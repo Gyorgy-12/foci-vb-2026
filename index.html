@@ -904,7 +904,7 @@ html,body{
 .mr-live-state.open{color:#27c96a}
 .mr-score-wrap{display:grid;grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto);align-items:center;justify-content:end;gap:clamp(5px,.85vw,10px)}
 .mr-score-lines{display:flex;flex-direction:column;gap:inherit;min-width:clamp(34px,5vw,56px)}
-.mr-clock{display:inline-flex;align-items:center;justify-content:center;min-width:clamp(23px,2.35vw,38px);padding:clamp(1px,.18vw,2px) clamp(5px,.5vw,8px);border-radius:999px;background:rgba(255,90,104,.16);border:1px solid rgba(255,90,104,.32);color:#ff7b87;font-size:clamp(9px,.58vw,11.6px);font-weight:950;line-height:1;white-space:nowrap}
+.mr-clock{display:inline-flex;align-items:center;justify-content:center;min-width:clamp(23px,2.35vw,38px);padding:clamp(1px,.18vw,2px) clamp(5px,.5vw,8px);border-radius:999px;background:rgba(255,90,104,.16);border:1px solid rgba(255,90,104,.32);color:#ff7b87;font-size:clamp(13px,.78vw,15.6px);font-weight:950;line-height:1;white-space:nowrap}
 .mr-score-pair{display:grid;grid-template-columns:minmax(14px,1fr) minmax(14px,1fr);align-items:center;gap:clamp(6px,.8vw,11px)}
 .mr-score-pair .mr-actual{text-align:center}
 .mr-score-pair .win{text-align:center}
@@ -3876,7 +3876,7 @@ html,body{
   .matches-main .mr-clock{
     min-width:22px!important;
     padding:1px 5px!important;
-    font-size:clamp(8.8px,2vw,10.6px)!important;
+    font-size:clamp(9.8px,2.15vw,11.6px)!important;
   }
   .matches-main .mr-score-pair{
     width:100%!important;
@@ -4085,8 +4085,11 @@ html,body{
 .matches-main .match-row.result-miss{box-shadow:inset 3px 0 0 rgba(240,64,80,.94)!important}
 .matches-main .match-row.live-locked:not(.result-exact):not(.result-diff):not(.result-outcome):not(.result-miss){box-shadow:inset 3px 0 0 rgba(255,102,116,.78)!important}
 .matches-main .match-row{min-height:clamp(66px,4.55vw,92px)!important}
-.matches-main .mr-score-wrap.no-tip{grid-template-columns:minmax(clamp(34px,5vw,56px),auto)!important}
-.matches-main .mr-score-wrap.no-tip .mr-clock{display:none!important}
+.matches-main .mr-score-wrap.no-tip{
+  grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
+  gap:clamp(5px,.85vw,10px)!important;
+}
+.matches-main .mr-score-wrap.no-tip .mr-clock{display:inline-flex!important}
 @media(max-width:560px){
   .matches-main .match-row{min-height:clamp(64px,16.8vw,78px)!important}
   .matches-main .mr-score-wrap.no-tip{
@@ -4400,7 +4403,7 @@ const WC26_SYNC_BEFORE_MS=5*60*1000,WC26_SYNC_AFTER_MS=140*60*1000,WC26_SYNC_LIV
 let wc26SyncTimer=null,wc26SyncInFlight=false;
 let LIVE_RESULTS={};
 function saveLiveResults(){}
-function normalizeLiveResult(id,d){if(!d)return null;let h=d.h??d.home??d.homeScore??d.home_score??d.scoreHome,a=d.a??d.away??d.awayScore??d.away_score??d.scoreAway;if(!validScore(h)||!validScore(a))return null;let rawStatus=d.status||d.matchStatus||'',status=String(rawStatus).toLowerCase(),finished=!!d.finished||status==='ft'||status==='finished'||status.includes('full')||status.includes('vége'),started=d.started!==false||finished||status==='live'||status.includes('élő')||status.includes('in_play')||status.includes('in play');return{started:!!started,finished:!!finished,h:+h,a:+a,minute:d.minute??d.matchMinute??d.elapsed??null,status:rawStatus,source:d.source||'Firebase',updatedAt:d.updatedAt||d.updated||new Date().toISOString()}}
+function normalizeLiveResult(id,d){if(!d)return null;let h=d.h??d.home??d.homeScore??d.home_score??d.scoreHome,a=d.a??d.away??d.awayScore??d.away_score??d.scoreAway;if(!validScore(h)||!validScore(a))return null;let rawStatus=d.status||d.matchStatus||'',status=String(rawStatus).toLowerCase(),finished=!!d.finished||status==='ft'||status==='finished'||status.includes('full')||status.includes('vége'),started=d.started!==false||finished||status==='live'||status.includes('élő')||status.includes('in_play')||status.includes('in play');return{started:!!started,finished:!!finished,h:+h,a:+a,minute:d.minute??d.matchMinute??d.elapsed??d.currentMinute??d.liveMinute??d.matchTime??d.time??d.statusMinute??null,status:rawStatus,source:d.source||'Firebase',updatedAt:d.updatedAt||d.updated||new Date().toISOString()}}
 function mergeLiveResults(next){let changed=false,pruneNeeded=false;Object.entries(next||{}).forEach(([id,obj])=>{let r=normalizeLiveResult(id,obj);if(!r)return;let old=LIVE_RESULTS[id];if(old&&old.finished&&!r.finished)return;if(JSON.stringify(old)!==JSON.stringify(r)){LIVE_RESULTS[id]=r;changed=true;if(r.finished&&(!old||!old.finished||old.h!==r.h||old.a!==r.a))pruneNeeded=true}});if(changed){if(pruneNeeded)pruneStaleKoPred(true);if(['matches','table','stats','community','knockout'].includes(S.tab))render();refreshCommunityPreviews()}return changed}
 function wc26RestValue(v){if(!v||typeof v!=='object')return null;if('booleanValue'in v)return !!v.booleanValue;if('integerValue'in v)return +v.integerValue;if('doubleValue'in v)return +v.doubleValue;if('stringValue'in v)return v.stringValue;if('timestampValue'in v)return v.timestampValue;if('nullValue'in v)return null;return null}
 function wc26RestDocData(doc){let out={};Object.entries(doc?.fields||{}).forEach(([k,v])=>out[k]=wc26RestValue(v));return out}
@@ -4426,7 +4429,7 @@ function lastWorkerSyncAt(){try{return +(localStorage.getItem(WC26_SYNC_LAST_KEY
 function markWorkerSyncAt(t=Date.now()){try{localStorage.setItem(WC26_SYNC_LAST_KEY,String(t))}catch(e){}}
 function nextLiveSyncDelay(){let now=Date.now(),info=liveSyncInfo(now);if(document.hidden)return Math.max(WC26_SYNC_LIVE_MS*2,WC26_SYNC_IDLE_MS/3);if(info.active)return WC26_SYNC_LIVE_MS;if(isFinite(info.next)){let untilWindow=info.next-now-WC26_SYNC_BEFORE_MS;return Math.max(WC26_SYNC_LIVE_MS,Math.min(WC26_SYNC_IDLE_MS,untilWindow))}return WC26_SYNC_IDLE_MS}
 function scheduleLiveSync(delay){if(FROZEN_MODE)return;clearTimeout(wc26SyncTimer);wc26SyncTimer=setTimeout(async()=>{await syncLiveResults();scheduleLiveSync()},delay??nextLiveSyncDelay())}
-async function syncLiveResults(opts={}){return loadMatchResultsFromBackendDb()}function liveClockLabel(r){if(!r||!r.started||r.finished)return'';let s=String(r.status||'').toLowerCase();if(s==='ft'||s.includes('finished'))return'';if(s.includes('half')||s==='ht')return'HT';let m=+(r.minute??r.matchMinute??r.elapsed);return Number.isFinite(m)&&m>0?Math.floor(m)+'&#39;':(s.includes('live')||s.includes('play')||s.includes('progress')||r.started?'LIVE':'')}
+async function syncLiveResults(opts={}){return loadMatchResultsFromBackendDb()}function liveClockMinute(r){let vals=[r?.minute,r?.matchMinute,r?.elapsed,r?.currentMinute,r?.liveMinute,r?.matchTime,r?.time,r?.statusMinute];for(let v of vals){if(v==null||typeof v==='object')continue;let m=String(v).match(/\d{1,3}/);if(m){let n=+m[0];if(Number.isFinite(n)&&n>0&&n<140)return n}}return null}function liveClockLabel(r){if(!r||!r.started||r.finished)return'';let s=String(r.status||'').toLowerCase();if(s==='ft'||s.includes('finished'))return'';let m=liveClockMinute(r);if(m)return Math.floor(m)+'&#39;';if(s.includes('half')||s==='ht')return'HT';return s.includes('live')||s.includes('play')||s.includes('progress')||r.started?'LIVE':''}
 function scorePair(real,tip,cls){return '<div class="mr-score-pair"><span class="mr-actual">'+real+'</span><span class="'+(cls||'win')+'">'+tip+'</span></div>'}
 function scoreHtml(x){let p=getPred(x.id),r=actualFor(x),hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),clock=liveClockLabel(r),lines='';if(p&&hasReal)lines=scorePair(r.h,p.h,'win')+scorePair(r.a,p.a,'win');else if(p)lines='<div class="win">'+p.h+'</div><div class="win">'+p.a+'</div>';else if(hasReal)lines='<div class="mr-actual">'+r.h+'</div><div class="mr-actual">'+r.a+'</div>';else lines='<div class="match-empty">-</div><div class="match-empty">-</div>';return hasReal&&clock?'<div class="mr-score-wrap '+(p?'':'no-tip')+'"><span class="mr-clock">'+clock+'</span><div class="mr-score-lines">'+lines+'</div></div>':lines}
 function mrow(x){let p=getPred(x.id),cls=p?'win':'',state=matchLockState(x),sc=tipScore(x),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'?' result-exact':sc.cat==='diff'?' result-diff':sc.cat==='outcome'?' result-outcome':sc.cat==='miss'?' result-miss':'');return '<div class="match-row'+rowCls+'" data-mid="'+x.id+'"><div class="mr-date">'+x.t+'<span>'+x.r+'. kör</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+matchStateBadge(x)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(x.h)+'<span class="mr-tname">'+esc(x.h)+'</span></div><div class="mr-team '+cls+'">'+crest(x.a)+'<span class="mr-tname">'+esc(x.a)+'</span></div></div><div class="mr-scores">'+scoreHtml(x)+'</div>'+edit+'</div>'}
