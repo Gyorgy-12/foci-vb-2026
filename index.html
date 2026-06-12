@@ -902,7 +902,12 @@ html,body{
 .mr-live-state.bad{color:var(--red)}
 .mr-live-state.neutral{color:#9eadb6}
 .mr-live-state.open{color:#27c96a}
-.mr-score-pair{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:clamp(3px,.8vw,6px)}
+.mr-score-wrap{display:grid;grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto);align-items:center;justify-content:end;gap:clamp(5px,.85vw,10px)}
+.mr-score-lines{display:flex;flex-direction:column;gap:inherit;min-width:clamp(34px,5vw,56px)}
+.mr-clock{display:inline-flex;align-items:center;justify-content:center;min-width:clamp(23px,2.35vw,38px);padding:clamp(1px,.18vw,2px) clamp(5px,.5vw,8px);border-radius:999px;background:rgba(255,90,104,.16);border:1px solid rgba(255,90,104,.32);color:#ff7b87;font-size:clamp(9px,.58vw,11.6px);font-weight:950;line-height:1;white-space:nowrap}
+.mr-score-pair{display:grid;grid-template-columns:minmax(14px,1fr) minmax(14px,1fr);align-items:center;gap:clamp(6px,.8vw,11px)}
+.mr-score-pair .mr-actual{text-align:center}
+.mr-score-pair .win{text-align:center}
 .mr-actual{color:#ff6470;font-weight:950}
 .mr-tip{font-size:clamp(8px,2vw,9.5px);font-weight:800;color:#27c96a;margin-top:2px}
 .tip-sheet{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
@@ -3863,13 +3868,23 @@ html,body{
     padding-right:3px!important;
     align-items:stretch!important;
   }
+  .matches-main .mr-score-wrap{
+    grid-template-columns:auto minmax(30px,auto)!important;
+    gap:5px!important;
+  }
+  .matches-main .mr-score-lines{min-width:30px!important}
+  .matches-main .mr-clock{
+    min-width:22px!important;
+    padding:1px 5px!important;
+    font-size:clamp(8.8px,2vw,10.6px)!important;
+  }
   .matches-main .mr-score-pair{
     width:100%!important;
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
-    gap:3px!important;
+    grid-template-columns:minmax(12px,1fr) minmax(12px,1fr)!important;
+    gap:5px!important;
   }
-  .matches-main .mr-score-pair span:first-child{text-align:left!important}
-  .matches-main .mr-actual{text-align:right!important}
+  .matches-main .mr-score-pair .mr-actual,
+  .matches-main .mr-score-pair .win{text-align:center!important}
 }
 /* Élő tabellasorok: visszafogott, fehéres-piros kiemelés */
 .standings .row.live-team{
@@ -4047,6 +4062,38 @@ html,body{
   .matches-main .mr-live-state,.matches-main .mr-tip{font-size:9.2px!important;line-height:1.08!important;text-align:center!important}
   .matches-main .mr-live-state.live{font-size:8.8px!important;padding:.22em .42em!important;margin-top:2px!important}
   .tip-sheet .sheet-verdict.actual-result{font-size:11.4px!important;line-height:1.42!important}
+}
+/* Result overlay breathes vertically without inflating the match-card layout. */
+.matches-main .match-row{position:relative!important;overflow:visible!important}
+.matches-main .match-row.result-exact::after,
+.matches-main .match-row.result-diff::after,
+.matches-main .match-row.result-outcome::after,
+.matches-main .match-row.result-miss::after,
+.matches-main .match-row.live-locked::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;display:none;
+}
+.matches-main .match-row.result-exact::after{box-shadow:inset 5px 0 0 rgba(40,209,108,.98),inset 0 0 0 1px rgba(40,209,108,.34)}
+.matches-main .match-row.result-diff::after{box-shadow:inset 5px 0 0 rgba(245,213,0,.98),inset 0 0 0 1px rgba(245,213,0,.34)}
+.matches-main .match-row.result-outcome::after{box-shadow:inset 5px 0 0 rgba(255,132,0,.98),inset 0 0 0 1px rgba(255,132,0,.36)}
+.matches-main .match-row.result-miss::after{box-shadow:inset 5px 0 0 rgba(240,64,80,.96),inset 0 0 0 1px rgba(240,64,80,.32)}
+.matches-main .match-row.live-locked:not(.result-exact):not(.result-diff):not(.result-outcome):not(.result-miss)::after{box-shadow:inset 5px 0 0 rgba(255,102,116,.82),inset 0 0 0 1px rgba(255,118,128,.28)}
+.matches-main .match-row>*{position:relative;z-index:1}
+.matches-main .mr-live-state,.matches-main .mr-tip{line-height:1.14!important}
+.matches-main .match-row.result-exact{box-shadow:inset 3px 0 0 rgba(40,209,108,.95)!important}
+.matches-main .match-row.result-diff{box-shadow:inset 3px 0 0 rgba(245,213,0,.95)!important}
+.matches-main .match-row.result-outcome{box-shadow:inset 3px 0 0 rgba(255,132,0,.95)!important}
+.matches-main .match-row.result-miss{box-shadow:inset 3px 0 0 rgba(240,64,80,.94)!important}
+.matches-main .match-row.live-locked:not(.result-exact):not(.result-diff):not(.result-outcome):not(.result-miss){box-shadow:inset 3px 0 0 rgba(255,102,116,.78)!important}
+.matches-main .match-row{min-height:clamp(66px,4.55vw,92px)!important}
+.matches-main .mr-score-wrap.no-tip{grid-template-columns:minmax(clamp(34px,5vw,56px),auto)!important}
+.matches-main .mr-score-wrap.no-tip .mr-clock{display:none!important}
+@media(max-width:560px){
+  .matches-main .match-row{min-height:clamp(64px,16.8vw,78px)!important}
+  .matches-main .mr-score-wrap.no-tip{
+    grid-template-columns:auto minmax(30px,auto)!important;
+    gap:5px!important;
+  }
+  .matches-main .mr-score-wrap.no-tip .mr-clock{display:inline-flex!important}
 }
 /* Final mobile KO/community placement nudge */
 @media(max-width:560px){
@@ -4349,11 +4396,11 @@ const FX=fixtures();
 const FX_BY_ID=Object.fromEntries(FX.map(m=>[m.id,m]));
 const WC26_RESULTS_SYNC_URL='';
 const WC26_RESULTS_READ_URL='https://wc26-results-sync.wc26-guesses.workers.dev/results';
-const WC26_SYNC_BEFORE_MS=5*60*1000,WC26_SYNC_AFTER_MS=140*60*1000,WC26_SYNC_LIVE_MS=30*1000,WC26_SYNC_IDLE_MS=30*60*1000,WC26_SYNC_LAST_KEY='wc26_worker_sync_last_at';
+const WC26_SYNC_BEFORE_MS=5*60*1000,WC26_SYNC_AFTER_MS=140*60*1000,WC26_SYNC_LIVE_MS=60*1000,WC26_SYNC_IDLE_MS=30*60*1000,WC26_SYNC_LAST_KEY='wc26_worker_sync_last_at';
 let wc26SyncTimer=null,wc26SyncInFlight=false;
 let LIVE_RESULTS={};
 function saveLiveResults(){}
-function normalizeLiveResult(id,d){if(!d)return null;let h=d.h??d.home??d.homeScore??d.home_score??d.scoreHome,a=d.a??d.away??d.awayScore??d.away_score??d.scoreAway;if(!validScore(h)||!validScore(a))return null;let status=String(d.status||d.matchStatus||'').toLowerCase(),finished=!!d.finished||status==='ft'||status==='finished'||status.includes('full')||status.includes('vége'),started=d.started!==false||finished||status==='live'||status.includes('élő');return{started:!!started,finished:!!finished,h:+h,a:+a,source:d.source||'Firebase',updatedAt:d.updatedAt||d.updated||new Date().toISOString()}}
+function normalizeLiveResult(id,d){if(!d)return null;let h=d.h??d.home??d.homeScore??d.home_score??d.scoreHome,a=d.a??d.away??d.awayScore??d.away_score??d.scoreAway;if(!validScore(h)||!validScore(a))return null;let rawStatus=d.status||d.matchStatus||'',status=String(rawStatus).toLowerCase(),finished=!!d.finished||status==='ft'||status==='finished'||status.includes('full')||status.includes('vége'),started=d.started!==false||finished||status==='live'||status.includes('élő')||status.includes('in_play')||status.includes('in play');return{started:!!started,finished:!!finished,h:+h,a:+a,minute:d.minute??d.matchMinute??d.elapsed??null,status:rawStatus,source:d.source||'Firebase',updatedAt:d.updatedAt||d.updated||new Date().toISOString()}}
 function mergeLiveResults(next){let changed=false,pruneNeeded=false;Object.entries(next||{}).forEach(([id,obj])=>{let r=normalizeLiveResult(id,obj);if(!r)return;let old=LIVE_RESULTS[id];if(old&&old.finished&&!r.finished)return;if(JSON.stringify(old)!==JSON.stringify(r)){LIVE_RESULTS[id]=r;changed=true;if(r.finished&&(!old||!old.finished||old.h!==r.h||old.a!==r.a))pruneNeeded=true}});if(changed){if(pruneNeeded)pruneStaleKoPred(true);if(['matches','table','stats','community','knockout'].includes(S.tab))render();refreshCommunityPreviews()}return changed}
 function wc26RestValue(v){if(!v||typeof v!=='object')return null;if('booleanValue'in v)return !!v.booleanValue;if('integerValue'in v)return +v.integerValue;if('doubleValue'in v)return +v.doubleValue;if('stringValue'in v)return v.stringValue;if('timestampValue'in v)return v.timestampValue;if('nullValue'in v)return null;return null}
 function wc26RestDocData(doc){let out={};Object.entries(doc?.fields||{}).forEach(([k,v])=>out[k]=wc26RestValue(v));return out}
@@ -4379,8 +4426,9 @@ function lastWorkerSyncAt(){try{return +(localStorage.getItem(WC26_SYNC_LAST_KEY
 function markWorkerSyncAt(t=Date.now()){try{localStorage.setItem(WC26_SYNC_LAST_KEY,String(t))}catch(e){}}
 function nextLiveSyncDelay(){let now=Date.now(),info=liveSyncInfo(now);if(document.hidden)return Math.max(WC26_SYNC_LIVE_MS*2,WC26_SYNC_IDLE_MS/3);if(info.active)return WC26_SYNC_LIVE_MS;if(isFinite(info.next)){let untilWindow=info.next-now-WC26_SYNC_BEFORE_MS;return Math.max(WC26_SYNC_LIVE_MS,Math.min(WC26_SYNC_IDLE_MS,untilWindow))}return WC26_SYNC_IDLE_MS}
 function scheduleLiveSync(delay){if(FROZEN_MODE)return;clearTimeout(wc26SyncTimer);wc26SyncTimer=setTimeout(async()=>{await syncLiveResults();scheduleLiveSync()},delay??nextLiveSyncDelay())}
-async function syncLiveResults(opts={}){return loadMatchResultsFromBackendDb()}function scorePair(pred,real,cls){return '<div class="mr-score-pair"><span class="'+(cls||'win')+'">'+pred+'</span><span class="mr-actual">'+real+'</span></div>'}
-function scoreHtml(x){let p=getPred(x.id),r=actualFor(x),hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a);if(p&&hasReal)return scorePair(p.h,r.h,'win')+scorePair(p.a,r.a,'win');if(p)return '<div class="win">'+p.h+'</div><div class="win">'+p.a+'</div>';if(hasReal)return '<div class="mr-actual">'+r.h+'</div><div class="mr-actual">'+r.a+'</div>';return '<div class="match-empty">-</div><div class="match-empty">-</div>'}
+async function syncLiveResults(opts={}){return loadMatchResultsFromBackendDb()}function liveClockLabel(r){if(!r||!r.started||r.finished)return'';let s=String(r.status||'').toLowerCase();if(s==='ft'||s.includes('finished'))return'';if(s.includes('half')||s==='ht')return'HT';let m=+(r.minute??r.matchMinute??r.elapsed);return Number.isFinite(m)&&m>0?Math.floor(m)+'&#39;':(s.includes('live')||s.includes('play')||s.includes('progress')||r.started?'LIVE':'')}
+function scorePair(real,tip,cls){return '<div class="mr-score-pair"><span class="mr-actual">'+real+'</span><span class="'+(cls||'win')+'">'+tip+'</span></div>'}
+function scoreHtml(x){let p=getPred(x.id),r=actualFor(x),hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),clock=liveClockLabel(r),lines='';if(p&&hasReal)lines=scorePair(r.h,p.h,'win')+scorePair(r.a,p.a,'win');else if(p)lines='<div class="win">'+p.h+'</div><div class="win">'+p.a+'</div>';else if(hasReal)lines='<div class="mr-actual">'+r.h+'</div><div class="mr-actual">'+r.a+'</div>';else lines='<div class="match-empty">-</div><div class="match-empty">-</div>';return hasReal&&clock?'<div class="mr-score-wrap '+(p?'':'no-tip')+'"><span class="mr-clock">'+clock+'</span><div class="mr-score-lines">'+lines+'</div></div>':lines}
 function mrow(x){let p=getPred(x.id),cls=p?'win':'',state=matchLockState(x),sc=tipScore(x),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'?' result-exact':sc.cat==='diff'?' result-diff':sc.cat==='outcome'?' result-outcome':sc.cat==='miss'?' result-miss':'');return '<div class="match-row'+rowCls+'" data-mid="'+x.id+'"><div class="mr-date">'+x.t+'<span>'+x.r+'. kör</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+matchStateBadge(x)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(x.h)+'<span class="mr-tname">'+esc(x.h)+'</span></div><div class="mr-team '+cls+'">'+crest(x.a)+'<span class="mr-tname">'+esc(x.a)+'</span></div></div><div class="mr-scores">'+scoreHtml(x)+'</div>'+edit+'</div>'}
 const KO_MATCH_SCHEDULE={R32:[['j&uacute;n. 28.','18:00'],['j&uacute;n. 28.','22:00'],['j&uacute;n. 29.','02:00'],['j&uacute;n. 29.','18:00'],['j&uacute;n. 29.','22:00'],['j&uacute;n. 30.','02:00'],['j&uacute;n. 30.','18:00'],['j&uacute;n. 30.','22:00'],['j&uacute;l. 1.','02:00'],['j&uacute;l. 1.','18:00'],['j&uacute;l. 1.','22:00'],['j&uacute;l. 2.','02:00'],['j&uacute;l. 2.','18:00'],['j&uacute;l. 2.','22:00'],['j&uacute;l. 3.','02:00'],['j&uacute;l. 3.','22:00']],R16:[['j&uacute;l. 4.','18:00'],['j&uacute;l. 4.','22:00'],['j&uacute;l. 5.','02:00'],['j&uacute;l. 5.','22:00'],['j&uacute;l. 6.','02:00'],['j&uacute;l. 6.','22:00'],['j&uacute;l. 7.','02:00'],['j&uacute;l. 7.','22:00']],QF:[['j&uacute;l. 9.','22:00'],['j&uacute;l. 10.','02:00'],['j&uacute;l. 10.','22:00'],['j&uacute;l. 11.','02:00']],SF:[['j&uacute;l. 14.','22:00'],['j&uacute;l. 15.','22:00']],BR:[['j&uacute;l. 18.','22:00']],F:[['j&uacute;l. 19.','22:00']]};
 function koMatchSchedule(m){let s=(KO_MATCH_SCHEDULE[m.round]||[])[(m.index||1)-1]||['',''];return{d:s[0],t:s[1]}}
@@ -4422,7 +4470,7 @@ function pctBar(val,total,clr){let p=total?((val/total)*100).toFixed(1):'0.0';re
 function statRow(i,name,sub,val){return '<div class="wc-stat-row"><div class="wc-stat-rank">'+i+'</div><div class="wc-stat-main"><div class="wc-stat-name">'+name+'</div><div class="wc-stat-sub">'+sub+'</div></div><div class="wc-stat-val">'+val+'</div></div>'}
 function tipEfficiency(){
   // --- Csoportkör ---
-  let grpMeccs=FX.map(m=>{let r=actualFor(m);if(!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return null;return tipScore(m);}).filter(x=>x&&x.cat);
+  let grpMeccs=FX.map(m=>{let r=actualFor(m);if(!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return null;return gradeTip(getPred(m.id),r);}).filter(x=>x&&x.cat);
   let grpPts=grpMeccs.reduce((s,x)=>s+x.pts,0);
   let grpMax=0;
   let grpExact=grpMeccs.filter(x=>x.cat==='exact').length;
@@ -4435,7 +4483,7 @@ function tipEfficiency(){
   let koRounds=buildKO();
   let bronze=buildBronze(koRounds);
   let koAll=koRounds.flatMap(r=>r.matches).concat([bronze]);
-  let koMeccs=koAll.map(m=>{let r=actualFor({id:m.id});if(!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return null;let p=koPred(m.id);if(!p)return null;let ph=p.pen?(p.pH>p.pA?m.h:m.a):null;let actualW=+r.h>+r.a?m.h:(+r.a>+r.h?m.a:null);let rh=+r.h,ra=+r.a,pph=+p.h,ppa=+p.a;if(pph===rh&&ppa===ra)return{cat:'exact',pts:1};let pdiff=pph-ppa,rdiff=rh-ra;if(pdiff===rdiff)return{cat:'diff',pts:0.5};if(Math.sign(pph-ppa)===Math.sign(rh-ra))return{cat:'outcome',pts:0.25};return{cat:'miss',pts:0};}).filter(x=>x&&x.cat);
+  let koMeccs=koAll.map(m=>{let r=actualFor({id:m.id});if(!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return null;let p=koPred(m.id);if(!p)return{cat:'miss',pts:0};let rh=+r.h,ra=+r.a,pph=+p.h,ppa=+p.a;if(pph===rh&&ppa===ra)return{cat:'exact',pts:1};let pdiff=pph-ppa,rdiff=rh-ra;if(pdiff===rdiff)return{cat:'diff',pts:0.5};if(Math.sign(pph-ppa)===Math.sign(rh-ra))return{cat:'outcome',pts:0.25};return{cat:'miss',pts:0};}).filter(x=>x&&x.cat);
   let koPts=koMeccs.reduce((s,x)=>s+x.pts,0);
   let koMax=0;
   let koExact=koMeccs.filter(x=>x.cat==='exact').length;
