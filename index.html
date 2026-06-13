@@ -897,14 +897,14 @@ html,body{
 .match-row.result-correct:hover{background:rgba(40,209,108,.11)}
 .match-row.result-wrong:hover{background:rgba(240,64,80,.105)}
 .match-row.locked .mr-bell{opacity:.22}
-.mr-live-state{font-size:clamp(8px,2.05vw,10px);font-weight:950;line-height:1;color:#f0c275}
+.mr-live-state{font-size:clamp(8px,2.05vw,10px);font-weight:950;line-height:1.2;color:#f0c275;white-space:nowrap;display:block}
 .mr-live-state.ok{color:var(--green)}
 .mr-live-state.bad{color:var(--red)}
 .mr-live-state.neutral{color:#9eadb6}
 .mr-live-state.open{color:#27c96a}
 .mr-score-wrap{display:grid;grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto);align-items:center;justify-content:end;gap:clamp(5px,.85vw,10px)}
 .mr-score-lines{display:flex;flex-direction:column;gap:inherit;min-width:clamp(34px,5vw,56px)}
-.mr-clock{display:inline-flex;align-items:center;justify-content:center;min-width:clamp(23px,2.35vw,38px);padding:clamp(1px,.18vw,2px) clamp(5px,.5vw,8px);border-radius:999px;background:rgba(255,90,104,.16);border:1px solid rgba(255,90,104,.32);color:#ff7b87;font-size:clamp(14px,calc(0.25vw + 11px),16px);font-weight:950;line-height:1;white-space:nowrap}
+.mr-clock{display:inline-flex;align-items:center;justify-content:center;min-width:clamp(28px,2.35vw,42px);padding:clamp(3px,.3vw,5px) clamp(7px,.7vw,11px);border-radius:999px;background:rgba(255,90,104,.16);border:1px solid rgba(255,90,104,.32);color:#ff7b87;font-size:clamp(17px,calc(0.25vw + 14px),19px);font-weight:950;line-height:1;white-space:nowrap}
 .mr-score-pair{display:grid;grid-template-columns:minmax(14px,1fr) minmax(14px,1fr);align-items:center;gap:clamp(6px,.8vw,11px)}
 .mr-score-pair .mr-actual{text-align:center}
 .mr-score-pair .win{text-align:center}
@@ -3889,9 +3889,9 @@ html,body{
   }
   .matches-main .mr-score-lines{min-width:30px!important}
   .matches-main .mr-clock{
-    min-width:24px!important;
-    padding:3px 7px!important;
-    font-size:clamp(10.8px,2.15vw,12.6px)!important;
+    min-width:30px!important;
+    padding:4px 9px!important;
+    font-size:clamp(13px,2.15vw,15px)!important;
   }
   .matches-main .mr-score-pair{
     width:100%!important;
@@ -3921,7 +3921,8 @@ html,body{
   color:#ffdee0!important;
 }
 /* Final stats/community/live-table polish 2026-06-12 */
-.standings .row.live-team .rank{padding-left:0!important}
+.standings .row.live-team{padding-left:6px}
+.standings .row.live-team .rank{padding-left:6px!important}
 .standings .row.live-team::before{display:none!important}
 @media(min-width:561px){
   .stats-main .eff-total-label{font-size:clamp(12.6px,.78vw,15px)!important}
@@ -4434,7 +4435,7 @@ function actualFor(m){return LIVE_RESULTS[m.id]||null}
 function fmtPts(n){let x=Math.round((+n||0)*100)/100;return(Math.round(x*100)%50===0)?x.toFixed(1):x.toFixed(2);}
 function tipScore(m){let p=getPred(m.id),r=actualFor(m);if(!p||!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return{cat:'',pts:0};let ph=+p.h,pa=+p.a,rh=+r.h,ra=+r.a;if(ph===rh&&pa===ra)return{cat:'exact',pts:1};let pdiff=ph-pa,rdiff=rh-ra;if(pdiff===rdiff)return{cat:'diff',pts:0.5};let pout=Math.sign(ph-pa),rout=Math.sign(rh-ra);if(pout===rout)return{cat:'outcome',pts:0.25};return{cat:'miss',pts:0};}
 function tipOutcome(m){let s=tipScore(m);if(!s.cat)return'';return s.cat==='exact'?'correct':s.cat==='miss'?'wrong':s.cat;}
-function matchStateBadge(m){let st=matchLockState(m),sc=tipScore(m),r=actualFor(m),rs=r&&validScore(r.h)&&validScore(r.a)?' '+r.h+'-'+r.a:'';if(sc.cat==='exact')return'<em class="mr-live-state ok">'+(st==='finished'?'Pontos':'Most pontos')+'</em>';if(sc.cat==='diff')return'<em class="mr-live-state diff">'+(st==='finished'?'G&oacute;lk&uuml;l.':'Most g&oacute;lk&uuml;l.')+'</em>';if(sc.cat==='outcome')return'<em class="mr-live-state outcome">'+(st==='finished'?'Kimenetel':'Most kimenetel')+'</em>';if(sc.cat==='miss')return'<em class="mr-live-state bad">'+(st==='finished'?'Hib&aacute;s':'Most hib&aacute;s')+'</em>';if(st==='finished')return'<em class="mr-live-state neutral">Lez&aacute;rt'+rs+'</em>';if(st==='live')return'<em class="mr-live-state live"><span></span>&Eacute;l&#337;'+rs+'</em>';return'<em class="mr-live-state open">Tippelhet&#337;</em>'}
+function matchStateBadge(m){let st=matchLockState(m),sc=tipScore(m),r=actualFor(m),rs=r&&validScore(r.h)&&validScore(r.a)?' '+r.h+'-'+r.a:'';if(sc.cat==='exact')return'<em class="mr-live-state ok">Pontos</em>';if(sc.cat==='diff')return'<em class="mr-live-state diff">G&oacute;lk&uuml;l.</em>';if(sc.cat==='outcome')return'<em class="mr-live-state outcome">Kimenetel</em>';if(sc.cat==='miss')return'<em class="mr-live-state bad">Hib&aacute;s</em>';if(st==='finished')return'<em class="mr-live-state neutral">Lez&aacute;rt'+rs+'</em>';if(st==='live')return'<em class="mr-live-state live"><span></span>&Eacute;l&#337;'+rs+'</em>';return'<em class="mr-live-state open">Tippelhet&#337;</em>'}
 function normLiveName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,' ').trim()}
 const LIVE_NAME_ALIASES={'usa':['united states','usa','united states of america'],'turkiye':['turkiye','turkey'],'south korea':['south korea','korea republic','republic of korea'],'czechia':['czechia','czech republic'],'ivory coast':['ivory coast','cote d ivoire'],'dr congo':['dr congo','congo dr','democratic republic of congo','congo democratic republic'],'bosnia and herzegovina':['bosnia and herzegovina','bosnia-herzegovina'],'curacao':['curacao','curaçao']};
 function liveNameMatch(a,b){let x=normLiveName(a),y=normLiveName(b);if(x===y)return true;let al=LIVE_NAME_ALIASES[y]||[];return al.map(normLiveName).includes(x)}
