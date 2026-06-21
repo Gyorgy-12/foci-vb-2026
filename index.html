@@ -404,6 +404,11 @@ html,body{
   overflow:hidden;
 }
 
+#koCtrl #selBtn{
+  font-size:clamp(13px,calc(12.4px + 0.1875vw),16px)!important;
+  padding:clamp(7px,calc(6.25px + 0.2344vw),10px) clamp(12px,calc(10.5px + 0.4688vw),18px)!important;
+}
+
 .sel-txt{
   min-width:0;
   overflow:hidden;
@@ -443,7 +448,7 @@ html,body{
 .main{
   max-width:var(--page-max);
   margin:0 auto;
-  padding:calc(clamp(10px,2.6vw,14px) + var(--ctrl-h,0px)) var(--pp) 64px;
+  padding:calc(clamp(10px,2.6vw,14px) + var(--ctrl-h,0px) + 12px) var(--pp) 64px;
 }
 
 .hidden{
@@ -703,7 +708,7 @@ html,body{
 }
 
 .zlabel{
-  font-size:clamp(10.6px,.72vw,14px)!important;
+  font-size:clamp(11.5px,calc(10.4286px + 0.3348vw),13px)!important;
   font-weight:780!important;
   color:var(--muted);
   padding-left:clamp(14px,4vw,24px);
@@ -1230,7 +1235,7 @@ body.modal-open{
   gap:clamp(6px,.58vw,11px)!important;
   padding:clamp(7px,.68vw,12px) clamp(11px,.95vw,18px)!important;
   border-bottom:1px solid rgba(255,255,255,.04);
-  font-size:clamp(11.6px,.9vw,16px)!important;
+  font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px)!important;
   color:var(--muted2);
   font-weight:600;
 }
@@ -2283,14 +2288,14 @@ body.modal-open{
 .wc-info b{
   display:block;
   color:var(--text);
-  font-size:clamp(22px,calc(17.0588px + 0.8824vw),34px)!important;
+  font-size:clamp(19px,calc(17px + 0.625vw),29px)!important;
   line-height:1;
   margin-bottom:7px;
 }
 
 .wc-info span{
   color:var(--muted);
-  font-size:12px;
+  font-size:clamp(11px,calc(10.5px + 0.1562vw),13.5px);
   font-weight:650;
   line-height:1.35;
 }
@@ -2320,8 +2325,19 @@ body.modal-open{
   padding:10px;
 }
 
+@media (max-width:560px){
+  .wc-team-chip{
+    gap:8px!important;
+    padding:7px 9px!important;
+    border-radius:7px!important;
+  }
+  .wc-team-chip .crest{
+    --cs:21px!important;
+  }
+}
+
 .wc-team-chip span{
-  font-size:13px;
+  font-size:clamp(13px,calc(12px + 0.3125vw),18px);
   font-weight:760;
   color:#dce6eb;
 }
@@ -2396,7 +2412,7 @@ body.modal-open{
 .wc-stat-name{
   color:#e8edf0;
   font-weight:800;
-  font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px);
+  font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px);
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -2406,7 +2422,7 @@ body.modal-open{
 
 .wc-stat-sub{
   color:var(--muted);
-  font-size:clamp(10px,calc(8.9286px + 0.3348vw),11.5px);
+  font-size:clamp(11px,calc(9.9286px + 0.3348vw),12.5px);
   font-weight:650;
   margin-top:clamp(4px,1.15vw,7px);
   line-height:1.28;
@@ -2416,7 +2432,7 @@ body.modal-open{
   text-align:right;
   color:#e8edf0;
   font-weight:900;
-  font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px);
+  font-size:clamp(14px,calc(12.5714px + 0.4464vw),16px);
   line-height:1;
 }
 
@@ -2694,8 +2710,8 @@ body.modal-open{
 .tip-btn{
   border:0;
   border-radius:10px;
-  padding:clamp(11px,1.3vw,14px)!important;
-  font-size:clamp(13px,1.15vw,15px)!important;
+  padding:clamp(12px,calc(11px + 0.5vw),16px)!important;
+  font-size:clamp(15px,calc(14.1744px + 0.1472vw),17px)!important;
   font-weight:900;
   cursor:pointer;
   background:#2b3943;
@@ -2745,6 +2761,12 @@ body.modal-open{
   grid-auto-columns:minmax(190px,1fr);
   gap:12px;
   align-items:start;
+  cursor:grab;
+}
+
+.ko-bracket.ko-dragging{
+  cursor:grabbing;
+  user-select:none;
 }
 
 .ko-col{
@@ -2758,7 +2780,7 @@ body.modal-open{
 }
 
 .ko-col h3{
-  font-size:11px!important;
+  font-size:clamp(12.5px,calc(11.468px + 0.184vw),15px)!important;
   color:var(--muted2)!important;
   font-weight:950!important;
   margin:0!important;
@@ -2785,10 +2807,10 @@ body.modal-open{
   flex-direction:column!important;
   justify-content:center!important;
   gap:clamp(4px,.45vw,8px)!important;
-  --ko-card-crest:clamp(20px,calc(17.5232px + 0.4415vw),26px);
-  --ko-card-name:clamp(12.5px,calc(11.0552px + 0.2575vw),16px);
-  --ko-card-score:clamp(14px,calc(12.3488px + 0.2943vw),18px);
-  --ko-card-pen:clamp(11px,calc(9.7616px + 0.2208vw),14px);
+  --ko-card-crest:clamp(22px,calc(19.936px + 0.3679vw),27px);
+  --ko-card-name:clamp(13.5px,calc(12.2616px + 0.2208vw),16.5px);
+  --ko-card-score:clamp(15.5px,calc(14.2616px + 0.2208vw),18.5px);
+  --ko-card-pen:clamp(12.5px,calc(11.8808px + 0.1104vw),14px);
   --ko-card-score-col:clamp(40px,2.78vw,58px);
   --ko-card-gap:clamp(4px,.42vw,7px);
   --ko-card-pad-x:clamp(4px,.42vw,8px);
@@ -2914,7 +2936,7 @@ body.modal-open{
 .ko-side{
   display:grid;
   grid-template-columns:repeat(4,clamp(150px,13vw,250px))!important;
-  gap:clamp(18px,3vw,45px)!important;
+  gap:clamp(28px,calc(16.4415px + 2.0603vw),56px)!important;
   align-items:start!important;
 }
 
@@ -3054,7 +3076,7 @@ body.modal-open{
 }
 
 .ko-final-col .ko-card{
-  max-width:clamp(172px,15vw,300px)!important;
+  max-width:clamp(150px,13vw,250px)!important;
   margin-left:auto;
   margin-right:auto;
   width:100%;
@@ -3669,14 +3691,14 @@ body.modal-open{
 }
 
 .stat-match-list .wc-stat-name{
-  font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px) !important;
+  font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px) !important;
   line-height:1.14 !important;
   font-weight:900 !important;
   letter-spacing:-.025em !important;
 }
 
 .stat-match-list .wc-stat-val{
-  font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px) !important;
+  font-size:clamp(14px,calc(12.5714px + 0.4464vw),16px) !important;
   white-space:nowrap;
   font-weight:950 !important;
   letter-spacing:-.02em !important;
@@ -3688,7 +3710,7 @@ body.modal-open{
 }
 
 .stat-match-list .wc-stat-sub{
-  font-size:clamp(10px,calc(8.9286px + 0.3348vw),11.5px) !important;
+  font-size:clamp(11px,calc(9.9286px + 0.3348vw),12.5px) !important;
   margin-top:clamp(3px,.95vw,5px) !important;
   font-weight:800 !important;
 }
@@ -3816,7 +3838,7 @@ body.modal-open{
   white-space:nowrap!important;
   overflow:visible!important;
   text-overflow:clip!important;
-  font-size:clamp(10.5px,.8vw,13.5px)!important;
+  font-size:clamp(13px,calc(10.936px + 0.3679vw),18px)!important;
   font-weight:900!important;
   color:#9aa8b2!important;
   text-align:center!important;
@@ -3834,8 +3856,8 @@ body.modal-open{
   align-items:center!important;
   justify-content:center!important;
   text-align:center!important;
-  color:rgba(255,255,255,.19)!important;
-  font-size:clamp(12px,.86vw,19px)!important;
+  color:rgba(255,255,255,.15)!important;
+  font-size:clamp(12px,calc(10.8px + 0.375vw),18px)!important;
   font-weight:1000!important;
   line-height:.94!important;
   letter-spacing:0!important;
@@ -3884,8 +3906,16 @@ body.modal-open{
   --cs:clamp(15.5px,1.28vw,28px)!important;
 }
 
-.wc-info span,.wc-note,.wc-team-chip span{
+.wc-info span{
+  font-size:clamp(11px,calc(10.5px + 0.1562vw),13.5px)!important;
+}
+
+.wc-note{
   font-size:clamp(12px,.78vw,15px)!important;
+}
+
+.wc-team-chip span{
+  font-size:clamp(13px,calc(12px + 0.3125vw),18px)!important;
 }
 
 .formv .stat-badge{
@@ -3931,7 +3961,7 @@ body.modal-open{
 }
 
 .standings .row .tname{
-  font-size:clamp(15px,.96vw,20.2px)!important;
+  font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px)!important;
   font-weight:860!important;
 }
 
@@ -4825,7 +4855,7 @@ body.modal-open{
   }
   .round-comp{
     padding:clamp(4px,1.2vw,6px) clamp(8px,2.2vw,11px);
-    font-size:clamp(8px,2.05vw,9.5px);
+    font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px);
     gap:clamp(4px,1.2vw,6px);
   }
   .round-comp .rc-logo{
@@ -4977,15 +5007,15 @@ body.modal-open{
     line-height:1;
   }
   .wc-stat-name{
-    font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px) !important;
+    font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px) !important;
     line-height:1.14 !important;
     letter-spacing:-.025em;
   }
   .stat-match-list .wc-stat-name{
-    font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px) !important;
+    font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px) !important;
   }
   .wc-stat-sub{
-    font-size:clamp(10px,calc(8.9286px + 0.3348vw),11.5px) !important;
+    font-size:clamp(11px,calc(9.9286px + 0.3348vw),12.5px) !important;
     line-height:1.2;
     margin-top:clamp(3px,.9vw,5px) !important;
     white-space:nowrap;
@@ -4993,11 +5023,11 @@ body.modal-open{
     text-overflow:ellipsis;
   }
   .wc-stat-val{
-    font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px) !important;
+    font-size:clamp(14px,calc(12.5714px + 0.4464vw),16px) !important;
     line-height:1;
   }
   .stat-match-list .wc-stat-val{
-    font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px) !important;
+    font-size:clamp(14px,calc(12.5714px + 0.4464vw),16px) !important;
     letter-spacing:-.02em;
   }
   .stat-game-name{
@@ -5042,7 +5072,7 @@ body.modal-open{
     font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px) !important;
   }
   .stat-match-list .wc-stat-sub{
-    font-size:clamp(10px,calc(8.9286px + 0.3348vw),11.5px) !important;
+    font-size:clamp(12px,calc(10.9286px + 0.3348vw),13.5px) !important;
   }
   .stat-match-list .stat-game-name{
     gap:clamp(5px,1.4vw,8px) !important;
@@ -5102,7 +5132,7 @@ body.modal-open{
   #tblCtrl .view-wrap{
     flex:0 0 auto;
     position:relative;
-    max-width:128px;
+    max-width:104px;
   }
   #tblCtrl .view-wrap:last-child{
     margin-left:auto;
@@ -5173,18 +5203,18 @@ body.modal-open{
     gap:6px !important;
   }
   .wc-stat-name{
-    font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px)!important;
+    font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px)!important;
     letter-spacing:-.03em!important;
   }
   .stat-match-list .wc-stat-name{
-    font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px) !important;
+    font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px) !important;
     letter-spacing:-.04em !important;
   }
   .wc-stat-sub{
-    font-size:clamp(10px,calc(8.9286px + 0.3348vw),11.5px)!important;
+    font-size:clamp(11px,calc(9.9286px + 0.3348vw),12.5px)!important;
   }
   .wc-stat-val{
-    font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px)!important;
+    font-size:clamp(14px,calc(12.5714px + 0.4464vw),16px)!important;
   }
   .stat-game-name .crest{
     --cs:16px !important;
@@ -5316,7 +5346,7 @@ body.modal-open{
     height:clamp(36px,3vw,44px);
   }
   .main{
-    padding-top:calc(clamp(18px,1.8vw,28px) + var(--ctrl-h,0px));
+    padding-top:calc(clamp(18px,1.8vw,28px) + var(--ctrl-h,0px) + 12px);
     padding-bottom:90px;
   }
   .card{
@@ -5354,6 +5384,7 @@ body.modal-open{
     border-bottom-width:3px;
   }
   .zlabel{
+    font-size:clamp(14px,calc(11.3333px + 0.3472vw),18px);
     padding-left:28px;
     padding-top:12px;
     padding-bottom:7px;
@@ -5545,7 +5576,7 @@ body.modal-open{
   }
   .ko-card .ko-team{
     line-height:1.18!important;
-    min-height:clamp(31px,2.45vw,45px)!important;
+    min-height:clamp(36px,calc(28.8307px + 1.278vw),48px)!important;
     padding-top:3px!important;
     padding-bottom:4px!important;
     align-items:center!important;
@@ -5634,11 +5665,11 @@ body.modal-open{
     min-height:clamp(76px,5.4vw,96px)!important;
   }
   .community-stat b{
-    font-size:clamp(18px,calc(16.3488px + 0.2943vw),22px)!important;
+    font-size:clamp(23px,calc(21.7616px + 0.2208vw),26px)!important;
     line-height:1.05!important;
   }
   .community-stat span{
-    font-size:clamp(10.8px,.62vw,12.4px)!important;
+    font-size:clamp(13.5px,calc(12.9634px + 0.0957vw),14.8px)!important;
     line-height:1.22!important;
   }
   .community-row{
@@ -5663,7 +5694,7 @@ body.modal-open{
     line-height:1.24!important;
   }
   .community-score{
-    font-size:clamp(18px,calc(16.3488px + 0.2943vw),22px)!important;
+    font-size:clamp(19px,calc(17.3488px + 0.2943vw),23px)!important;
     line-height:1!important;
   }
   .community-tabs{
@@ -5858,11 +5889,11 @@ body.modal-open{
     height:clamp(39px,3.22vw,53px)!important;
   }
   .community-top-card > .community-user .community-name{
-    font-size:clamp(16.8px,1.46vw,19px)!important;
+    font-size:clamp(18px,calc(15.936px + 0.3679vw),23px)!important;
     line-height:1.12!important;
   }
   .community-top-card > .community-user .community-meta{
-    font-size:clamp(12.8px,1vw,14px)!important;
+    font-size:clamp(13.5px,calc(12.468px + 0.184vw),16px)!important;
     line-height:1.25!important;
   }
   .community-main .community-row .community-rank{
@@ -5879,7 +5910,7 @@ body.modal-open{
     font-size:12px!important;
   }
   .community-main .community-row .community-score{
-    font-size:17px!important;
+    font-size:18.5px!important;
     font-weight:1000!important;
     color:#41ffad!important;
     text-shadow:0 0 12px rgba(56,242,162,.22)!important;
@@ -5895,12 +5926,12 @@ body.modal-open{
     grid-auto-columns:minmax(174px,86vw);
   }
   .ko-stage-wrap{
-    min-width:1840px!important;
-    grid-template-columns:690px 190px 690px!important;
+    min-width:1948px!important;
+    grid-template-columns:794px 190px 794px!important;
     gap:85px!important;
   }
   .ko-side{
-    grid-template-columns:repeat(4,150px)!important;
+    grid-template-columns:repeat(4,185px)!important;
     gap:18px!important;
   }
   .ko-final-col{
@@ -5911,10 +5942,10 @@ body.modal-open{
     gap:4px!important;
   }
   .ko-col{
-    min-width:150px!important;
-    grid-template-rows:repeat(17,40px)!important;
-    row-gap:4px!important;
-    gap:4px!important;
+    min-width:185px!important;
+    grid-template-rows:repeat(17,48px)!important;
+    row-gap:26px!important;
+    gap:26px!important;
     padding-top:19px!important;
   }
   .ko-left .ko-card::after{
@@ -5934,7 +5965,7 @@ body.modal-open{
     width:42px!important;
   }
   .ko-col h3{
-    font-size:9px!important;
+    font-size:clamp(12.5px,calc(10.5px + 0.625vw),14px)!important;
   }
   .ko-final-col h3{
     top:24px!important;
@@ -5950,52 +5981,52 @@ body.modal-open{
     font-size:9px!important;
   }
   .ko-team{
-    grid-template-columns:21px minmax(0,1fr) 47px!important;
-    min-height:29px!important;
+    grid-template-columns:22px minmax(0,1fr) 40px!important;
+    min-height:32px!important;
     gap:4px!important;
     padding:2px 4px!important;
-    font-size:12.5px!important;
+    font-size:15px!important;
     line-height:1.08!important;
   }
   .ko-team .crest{
-    --cs:21px!important;
+    --cs:25px!important;
   }
   .ko-name{
     font-weight:900!important;
   }
   .ko-score{
-    font-size:14px!important;
+    font-size:17px!important;
     gap:2px!important;
   }
   .ko-pen{
-    font-size:11px!important;
+    font-size:14px!important;
   }
   .ko-final-col .ko-card{
-    max-width:172px!important;
+    max-width:185px!important;
   }
   .ko-card .ko-team{
-    grid-template-columns:17.5px minmax(0,1fr) 37px!important;
-    min-height:30px!important;
+    grid-template-columns:22px minmax(0,1fr) 40px!important;
+    min-height:32px!important;
     gap:5px!important;
     padding:1px 4px!important;
-    font-size:12.5px!important;
+    font-size:15px!important;
     padding-right:5px!important;
     padding-left:6px!important;
     align-items:center!important;
     line-height:1.1!important;
   }
   .ko-card .ko-team .crest{
-    --cs:21.5px!important;
+    --cs:25px!important;
   }
   .ko-card .ko-score{
-    font-size:14px!important;
+    font-size:17px!important;
     gap:2px!important;
     justify-content:flex-end!important;
     transform:translateX(-2px)!important;
     min-width:37px!important;
   }
   .ko-card .ko-pen{
-    font-size:11px!important;
+    font-size:14px!important;
   }
   .ko-card .ko-name{
     font-size:inherit!important;
@@ -6009,10 +6040,10 @@ body.modal-open{
     padding-right:5px!important;
   }
   .ko-card .ko-empty .ko-name{
-    font-size:8.6px!important;
+    font-size:10px!important;
     text-align:center!important;
-    line-height:1.04!important;
-    white-space:nowrap!important;
+    line-height:1.1!important;
+    white-space:normal!important;
   }
   .ko-card .ko-meta + .ko-team{
     transform:translateY(1.2px)!important;
@@ -6023,9 +6054,9 @@ body.modal-open{
   }
   .ko-watermark{
     inset:0 4px!important;
-    font-size:10.4px!important;
+    font-size:12px!important;
     line-height:.92!important;
-    color:rgba(255,255,255,.19)!important;
+    color:rgba(255,255,255,.15)!important;
     white-space:nowrap!important;
   }
   .ko-card .ko-team:first-of-type{
@@ -6033,10 +6064,10 @@ body.modal-open{
   }
   .ko-card{
     gap:3px!important;
-    --ko-card-crest:clamp(19.5px,5.25vw,24.5px);
-    --ko-card-name:clamp(11.3px,2.9vw,13.1px);
-    --ko-card-score:clamp(13.3px,3.45vw,15.5px);
-    --ko-card-pen:clamp(10.7px,2.7vw,12.5px);
+    --ko-card-crest:clamp(24px,calc(18.6667px + 1.6667vw),28px);
+    --ko-card-name:clamp(12px,calc(10px + 0.625vw),13.5px);
+    --ko-card-score:clamp(16px,calc(13.3333px + 0.8333vw),18px);
+    --ko-card-pen:clamp(13px,calc(11px + 0.625vw),14.5px);
     --ko-card-score-col:clamp(39px,11.4vw,46px);
     --ko-card-gap:clamp(3px,1vw,4px);
     --ko-card-pad-x:clamp(3px,1.1vw,5px);
@@ -6060,7 +6091,7 @@ body.modal-open{
     font-size:11.5px!important;
   }
   .round-comp{
-    font-size:10.9px!important;
+    font-size:14px!important;
     padding:6px 10px!important;
     gap:6px!important;
   }
@@ -6090,8 +6121,8 @@ body.modal-open{
     font-size:12px!important;
   }
   .zlabel{
-    font-size:9.3px!important;
-    line-height:1.12!important;
+    font-size:11.5px!important;
+    line-height:1.18!important;
     font-weight:720!important;
     padding-top:4px!important;
     padding-bottom:2px!important;
@@ -6256,8 +6287,8 @@ body.modal-open{
     margin:11px 11px 0!important;
   }
   .tip-btn{
-    font-size:clamp(12px,2.6vw,13.5px)!important;
-    padding:clamp(10px,2.2vw,12px)!important;
+    font-size:clamp(13.5px,calc(11.5px + 0.625vw),15px)!important;
+    padding:clamp(11px,2.6vw,14px)!important;
     border-radius:9px!important;
   }
   .sheet-verdict{
@@ -6416,6 +6447,13 @@ body.modal-open{
     padding-top:4px!important;
     padding-bottom:4px!important;
   }
+  #koCtrl #selBtn{
+    font-size:18px!important;
+    height:36px!important;
+    min-height:36px!important;
+    padding-top:6px!important;
+    padding-bottom:6px!important;
+  }
   #tblCtrl .pill,#mCtrl .pill{
     min-width:64px!important;
   }
@@ -6518,16 +6556,24 @@ body.modal-open{
   }
   .community-stat{
     padding:9px!important;
-    min-height:62px!important;
+    min-height:64px!important;
     border-radius:12px!important;
   }
   .community-stat b{
-    font-size:18px!important;
+    font-size:23px!important;
     line-height:1.05!important;
   }
   .community-stat span{
-    font-size:11.5px!important;
+    font-size:13px!important;
     line-height:1.2!important;
+  }
+  .community-top-card > .community-user .community-name{
+    font-size:18px!important;
+    line-height:1.15!important;
+  }
+  .community-top-card > .community-user .community-meta{
+    font-size:13.5px!important;
+    line-height:1.25!important;
   }
   .community-row{
     padding:9px!important;
@@ -6848,20 +6894,20 @@ body.modal-open{
     font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px)!important;
   }
   .overview-main .stat-match-list .stat-game-name{
-    font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px)!important;
+    font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px)!important;
     gap:5px!important;
   }
   .overview-main .stat-match-list .stat-game-name .crest,.overview-main .stat-match-list .stat-game-name .crest[style]{
     --cs:18px!important;
   }
   .overview-main .stat-match-list .wc-stat-name{
-    font-size:clamp(12px,calc(10.5714px + 0.4464vw),14px)!important;
+    font-size:clamp(13px,calc(11.5714px + 0.4464vw),15px)!important;
   }
   .overview-main .stat-match-list .wc-stat-sub{
-    font-size:clamp(10px,calc(8.9286px + 0.3348vw),11.5px)!important;
+    font-size:clamp(11px,calc(9.9286px + 0.3348vw),12.5px)!important;
   }
   .overview-main .stat-match-list .wc-stat-val{
-    font-size:clamp(15px,calc(13.5714px + 0.4464vw),17px)!important;
+    font-size:clamp(14px,calc(12.5714px + 0.4464vw),16px)!important;
   }
 }
 
@@ -6943,7 +6989,7 @@ body.modal-open{
     font-size:clamp(13px,.78vw,16px)!important;
   }
   .standings .row .tname,.standings .row .num,.standings .row .rank{
-    font-size:clamp(17.8px,.98vw,21.8px)!important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px)!important;
   }
   .standings .row .tc .crest,.standings .row .tc .crest[style]{
     --cs:clamp(29px,1.68vw,37px)!important;
@@ -7076,18 +7122,18 @@ body.modal-open{
     gap:clamp(210px,17vw,280px)!important;
   }
   .ko-side{
-    grid-template-columns:repeat(4,clamp(265px,20.5vw,315px))!important;
+    grid-template-columns:repeat(4,clamp(230px,calc(194.7059px + 3.9216vw),270px))!important;
     gap:clamp(58px,4.8vw,78px)!important;
   }
   .ko-col{
-    min-width:clamp(265px,20.5vw,315px)!important;
+    min-width:clamp(230px,calc(194.7059px + 3.9216vw),270px)!important;
     grid-template-rows:repeat(17,clamp(66px,5.15vw,82px))!important;
     row-gap:clamp(17px,1.45vw,24px)!important;
     gap:clamp(17px,1.45vw,24px)!important;
     padding-top:clamp(34px,2.8vw,44px)!important;
   }
   .ko-col h3{
-    font-size:clamp(14px,1.05vw,17px)!important;
+    font-size:clamp(12.5px,calc(11.468px + 0.184vw),15px)!important;
     letter-spacing:.01em!important;
   }
   .ko-final-col{
@@ -7096,6 +7142,9 @@ body.modal-open{
     row-gap:clamp(17px,1.45vw,24px)!important;
     gap:clamp(17px,1.45vw,24px)!important;
     padding-top:clamp(38px,3vw,50px)!important;
+  }
+  .ko-final-col .ko-card{
+    max-width:clamp(230px,calc(194.7059px + 3.9216vw),270px)!important;
   }
   .ko-final-col .ko-cup{
     height:clamp(40px,3.2vw,54px)!important;
@@ -7271,7 +7320,7 @@ body.modal-open{
     overflow:hidden !important;
   }
   .stat-match-list .wc-stat-name{
-    font-size:clamp(14px,calc(13.3808px + 0.1104vw),15.5px)!important;
+    font-size:clamp(15px,calc(13.968px + 0.184vw),17.5px)!important;
     line-height:1.15 !important;
     letter-spacing:-.008em !important;
     font-weight:900 !important;
@@ -7304,7 +7353,7 @@ body.modal-open{
     font-size:inherit!important;
   }
   .stat-match-list .wc-stat-sub{
-    font-size:clamp(11.5px,calc(11.0872px + 0.0736vw),12.5px)!important;
+    font-size:clamp(12.5px,calc(11.8808px + 0.1104vw),14px)!important;
     line-height:1.2 !important;
     margin-top:clamp(4px,.28vw,6px) !important;
     white-space:nowrap !important;
@@ -7339,7 +7388,7 @@ body.modal-open{
     height:clamp(57px,3.62vw,69px)!important;
   }
   .standings .row .tname,.standings .row .num,.standings .row .rank{
-    font-size:clamp(15.2px,1.02vw,18px) !important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px) !important;
   }
   .standings .thead{
     font-size:clamp(11.6px,.74vw,14px)!important;
@@ -7352,12 +7401,12 @@ body.modal-open{
     gap:clamp(12px,.85vw,16px)!important;
   }
   .standings .row .tname{
-    font-size:clamp(16.1px,.96vw,20px)!important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px)!important;
     font-weight:780!important;
     letter-spacing:.002em!important;
   }
   .standings .row .num,.standings .row .rank{
-    font-size:clamp(16px,.95vw,20px)!important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px)!important;
     font-weight:780!important;
   }
   .short{
@@ -7383,7 +7432,7 @@ body.modal-open{
     padding:clamp(9px,.7vw,14px) clamp(14px,.95vw,22px)!important;
   }
   .round-comp{
-    font-size:clamp(11px,.72vw,14px)!important;
+    font-size:clamp(14px,calc(12.3488px + 0.2943vw),18px)!important;
     padding:clamp(6px,.45vw,10px) clamp(14px,.95vw,22px)!important;
     gap:clamp(7px,.48vw,10px)!important;
   }
@@ -7452,7 +7501,7 @@ body.modal-open{
     --cs:24px !important;
   }
   .stat-match-list .wc-stat-name{
-    font-size:14.5px !important;
+    font-size:15.8px !important;
   }
   .stat-match-list .wc-stat-val{
     font-size:17.6px !important;
@@ -7471,7 +7520,7 @@ body.modal-open{
     font-size:17.6px !important;
   }
   .stat-match-list .wc-stat-sub{
-    font-size:11.8px !important;
+    font-size:13px !important;
   }
   .stat-match-list .stat-game-text{
     max-width:clamp(230px,32vw,420px) !important;
@@ -7483,7 +7532,7 @@ body.modal-open{
     height:57px!important;
   }
   .standings .row .tname,.standings .row .num,.standings .row .rank{
-    font-size:16.1px!important;
+    font-size:16.3px!important;
   }
   .stat-match-list .stat-game-name .crest,.stat-match-list .stat-game-name .crest[style]{
     --cs:20px !important;
@@ -7500,7 +7549,7 @@ body.modal-open{
     padding:9px 14px!important;
   }
   .round-comp{
-    font-size:11px!important;
+    font-size:15.3px!important;
     padding:6px 14px!important;
   }
   .round-comp .rc-logo{
@@ -7541,7 +7590,7 @@ body.modal-open{
     --cs:clamp(28px,1.55vw,32px)!important;
   }
   .standings .row .tname,.standings .row .num,.standings .row .rank{
-    font-size:clamp(16.6px,.92vw,18px)!important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px)!important;
   }
   .match-row{
     min-height:clamp(69px,4vw,76px)!important;
@@ -7659,7 +7708,7 @@ body.modal-open{
     --cs:clamp(32px,1.45vw,40px)!important;
   }
   .standings .row .tname,.standings .row .num,.standings .row .rank{
-    font-size:clamp(18px,.9vw,22px)!important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px)!important;
   }
   .match-row{
     min-height:clamp(76px,3.7vw,92px)!important;
@@ -7729,10 +7778,10 @@ body.modal-open{
     font-size:clamp(17px,calc(16.1744px + 0.1472vw),19px) !important;
   }
   .stat-match-list .wc-stat-name{
-    font-size:clamp(14px,calc(13.3808px + 0.1104vw),15.5px) !important;
+    font-size:clamp(15px,calc(13.968px + 0.184vw),17.5px) !important;
   }
   .stat-match-list .wc-stat-sub{
-    font-size:clamp(11.5px,calc(11.0872px + 0.0736vw),12.5px) !important;
+    font-size:clamp(12.5px,calc(11.8808px + 0.1104vw),14px) !important;
   }
   .stat-match-list .wc-stat-val{
     font-size:clamp(17px,calc(16.1744px + 0.1472vw),19px) !important;
@@ -7750,7 +7799,7 @@ body.modal-open{
     height:clamp(61px,3.25vw,70px) !important;
   }
   .standings .row .tname,.standings .row .num,.standings .row .rank{
-    font-size:clamp(17px,.98vw,20px) !important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px) !important;
   }
   .stat-match-list .stat-game-name .crest,.stat-match-list .stat-game-name .crest[style]{
     --cs:clamp(26px,1.32vw,34px) !important;
@@ -7804,24 +7853,21 @@ body.modal-open{
 }
 
 @media (min-width:1500px){
-  .ko-watermark{
-    font-size:17px!important;
-  }
   .ko-card .ko-team{
-    grid-template-columns:clamp(30px,1.56vw,35px) minmax(0,1fr) 58px!important;
-    min-height:44px!important;
-    font-size:clamp(15.8px,.86vw,18px)!important;
+    grid-template-columns:clamp(28.8px,calc(20.9429px + 0.5238vw),31px) minmax(0,1fr) 52px!important;
+    min-height:46px!important;
+    font-size:clamp(17.8px,calc(13.5143px + 0.2857vw),19px)!important;
   }
   .ko-card .ko-team .crest{
-    --cs:clamp(30px,1.56vw,35px)!important;
+    --cs:clamp(28.8px,calc(20.9429px + 0.5238vw),31px)!important;
   }
   .ko-card .ko-score{
-    font-size:18px!important;
-    min-width:58px!important;
+    font-size:20.5px!important;
+    min-width:52px!important;
     transform:translateX(-6px)!important;
   }
   .ko-card .ko-pen{
-    font-size:14px!important;
+    font-size:15.5px!important;
   }
   .standings .row .tc .crest,.standings .row .tc .crest[style]{
     --cs:clamp(33px,1.72vw,41px)!important;
@@ -7830,13 +7876,13 @@ body.modal-open{
     font-size:clamp(23px,1.08vw,29px)!important;
   }
   .standings .row .tname,.standings .row .num,.standings .row .rank{
-    font-size:clamp(17px,.92vw,21px)!important;
+    font-size:clamp(15px,calc(13.3488px + 0.2943vw),19px)!important;
   }
   .standings .thead{
     font-size:clamp(12px,.66vw,15px)!important;
   }
   .round-comp{
-    font-size:clamp(15px,.8vw,18px)!important;
+    font-size:clamp(14px,calc(12.3488px + 0.2943vw),18px)!important;
   }
   .match-row{
     min-height:clamp(82px,3.8vw,96px)!important;
@@ -7855,9 +7901,6 @@ body.modal-open{
   }
   .mr-scores{
     font-size:clamp(18px,.92vw,23px)!important;
-  }
-  .zlabel{
-    font-size:clamp(13.5px,.72vw,16px)!important;
   }
   .round-comp .rc-logo{
     width:clamp(25px,1.28vw,30px)!important;
@@ -8135,8 +8178,8 @@ function groupBy(arr,fn){return arr.reduce((o,x)=>{let k=fn(x);(o[k]??=[]).push(
 function dateSection(k,rows){let byG=groupBy(rows,x=>x.g);return '<section class="card"><h2 class="card-title">'+k+'</h2>'+Object.entries(byG).map(([g,ms])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+ms[0].r+'. kör</span></div><div class="matches">'+ms.map(mrow).join('')+'</div>').join('')+'</section>'}
 let matchAutoScrollTimer=null,matchAutoScrolledKey='',suppressShrinkUntil=0;
 function currentMatchScrollTarget(){let rows=FX.slice();if(MS.filt==='round')rows=rows.filter(x=>x.r===MS.round);if(MS.filt==='team')rows=rows.filter(x=>x.h===MS.team||x.a===MS.team);rows.sort((x,y)=>x.day-y.day||x.g.localeCompare(y.g)||x.r-y.r);return rows.find(x=>matchLockState(x)==='live')||rows.find(x=>matchLockState(x)==='open')||null}
-function scrollToCurrentMatch(){if(FROZEN_MODE||S.tab!=='matches')return;let target=currentMatchScrollTarget();if(!target)return;let key=[MS.filt,MS.round,MS.team,target.id].join('|');if(matchAutoScrolledKey===key)return;matchAutoScrolledKey=key;clearTimeout(matchAutoScrollTimer);matchAutoScrollTimer=setTimeout(()=>{let el=document.querySelector('[data-mid="'+target.id+'"]');if(!el)return;syncSpacer();let h=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--control-top'))||0,y=el.getBoundingClientRect().top+scrollY-Math.max(86,h+18);scrollTo({top:Math.max(0,y),behavior:'auto'})},40)}
-function renderMatches(){let rows=FX.slice(),m=document.getElementById('main'),koHtml='';m.className='main matches-main';if(MS.filt==='round')rows=rows.filter(x=>x.r===MS.round);if(MS.filt==='team')rows=rows.filter(x=>x.h===MS.team||x.a===MS.team);if(MS.filt==='date'||MS.filt==='group')koHtml=koMatchSections();rows.sort((x,y)=>x.day-y.day||x.g.localeCompare(y.g)||x.r-y.r);if(MS.filt==='date'){let by=groupBy(rows,x=>localMatchDate(x));m.innerHTML=Object.entries(by).map(([k,v])=>dateSection(k,v)).join('')+koHtml}else if(MS.filt==='group'){let by=groupBy(rows,x=>x.g);m.innerHTML=Object.entries(by).map(([g,ms])=>'<section class="card"><h2 class="card-title">'+g+' csoport</h2>'+Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')+'</section>').join('')+koHtml}else if(MS.filt==='round'){let by=groupBy(rows,x=>x.g);m.innerHTML='<section class="card"><h2 class="card-title">Csoportkör - '+MS.round+'. kör</h2>'+Object.entries(by).map(([g,ms])=>Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')).join('')+'</section>'}else{let by=groupBy(rows,x=>localMatchDate(x));m.innerHTML='<section class="card"><h2 class="card-title">'+esc(MS.team)+'</h2>'+Object.entries(by).map(([k,v])=>'<div class="round-comp"><span>'+k+'</span></div><div class="matches">'+v.map(mrow).join('')+'</div>').join('')+'</section>'}activateCrests();if(!FROZEN_MODE){m.querySelectorAll('[data-mid]').forEach(el=>el.onclick=e=>{e.stopPropagation();openTip(el.dataset.mid)});m.querySelectorAll('[data-ko-mid]').forEach(el=>el.onclick=e=>{e.stopPropagation();openKoTip(el.dataset.koMid)})}scrollToCurrentMatch()}
+function scrollToCurrentMatch(){if(FROZEN_MODE||S.tab!=='matches')return;if(MS.filt==='group'||MS.filt==='round')return;let target=currentMatchScrollTarget();if(!target)return;let key=[MS.filt,MS.round,MS.team,target.id].join('|');if(matchAutoScrolledKey===key)return;matchAutoScrolledKey=key;clearTimeout(matchAutoScrollTimer);matchAutoScrollTimer=setTimeout(()=>{let el=document.querySelector('[data-mid="'+target.id+'"]');if(!el)return;syncSpacer();let h=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--control-top'))||0,y=el.getBoundingClientRect().top+scrollY-Math.max(140,h+78);scrollTo({top:Math.max(0,y),behavior:'auto'})},40)}
+function renderMatches(){let rows=FX.slice(),m=document.getElementById('main'),koHtml='';m.className='main matches-main';if(MS.filt==='round')rows=rows.filter(x=>x.r===MS.round);if(MS.filt==='team')rows=rows.filter(x=>x.h===MS.team||x.a===MS.team);if(MS.filt==='date'||MS.filt==='group')koHtml=koMatchSections();rows.sort((x,y)=>x.day-y.day||x.g.localeCompare(y.g)||x.r-y.r);if(MS.filt==='date'){let by=groupBy(rows,x=>localMatchDate(x));m.innerHTML=Object.entries(by).map(([k,v])=>dateSection(k,v)).join('')+koHtml}else if(MS.filt==='group'){let by=groupBy(rows,x=>x.g);m.innerHTML=Object.entries(by).map(([g,ms])=>'<section class="card"><h2 class="card-title">'+g+' csoport</h2>'+Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')+'</section>').join('')+koHtml}else if(MS.filt==='round'){let by=groupBy(rows,x=>x.g);m.innerHTML='<section class="card"><h2 class="card-title">Csoportkör - '+MS.round+'. kör</h2>'+Object.entries(by).map(([g,ms])=>Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')).join('')+'</section>'}else{let by=groupBy(rows,x=>localMatchDate(x));m.innerHTML='<section class="card"><h2 class="card-title">'+esc(MS.team)+'</h2>'+Object.entries(by).map(([k,v])=>'<div class="round-comp"><span>'+k+'</span></div><div class="matches">'+v.map(mrow).join('')+'</div>').join('')+'</section>'}activateCrests();if(!FROZEN_MODE){m.querySelectorAll('[data-mid]').forEach(el=>el.onclick=e=>{e.stopPropagation();openTip(el.dataset.mid)});m.querySelectorAll('[data-ko-mid]').forEach(el=>el.onclick=e=>{e.stopPropagation();openKoTip(el.dataset.koMid)})}scrollToCurrentMatch();syncSoon()}
 function teamModelScore(n){let elo=TEAM_ELO[n]||1600,m=TEAM_MARKET[n]||25,market=Math.log(m+25)*62,host=HOST_TEAMS.has(n)?28:0;return elo+market+host}
 function rankScore(n){return teamModelScore(n)}
 function matchProb(x){let diff=teamModelScore(x.h)-teamModelScore(x.a),draw=Math.max(.17,Math.min(.29,.265-Math.abs(diff)/2600)),homeShare=1/(1+Math.exp(-diff/285)),rem=1-draw,home=rem*homeShare,away=rem*(1-homeShare),s=home+draw+away;return{home:home/s,draw:draw/s,away:away/s,diff}}
@@ -8251,5 +8294,5 @@ function statsRoundEfficiencyHtml(){let ko=communityKoMatches(PRED,KO_PRED),card
 function syncSpacer(){let t=document.getElementById('topBar'),s=document.getElementById('spacer'),h=Math.ceil(t.getBoundingClientRect().height||t.offsetHeight||148);s.style.height=h+'px';document.documentElement.style.setProperty('--top-h',h+'px');document.documentElement.style.setProperty('--control-top',(h+2)+'px');let cw=document.getElementById('ctrlWrap'),ch=cw?Math.ceil(cw.getBoundingClientRect().height||cw.offsetHeight||0):0;document.documentElement.style.setProperty('--ctrl-h',ch+'px')}
 function syncSoon(){syncSpacer();requestAnimationFrame(syncSpacer);setTimeout(syncSpacer,90);setTimeout(syncSpacer,220);setTimeout(syncSpacer,360)}
 function render(){if(S.tab!=='community')document.querySelectorAll('.community-preview').forEach(x=>x.remove());document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===S.tab));tblCtrl.classList.toggle('hidden',S.tab!=='table');koCtrl.classList.toggle('hidden',S.tab!=='knockout');mCtrl.classList.toggle('hidden',S.tab!=='matches');mRoundBar.classList.toggle('hidden',!(S.tab==='matches'&&MS.filt==='round'));mTeamBar.classList.toggle('hidden',!(S.tab==='matches'&&MS.filt==='team'));if(S.tab==='overview')renderOverview();else if(S.tab==='table')renderTables();else if(S.tab==='matches')renderMatches();else if(S.tab==='knockout')renderKO();else if(S.tab==='stats')renderStats();else if(S.tab==='community')renderCommunity();else renderStats();syncSpacer()}
-tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');syncSpacer()}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));render()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){MS.round=+b.dataset.r;matchAutoScrolledKey='';roundSelTxt.innerHTML=MS.round+'. kör';roundSelDrop.classList.remove('open');renderMatches()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');renderMatches()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();syncSoon();</script></body></html>
+tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken')}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){MS.round=+b.dataset.r;matchAutoScrolledKey='';roundSelTxt.innerHTML=MS.round+'. kör';roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();</script></body></html>
 
