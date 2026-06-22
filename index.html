@@ -2971,6 +2971,10 @@ body.modal-open{
   direction:ltr!important;
 }
 
+.ko-left{
+  justify-content:end!important;
+}
+
 .ko-right .ko-col{
   direction:ltr!important;
 }
@@ -3017,13 +3021,13 @@ body.modal-open{
 }
 
 .ko-left .ko-card::after{
-  right:-30px!important;
-  width:30px!important;
+  right:calc(-1 * clamp(24px,3vw,60px))!important;
+  width:clamp(24px,3vw,60px)!important;
 }
 
 .ko-right .ko-card::after{
-  left:-30px!important;
-  width:30px!important;
+  left:calc(-1 * clamp(24px,3vw,60px))!important;
+  width:clamp(24px,3vw,60px)!important;
 }
 
 .ko-final-col .ko-card::before,.ko-final-col .ko-card::after{
@@ -3985,7 +3989,7 @@ body.modal-open{
 }
 
 .matches-main .mr-scores{
-  font-size:clamp(13px,calc(11.5px + 0.3vw),14.5px)!important;
+  font-size:clamp(13.5px,calc(12px + 0.3vw),15px)!important;
 }
 
 .ctrl-inner,.kc-inner{
@@ -5518,7 +5522,7 @@ body.modal-open{
     --cs:clamp(22px,1.62vw,35px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(13.5px,calc(12px + 0.33vw),15px)!important;
+    font-size:clamp(14px,calc(12.5px + 0.33vw),15.5px)!important;
   }
   .eff-total{
     padding:clamp(12px,.95vw,15px) clamp(16px,1.2vw,22px)!important;
@@ -5709,7 +5713,7 @@ body.modal-open{
     line-height:1.24!important;
   }
   .community-score{
-    font-size:clamp(21px,calc(19.1424px + 0.3311vw),25.5px)!important;
+    font-size:clamp(23px,calc(21px + 0.35vw),28px)!important;
     line-height:1!important;
   }
   .community-tabs{
@@ -5812,7 +5816,7 @@ body.modal-open{
     line-height:1.12!important;
   }
   .community-row .community-meta{
-    font-size:clamp(12.8px,.7vw,14.8px)!important;
+    font-size:clamp(15.5px,.88vw,17.5px)!important;
     line-height:1.25!important;
   }
   .community-pred .community-team{
@@ -5866,7 +5870,7 @@ body.modal-open{
     gap:clamp(4px,.7vw,8px)!important;
   }
   .matches-main .mr-live-state,.matches-main .mr-tip{
-    font-size:clamp(11.5px,.75vw,14.5px)!important;
+    font-size:clamp(12.5px,.82vw,15.5px)!important;
   }
   .stats-main .eff-total-label{
     font-size:clamp(12.6px,.78vw,15px)!important;
@@ -5922,10 +5926,10 @@ body.modal-open{
     line-height:1.12!important;
   }
   .community-main .community-row .community-meta{
-    font-size:12px!important;
+    font-size:15.5px!important;
   }
   .community-main .community-row .community-score{
-    font-size:18.5px!important;
+    font-size:20.5px!important;
     font-weight:1000!important;
     color:#41ffad!important;
     text-shadow:0 0 12px rgba(56,242,162,.22)!important;
@@ -5973,12 +5977,12 @@ body.modal-open{
     grid-template-rows:repeat(9,28px)!important;
   }
   .ko-left .ko-card::after{
-    right:-18px!important;
-    width:18px!important;
+    right:-24px!important;
+    width:24px!important;
   }
   .ko-right .ko-card::after{
-    left:-18px!important;
-    width:18px!important;
+    left:-24px!important;
+    width:24px!important;
   }
   .ko-final-col .ko-card::before{
     left:-24px!important;
@@ -7005,7 +7009,7 @@ body.modal-open{
     --cs:clamp(21px,1.52vw,29.5px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(14.5px,calc(13px + 0.19vw),16px)!important;
+    font-size:clamp(15px,calc(13.5px + 0.19vw),16.5px)!important;
   }
   .matches-main .mr-bell{
     font-size:clamp(14px,.82vw,18px)!important;
@@ -7025,7 +7029,7 @@ body.modal-open{
     font-weight:950!important;
   }
   .matches-main .mr-live-state,.matches-main .mr-tip{
-    font-size:clamp(9.8px,.68vw,12.5px)!important;
+    font-size:clamp(10.5px,.72vw,13.5px)!important;
   }
 }
 
@@ -7213,12 +7217,12 @@ body.modal-open{
     font-size:clamp(13px,1vw,16px)!important;
   }
   .ko-left .ko-card::after{
-    right:calc(-1 * clamp(58px,4.8vw,78px))!important;
-    width:clamp(58px,4.8vw,78px)!important;
+    right:calc(-1 * clamp(40px,3.5vw,60px))!important;
+    width:clamp(40px,3.5vw,60px)!important;
   }
   .ko-right .ko-card::after{
-    left:calc(-1 * clamp(58px,4.8vw,78px))!important;
-    width:clamp(58px,4.8vw,78px)!important;
+    left:calc(-1 * clamp(40px,3.5vw,60px))!important;
+    width:clamp(40px,3.5vw,60px)!important;
   }
   .ko-final-col .ko-card::before{
     left:calc(-1 * clamp(40px,3.5vw,60px))!important;
@@ -7730,7 +7734,7 @@ body.modal-open{
     --cs:clamp(23.5px,1.58vw,29.5px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(15px,calc(11px + 0.32vw),17px)!important;
+    font-size:clamp(15.5px,calc(11.5px + 0.32vw),17.5px)!important;
   }
 }
 
@@ -7778,7 +7782,7 @@ body.modal-open{
     --cs:clamp(28px,1.24vw,36px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(16px,calc(12px + 0.22vw),18px)!important;
+    font-size:clamp(16.5px,calc(12.5px + 0.22vw),18.5px)!important;
   }
 }
 
@@ -7954,7 +7958,7 @@ body.modal-open{
     font-size:clamp(12.5px,.58vw,14.5px)!important;
   }
   .matches-main .mr-scores{
-    font-size:16.5px!important;
+    font-size:17px!important;
   }
   .tip-sheet .sheet-verdict{
     font-size:clamp(13px,.72vw,15.5px)!important;
@@ -8357,4 +8361,3 @@ function syncSpacer(){let t=document.getElementById('topBar'),s=document.getElem
 function syncSoon(){syncSpacer();requestAnimationFrame(syncSpacer);setTimeout(syncSpacer,90);setTimeout(syncSpacer,220);setTimeout(syncSpacer,360)}
 function render(){if(S.tab!=='community')document.querySelectorAll('.community-preview').forEach(x=>x.remove());document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===S.tab));tblCtrl.classList.toggle('hidden',S.tab!=='table');koCtrl.classList.toggle('hidden',S.tab!=='knockout');mCtrl.classList.toggle('hidden',S.tab!=='matches');mRoundBar.classList.toggle('hidden',!(S.tab==='matches'&&MS.filt==='round'));mTeamBar.classList.toggle('hidden',!(S.tab==='matches'&&MS.filt==='team'));if(S.tab==='overview')renderOverview();else if(S.tab==='table')renderTables();else if(S.tab==='matches')renderMatches();else if(S.tab==='knockout')renderKO();else if(S.tab==='stats')renderStats();else if(S.tab==='community')renderCommunity();else renderStats();syncSpacer()}
 tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken')}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();</script></body></html>
-
