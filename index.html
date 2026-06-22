@@ -3989,7 +3989,7 @@ body.modal-open{
 }
 
 .matches-main .mr-scores{
-  font-size:clamp(13.5px,calc(12px + 0.3vw),15px)!important;
+  font-size:clamp(17.5px,calc(16px + 0.3vw),19px)!important;
 }
 
 .ctrl-inner,.kc-inner{
@@ -5522,7 +5522,7 @@ body.modal-open{
     --cs:clamp(22px,1.62vw,35px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(14px,calc(12.5px + 0.33vw),15.5px)!important;
+    font-size:clamp(18px,calc(16.5px + 0.33vw),19.5px)!important;
   }
   .eff-total{
     padding:clamp(12px,.95vw,15px) clamp(16px,1.2vw,22px)!important;
@@ -5870,7 +5870,7 @@ body.modal-open{
     gap:clamp(4px,.7vw,8px)!important;
   }
   .matches-main .mr-live-state,.matches-main .mr-tip{
-    font-size:clamp(12.5px,.82vw,15.5px)!important;
+    font-size:clamp(11.5px,.75vw,14.5px)!important;
   }
   .stats-main .eff-total-label{
     font-size:clamp(12.6px,.78vw,15px)!important;
@@ -7009,7 +7009,7 @@ body.modal-open{
     --cs:clamp(21px,1.52vw,29.5px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(15px,calc(13.5px + 0.19vw),16.5px)!important;
+    font-size:clamp(19px,calc(17.5px + 0.19vw),20.5px)!important;
   }
   .matches-main .mr-bell{
     font-size:clamp(14px,.82vw,18px)!important;
@@ -7029,7 +7029,7 @@ body.modal-open{
     font-weight:950!important;
   }
   .matches-main .mr-live-state,.matches-main .mr-tip{
-    font-size:clamp(10.5px,.72vw,13.5px)!important;
+    font-size:clamp(9.8px,.68vw,12.5px)!important;
   }
 }
 
@@ -7734,7 +7734,7 @@ body.modal-open{
     --cs:clamp(23.5px,1.58vw,29.5px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(15.5px,calc(11.5px + 0.32vw),17.5px)!important;
+    font-size:clamp(19.5px,calc(15.5px + 0.32vw),21.5px)!important;
   }
 }
 
@@ -7782,7 +7782,7 @@ body.modal-open{
     --cs:clamp(28px,1.24vw,36px)!important;
   }
   .matches-main .mr-scores{
-    font-size:clamp(16.5px,calc(12.5px + 0.22vw),18.5px)!important;
+    font-size:clamp(20.5px,calc(16.5px + 0.22vw),22.5px)!important;
   }
 }
 
@@ -7958,7 +7958,7 @@ body.modal-open{
     font-size:clamp(12.5px,.58vw,14.5px)!important;
   }
   .matches-main .mr-scores{
-    font-size:17px!important;
+    font-size:21px!important;
   }
   .tip-sheet .sheet-verdict{
     font-size:clamp(13px,.72vw,15.5px)!important;
@@ -8298,10 +8298,10 @@ function openKoTip(id){if(FROZEN_MODE)return;let x=findKoMatch(id);if(!x||x.lock
 function saveKoTip(id){let x=findKoMatch(id);if(!x||x.locked)return;let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;let ov=document.querySelector('.tip-overlay'),h=ov.querySelector('#tipH').value,a=ov.querySelector('#tipA').value,pH=ov.querySelector('#penH').value,pA=ov.querySelector('#penA').value,msg=ov.querySelector('#tipMsg');if(!groupsComplete()){msg.textContent='El&#337;bb tippeld ki mind a 72 csoportmeccset.';return}if(!validScore(h)||!validScore(a)){msg.textContent='Adj meg k&eacute;t 0 &eacute;s 99 k&ouml;z&ouml;tti eg&eacute;sz sz&aacute;mot.';return}let obj={h:+h,a:+a,hTeam:x.h,aTeam:x.a,round:x.title};if(+h===+a){if(!validScore(pH)||!validScore(pA)){msg.textContent='D&ouml;ntetlenn&eacute;l a tizenegyeseket is meg kell adni.';return}if(+pH===+pA){msg.textContent='A tizenegyesp&aacute;rbaj nem lehet d&ouml;ntetlen.';return}obj.pH=+pH;obj.pA=+pA}else{pH='';pA=''}KO_PRED[id]=obj;savePred();closeTip();render()}
 function pctBar(val,total,clr){let p=total?+((val/total)*100).toFixed(2):0;return '<div class="stat-bar-row"><div class="stat-bar-track"><div class="stat-bar-fill" style="width:'+p+'%;background:'+clr+'"></div></div><span class="stat-bar-val">'+p+'%</span></div>'}
 function statRow(i,name,sub,val){return '<div class="wc-stat-row"><div class="wc-stat-rank">'+i+'</div><div class="wc-stat-main"><div class="wc-stat-name">'+name+'</div><div class="wc-stat-sub">'+sub+'</div></div><div class="wc-stat-val">'+val+'</div></div>'}
-function topScorersList(){let counts={};FX.forEach(x=>{let r=LIVE_RESULTS[x.id];if(!r||!Array.isArray(r.scorers))return;r.scorers.forEach(s=>{if(!s.player||s.og)return;let team=s.team==='a'?x.a:x.h,key=s.player+'|'+team;if(!counts[key])counts[key]={player:s.player,team,goals:0};counts[key].goals++})});return Object.values(counts).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player)).slice(0,15)}
+function topScorersList(){let counts={};FX.forEach(x=>{let r=LIVE_RESULTS[x.id];if(!r||!Array.isArray(r.scorers))return;r.scorers.forEach(s=>{if(!s.player||s.og)return;let team=s.team==='a'?x.a:x.h,key=s.player+'|'+team;if(!counts[key])counts[key]={player:s.player,team,goals:0};counts[key].goals++})});return Object.values(counts).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player)).slice(0,20)}
 function goalScorerStatRow(i,s){return '<div class="wc-stat-row"><div class="wc-stat-rank">'+i+'</div><div class="wc-stat-main"><div class="wc-stat-name stat-game-name">'+crest(s.team,'16px')+'<span class="stat-game-text">'+esc(s.player)+'</span></div><div class="wc-stat-sub">'+esc(s.team)+'</div></div><div class="wc-stat-val">'+s.goals+'</div></div>'}
-function topScorersHtml(){let list=topScorersList();return '<section class="card"><h2 class="card-title">Legjobb g&oacute;ll&ouml;v&#337;k - Top 15</h2><div class="wc-stat-list stat-match-list">'+(list.length?list.map((s,i)=>goalScorerStatRow(i+1,s)).join(''):Array.from({length:15},(_,i)=>statRow(i+1,'M&eacute;g nincs adat','A val&oacute;s g&oacute;lszerz&#337;k ut&aacute;n friss&uuml;l','0')).join(''))+'</div></section>'}
-function topMatchesHtml(){let realRes=FX.map(x=>({m:x,p:actualFor(x),source:'Val&oacute;s'})).filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a)&&(x.p.started||x.p.finished)),tipRes=FX.filter(x=>{let r=actualFor(x);return !(r&&validScore(r.h)&&validScore(r.a)&&(r.started||r.finished))}).map(x=>({m:x,p:PRED[x.id],source:'Tipp'})).filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a)),koTipRes=(()=>{try{return buildKO().flatMap(r=>r.matches).concat([buildBronze(buildKO())]).filter(m=>m.h&&m.a&&!m.locked).map(m=>({m:{id:m.id,h:m.h,a:m.a,g:'',d:'',title:m.title,index:m.index},p:KO_PRED[m.id],source:'Tipp'})).filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a))}catch(e){return []}})(),res=realRes.concat(tipRes).concat(koTipRes),goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,15),diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,15);return '<section class="card"><h2 class="card-title">Legg&oacute;losabb meccsek - Top 15</h2><div class="wc-stat-list stat-match-list">'+(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:15},(_,i)=>statRow(i+1,'M&eacute;g nincs adat','A val&oacute;s eredm&eacute;nyek ut&aacute;n friss&uuml;l','0')).join(''))+'</div></section><section class="card"><h2 class="card-title">Legegyoldal&uacute;bb meccsek - Top 15</h2><div class="wc-stat-list stat-match-list">'+(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:15},(_,i)=>statRow(i+1,'M&eacute;g nincs lej&aacute;tszott m&eacute;rk&#337;z&eacute;s','G&oacute;lk&uuml;l&ouml;nbs&eacute;g: 0','0')).join(''))+'</div></section>'}
+function topScorersHtml(){let list=topScorersList();return '<section class="card"><h2 class="card-title">Legjobb g&oacute;ll&ouml;v&#337;k - Top 20</h2><div class="wc-stat-list stat-match-list">'+(list.length?list.map((s,i)=>goalScorerStatRow(i+1,s)).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'M&eacute;g nincs adat','A val&oacute;s g&oacute;lszerz&#337;k ut&aacute;n friss&uuml;l','0')).join(''))+'</div></section>'}
+function topMatchesHtml(){let realRes=FX.map(x=>({m:x,p:actualFor(x),source:'Val&oacute;s'})).filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a)&&(x.p.started||x.p.finished)),tipRes=FX.filter(x=>{let r=actualFor(x);return !(r&&validScore(r.h)&&validScore(r.a)&&(r.started||r.finished))}).map(x=>({m:x,p:PRED[x.id],source:'Tipp'})).filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a)),koTipRes=(()=>{try{return buildKO().flatMap(r=>r.matches).concat([buildBronze(buildKO())]).filter(m=>m.h&&m.a&&!m.locked).map(m=>({m:{id:m.id,h:m.h,a:m.a,g:'',d:'',title:m.title,index:m.index},p:KO_PRED[m.id],source:'Tipp'})).filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a))}catch(e){return []}})(),res=realRes.concat(tipRes).concat(koTipRes),goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20),diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);return '<section class="card"><h2 class="card-title">Legg&oacute;losabb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'+(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'M&eacute;g nincs adat','A val&oacute;s eredm&eacute;nyek ut&aacute;n friss&uuml;l','0')).join(''))+'</div></section><section class="card"><h2 class="card-title">Legegyoldal&uacute;bb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'+(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'M&eacute;g nincs lej&aacute;tszott m&eacute;rk&#337;z&eacute;s','G&oacute;lk&uuml;l&ouml;nbs&eacute;g: 0','0')).join(''))+'</div></section>'}
 function tipEfficiency(){
   // --- Csoportkör ---
   let grpMeccs=FX.map(m=>{let r=actualFor(m);if(!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return null;return gradeTip(getPred(m.id),r);}).filter(x=>x&&x.cat);
