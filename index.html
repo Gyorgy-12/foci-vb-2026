@@ -2578,13 +2578,13 @@ body.modal-open{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-width:clamp(34px,2.35vw,48px);
-  padding:clamp(4px,.35vw,6px) clamp(9px,.8vw,13px);
+  min-width:clamp(24px,2.35vw,48px);
+  padding:clamp(2px,.35vw,6px) clamp(5px,.8vw,13px);
   border-radius:999px;
   background:rgba(255,90,104,.16);
   border:1px solid rgba(255,90,104,.32);
   color:#ff7b87;
-  font-size:clamp(14px,calc(0.22vw + 12px),16px);
+  font-size:clamp(10px,calc(0.22vw + 12px),16px);
   font-weight:950;
   line-height:1;
   white-space:nowrap;
@@ -2601,13 +2601,13 @@ body.modal-open{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-width:clamp(34px,2.35vw,48px);
-  padding:clamp(4px,.35vw,6px) clamp(9px,.8vw,13px);
+  min-width:clamp(24px,2.35vw,48px);
+  padding:clamp(2px,.35vw,6px) clamp(5px,.8vw,13px);
   border-radius:999px;
   background:rgba(255,160,50,.14);
   border:1px solid rgba(255,160,50,.32);
   color:#ffaa44;
-  font-size:clamp(14px,calc(0.22vw + 12px),16px);
+  font-size:clamp(10px,calc(0.22vw + 12px),16px);
   font-weight:950;
   letter-spacing:.02em;
   line-height:1;
@@ -3218,13 +3218,13 @@ body.modal-open{
   justify-content:center;
   margin-left:auto;
   margin-right:8px;
-  min-width:clamp(42px,4.4vw,62px);
-  padding:clamp(5px,.62vw,8px) clamp(10px,1vw,14px);
+  min-width:clamp(56px,4.4vw,72px);
+  padding:clamp(8px,.62vw,12px) clamp(14px,1vw,18px);
   border-radius:999px;
   background:rgba(255,90,104,.2);
   border:1px solid rgba(255,90,104,.42);
   color:#ff7b87;
-  font-size:clamp(14px,1.05vw,18px);
+  font-size:clamp(18px,1.05vw,22px);
   font-weight:950;
   line-height:1;
   white-space:nowrap;
@@ -6583,14 +6583,14 @@ body.modal-open{
   }
   .sheet-verdict.actual-result .tip-live-clock.int-modal-badge{background:rgba(255,160,50,.16)!important;border-color:rgba(255,160,50,.36)!important;color:#ffaa44!important;}
 .tip-live-clock{
-    min-width:clamp(32px,8vw,35px)!important;
-    padding:clamp(1px,.5vw,2px) clamp(5px,1.6vw,7px)!important;
-    font-size:10px!important;
+    min-width:clamp(36px,9vw,44px)!important;
+    padding:clamp(3px,.8vw,5px) clamp(8px,2vw,11px)!important;
+    font-size:clamp(12px,2.8vw,14px)!important;
   }
   .matches-main .mr-clock{
-    min-width:36px!important;
-    padding:5px 11px!important;
-    font-size:clamp(14px,2.4vw,16px)!important;
+    min-width:34px!important;
+    padding:4px 10px!important;
+    font-size:10.5px!important;
   }
   .community-main{
     gap:10px!important;
@@ -6877,10 +6877,10 @@ body.modal-open{
   .matches-main .mr-score-wrap.no-tip .mr-clock{
     display:inline-flex!important;
   }
-  .matches-main .mr-clock{
-    min-width:clamp(38px,2.6vw,52px)!important;
-    padding:clamp(4px,.35vw,7px) clamp(10px,.9vw,14px)!important;
-    font-size:clamp(14px,calc(0.2vw + 12px),17px)!important;
+  .matches-main .mr-clock,.matches-main .mr-int-badge{
+    min-width:34px!important;
+    padding:4px 10px!important;
+    font-size:10.5px!important;
   }
   .community-main .community-row{
     position:relative!important;
@@ -6985,6 +6985,11 @@ body.modal-open{
 }
 
 @media (min-width:768px){
+  .matches-main .mr-clock{
+    font-size:clamp(12px,calc(0.15vw + 10.5px),14.5px)!important;
+    min-width:clamp(30px,2vw,40px)!important;
+    padding:clamp(3px,.3vw,5px) clamp(7px,.6vw,10px)!important;
+  }
   .card:has(.stat-kpi-row),.card:has(.stat-phase-grid),.card:has(.wc-stat-list),.export-card{
     padding:clamp(24px,2.3vw,32px);
   }
