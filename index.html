@@ -2578,16 +2578,33 @@ body.modal-open{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-width:clamp(28px,2.35vw,42px);
-  padding:clamp(3px,.3vw,5px) clamp(7px,.7vw,11px);
+  min-width:clamp(34px,2.35vw,48px);
+  padding:clamp(4px,.35vw,6px) clamp(9px,.8vw,13px);
   border-radius:999px;
   background:rgba(255,90,104,.16);
   border:1px solid rgba(255,90,104,.32);
   color:#ff7b87;
-  font-size:clamp(13px,calc(0.18vw + 11px),15px);
+  font-size:clamp(14px,calc(0.22vw + 12px),16px);
   font-weight:950;
   line-height:1;
   white-space:nowrap;
+}
+
+.mr-int-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:2px 6px;
+  border-radius:999px;
+  background:rgba(255,160,50,.14);
+  border:1px solid rgba(255,160,50,.32);
+  color:#ffaa44;
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.06em;
+  line-height:1;
+  white-space:nowrap;
+  margin-top:2px;
 }
 
 .mr-score-pair{
@@ -6555,9 +6572,9 @@ body.modal-open{
     font-size:10px!important;
   }
   .matches-main .mr-clock{
-    min-width:30px!important;
-    padding:4px 9px!important;
-    font-size:clamp(12px,2.15vw,14px)!important;
+    min-width:36px!important;
+    padding:5px 11px!important;
+    font-size:clamp(14px,2.4vw,16px)!important;
   }
   .community-main{
     gap:10px!important;
@@ -6843,6 +6860,11 @@ body.modal-open{
   }
   .matches-main .mr-score-wrap.no-tip .mr-clock{
     display:inline-flex!important;
+  }
+  .matches-main .mr-clock{
+    min-width:clamp(38px,2.6vw,52px)!important;
+    padding:clamp(4px,.35vw,7px) clamp(10px,.9vw,14px)!important;
+    font-size:clamp(14px,calc(0.2vw + 12px),17px)!important;
   }
   .community-main .community-row{
     position:relative!important;
@@ -8210,7 +8232,7 @@ function nextLiveSyncDelay(){let now=Date.now(),info=liveSyncInfo(now);if(docume
 function scheduleLiveSync(delay){if(FROZEN_MODE)return;clearTimeout(wc26SyncTimer);wc26SyncTimer=setTimeout(async()=>{await syncLiveResults();scheduleLiveSync()},delay??nextLiveSyncDelay())}
 async function syncLiveResults(opts={}){return loadMatchResultsFromBackendDb()}function liveClockMinute(r){let vals=[r?.minute,r?.matchMinute,r?.elapsed,r?.currentMinute,r?.liveMinute,r?.matchTime,r?.time,r?.statusMinute];for(let v of vals){if(v==null||typeof v==='object')continue;let m=String(v).match(/\d{1,3}/);if(m){let n=+m[0];if(Number.isFinite(n)&&n>0&&n<140)return n}}return null}function shortPlayerName(name){let parts=String(name||'').trim().split(/\s+/);if(parts.length<2)return name;let first=parts[0],last=parts[parts.length-1];return first.charAt(0)+'. '+last}function eventTeam(e){return e.team==='a'||e.team==='away'||e.side==='away'||e.teamSide==='away'?'a':'h'}function eventMinute(e){return e.minute??e.matchMinute??e.elapsed??e.time??''}function isPenaltyGoal(s){let t=String(s.type||s.detail||s.note||s.goalType||s.code||s.Cd||'').toLowerCase(),blob=JSON.stringify(s||{}).toLowerCase();return !!(s.penalty===true||s.pen===true||s.pk===true||s.fromPenalty===true||t==='p'||t==='pg'||t==='pen'||t==='penalty'||t.includes('spot kick')||/"(penalty|pen|pk|frompenalty)"\s*:\s*true/.test(blob)||/\b11m\b/.test(blob)||blob.includes('spot kick'))}function goalScorersHtml(r,x){let events=[];if(r&&Array.isArray(r.scorers))events=events.concat(r.scorers.map(s=>({...s,_kind:'goal'})));if(r&&Array.isArray(r.redCards))events=events.concat(r.redCards.map(s=>({...s,_kind:'red'})));if(!events.length)return'';let sorted=events.sort((a,b)=>(parseInt(eventMinute(a))||0)-(parseInt(eventMinute(b))||0)),infoCell=s=>{if(s._kind==='red')return'<span class="red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Piros lap')+'</span>';let name=s.player?esc(shortPlayerName(s.player)):'',og=s.og?'<span class="goal-scorer-og">(&ouml;ng.)</span>':'',pen=isPenaltyGoal(s)?'<span class="goal-scorer-pen">(11-es)</span>':'';return'<span class="goal-scorer-ball">&#9917;</span><span class="goal-scorer-name">'+name+'</span>'+og+pen},rows=sorted.map(s=>{let team=eventTeam(s),home=team!=='a'?infoCell(s):'',away=team==='a'?infoCell(s):'',min=eventMinute(s)?eventMinute(s)+'&#39;':'',red=s._kind==='red'?' red-card-row':'';return'<div class="goal-scorer-row'+red+'"><div class="goal-scorers-col">'+home+'</div><span class="goal-scorer-min">'+min+'</span><div class="goal-scorers-col">'+away+'</div></div>'}).join('');return'<div class="goal-scorers">'+rows+'</div>'}function redCardsHtml(r,x){return''}function liveClockLabel(r){if(!r||!r.started||r.finished)return'';let s=String(r.status||'').toLowerCase();if(s==='ft'||s.includes('finished'))return'';if(s.includes('half')||s==='ht'||s.includes('halftime'))return'HT';let vals=[r.minute,r.matchMinute,r.elapsed,r.currentMinute,r.liveMinute,r.matchTime,r.time,r.statusMinute];for(let v of vals){if(v==null||typeof v==='object')continue;let str=String(v),plus=str.match(/(\d{1,3})\s*\+\s*(\d{1,2})/);if(plus)return plus[1]+'+'+plus[2]+'&#39;';let m=str.match(/\d{1,3}/);if(m){let n=+m[0];if(Number.isFinite(n)&&n>0&&n<140)return n+'&#39;'}}return s.includes('live')||s.includes('play')||s.includes('progress')||r.started?'LIVE':''}
 function scorePair(real,tip,cls){return '<div class="mr-score-pair"><span class="mr-actual">'+real+'</span><span class="'+(cls||'win')+'">'+tip+'</span></div>'}
-function scoreHtml(x){let p=getPred(x.id),r=actualFor(x),hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),clock=liveClockLabel(r),lines='';if(p&&hasReal)lines=scorePair(r.h,p.h,'win')+scorePair(r.a,p.a,'win');else if(p)lines='<div class="win">'+p.h+'</div><div class="win">'+p.a+'</div>';else if(hasReal)lines='<div class="mr-actual">'+r.h+'</div><div class="mr-actual">'+r.a+'</div>';else lines='<div class="match-empty">-</div><div class="match-empty">-</div>';return hasReal&&clock?'<div class="mr-score-wrap '+(p?'':'no-tip')+'"><span class="mr-clock">'+clock+'</span><div class="mr-score-lines">'+lines+'</div></div>':lines}
+function scoreHtml(x){let p=getPred(x.id),r=actualFor(x),hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),clock=liveClockLabel(r),rawSt=r&&r.status?String(r.status).toUpperCase():'',isInt=rawSt.includes('INT'),lines='';if(p&&hasReal)lines=scorePair(r.h,p.h,'win')+scorePair(r.a,p.a,'win');else if(p)lines='<div class="win">'+p.h+'</div><div class="win">'+p.a+'</div>';else if(hasReal)lines='<div class="mr-actual">'+r.h+'</div><div class="mr-actual">'+r.a+'</div>';else lines='<div class="match-empty">-</div><div class="match-empty">-</div>';return hasReal&&clock?'<div class="mr-score-wrap '+(p?'':'no-tip')+'"><span class="mr-clock">'+clock+'</span>'+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'<div class="mr-score-lines">'+lines+'</div></div>':hasReal&&isInt?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+'<span class="mr-int-badge">INT.</span>'+'<div class="mr-score-lines">'+lines+'</div></div>':lines}
 function mrow(x){let p=getPred(x.id),cls=p?'win':'',state=matchLockState(x),sc=tipScore(x),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'?' result-exact':sc.cat==='diff'?' result-diff':sc.cat==='outcome'?' result-outcome':sc.cat==='miss'?' result-miss':'');return '<div class="match-row'+rowCls+'" data-mid="'+x.id+'"><div class="mr-date">'+localMatchTime(x)+'<span>'+x.r+'. kör</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+matchStateBadge(x)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(x.h)+'<span class="mr-tname">'+esc(x.h)+'</span></div><div class="mr-team '+cls+'">'+crest(x.a)+'<span class="mr-tname">'+esc(x.a)+'</span></div></div><div class="mr-scores">'+scoreHtml(x)+'</div>'+edit+'</div>'}
 const KO_MATCH_SCHEDULE={R32:[['j&uacute;n. 28.','21:00'],['j&uacute;n. 29.','22:30'],['j&uacute;n. 30.','03:00'],['j&uacute;n. 29.','19:00'],['j&uacute;n. 30.','23:00'],['j&uacute;n. 30.','19:00'],['j&uacute;l. 1.','03:00'],['j&uacute;l. 1.','18:00'],['j&uacute;l. 2.','02:00'],['j&uacute;l. 1.','22:00'],['j&uacute;l. 3.','01:00'],['j&uacute;l. 2.','21:00'],['j&uacute;l. 3.','05:00'],['j&uacute;l. 4.','00:00'],['j&uacute;l. 4.','03:30'],['j&uacute;l. 3.','20:00']],R16:[['j&uacute;l. 4.','23:00'],['j&uacute;l. 4.','19:00'],['j&uacute;l. 5.','22:00'],['j&uacute;l. 6.','02:00'],['j&uacute;l. 6.','21:00'],['j&uacute;l. 7.','02:00'],['j&uacute;l. 7.','18:00'],['j&uacute;l. 7.','22:00']],QF:[['j&uacute;l. 9.','22:00'],['j&uacute;l. 10.','21:00'],['j&uacute;l. 11.','23:00'],['j&uacute;l. 12.','03:00']],SF:[['j&uacute;l. 14.','21:00'],['j&uacute;l. 15.','21:00']],BR:[['j&uacute;l. 18.','23:00']],F:[['j&uacute;l. 19.','21:00']]};
 function koMatchSchedule(m){let s=(KO_MATCH_SCHEDULE[m.round]||[])[(m.index||1)-1]||['',''];return{d:s[0],t:s[1]}}
