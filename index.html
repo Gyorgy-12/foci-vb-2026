@@ -8491,7 +8491,7 @@ function koLocalDate(d){
       'jül. 11.':'2026-07-11','jül. 12.':'2026-07-12','jül. 14.':'2026-07-14',
       'jül. 15.':'2026-07-15','jül. 18.':'2026-07-18','jül. 19.':'2026-07-19'};
     const iso=M[d];if(!iso)return d;
-    return new Date(iso+'T12:00:00+02:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/ /g,' ');
+    return new Date(iso+'T12:00:00+03:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/ /g,' ');
   }catch(e){return d;}
 }
 function koMatchKickoff(m){
@@ -8504,13 +8504,13 @@ function koMatchKickoff(m){
     'jül. 15.':'2026-07-15','jül. 18.':'2026-07-18','jül. 19.':'2026-07-19'};
   const iso=M[sched.d];
   if(!iso||!sched.t)return null;
-  return new Date(iso+'T'+sched.t+':00+02:00').getTime();
+  return new Date(iso+'T'+sched.t+':00+03:00').getTime();
 }
 
 function koMatchScoreHtml(m){let p=koPred(m.id);if(!p)return '<div class="match-empty">-</div><div class="match-empty">-</div>';let ph=p.pen?'<small class="ko-pen">('+p.pH+')</small> ':'';let pa=p.pen?'<small class="ko-pen">('+p.pA+')</small> ':'';return '<div class="win">'+ph+p.h+'</div><div class="win">'+pa+p.a+'</div>'}
 const KO_ROUND_SHORT={'Legjobb 32':'L. 32','Nyolcaddöntő':'Nyolcad','Negyeddöntő':'Negyed','Elődöntő':'Elődöntő','Döntő':'Döntő','Bronzmeccs':'3. hely'};
 
-function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
+function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{if(m.date&&m.t){try{return new Date(m.date+'T'+m.t+':00+03:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){}}let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
 
 function koMatchRowsByDate(ms){let sorted=ms.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.t||'').localeCompare(b.t||'')),by=groupBy(sorted,x=>koMatchSchedule(x).d||'Később'),order=[];sorted.forEach(x=>{let k=koMatchSchedule(x).d||'Később';if(!order.includes(k))order.push(k)});return order.map(d=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+by[d].map(koMatchRow).join('')+'</div>').join('')}
 function koMatchRowHtml(m){
