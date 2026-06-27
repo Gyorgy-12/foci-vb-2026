@@ -8521,9 +8521,9 @@ function koMatchRowHtml(m){
 function koMatchSections(){
   let rounds=buildKO(),bronze=buildBronze(rounds),all=rounds.flatMap(r=>r.matches).concat([bronze]);
   all=all.slice().sort((a,b)=>(koMatchKickoff(a)||0)-(koMatchKickoff(b)||0));
-  let by=groupBy(all,m=>koMatchSchedule(m).d||'Későbbi kör');
-  let entries=Object.entries(by).sort(([da],[db])=>(koMatchKickoff(by[da][0])||0)-(koMatchKickoff(by[db][0])||0));
-  return entries.map(([d,ms])=>'<section class="card"><h2 class="card-title">'+koLocalDate(d)+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+ms.map(koMatchRow).join('')+'</div></section>').join('');
+  let by=groupBy(all,m=>m.date||'9999-12-31');
+  let entries=Object.entries(by).sort(([da],[db])=>da.localeCompare(db));
+  return entries.map(([iso,ms])=>{let label=iso==='9999-12-31'?'Későbbi meccs':new Date(iso+'T12:00:00+02:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/ /g,' ');return '<section class="card"><h2 class="card-title">'+label+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+ms.map(koMatchRow).join('')+'</div></section>';}).join('');
 }
 function groupBy(arr,fn){return arr.reduce((o,x)=>{let k=fn(x);(o[k]??=[]).push(x);return o},{})}
 function dateSection(k,rows){let byG=groupBy(rows,x=>x.g);return '<section class="card"><h2 class="card-title">'+k+'</h2>'+Object.entries(byG).map(([g,ms])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+ms[0].r+'. kör</span></div><div class="matches">'+ms.map(mrow).join('')+'</div>').join('')+'</section>'}
@@ -8539,14 +8539,16 @@ function renderMatches(){let rows=FX.slice(),m=document.getElementById('main'),k
     let allRounds=buildKO(),bronze=buildBronze(allRounds);
     let allMatches=[...allRounds.flatMap(r=>r.matches)];
     if(bronze&&(bronze.h||bronze.a||bronze.id))allMatches.push(bronze);
-    allMatches.forEach(km=>{let sched=koMatchSchedule(km),kt=koMatchKickoff(km)||0;koItems.push({km,kt,d:sched.d});});
+    allMatches.forEach(km=>{let kt=koMatchKickoff(km)||0;koItems.push({km,kt,d:km.date||'9999-12-31'});});
     koItems.sort((a,b)=>a.kt-b.kt);
   }catch(e){}
   let koByDate={};
   koItems.forEach(({km,d})=>{let key=d||'Későbbi meccs';if(!koByDate[key])koByDate[key]=[];koByDate[key].push(koMatchRow(km));});
-  const KISO={'j&uacute;n. 28.':'2026-06-28','j&uacute;n. 29.':'2026-06-29','j&uacute;n. 30.':'2026-06-30','j&uacute;l. 1.':'2026-07-01','j&uacute;l. 2.':'2026-07-02','j&uacute;l. 3.':'2026-07-03','j&uacute;l. 4.':'2026-07-04','j&uacute;l. 5.':'2026-07-05','j&uacute;l. 6.':'2026-07-06','j&uacute;l. 7.':'2026-07-07','j&uacute;l. 9.':'2026-07-09','j&uacute;l. 10.':'2026-07-10','j&uacute;l. 11.':'2026-07-11','j&uacute;l. 12.':'2026-07-12','j&uacute;l. 14.':'2026-07-14','j&uacute;l. 15.':'2026-07-15','j&uacute;l. 18.':'2026-07-18','j&uacute;l. 19.':'2026-07-19'};
-  let koDatesSort=Object.keys(koByDate).sort((a,b)=>(KISO[a]||'9999').localeCompare(KISO[b]||'9999'));
-  let koHtml=koDatesSort.map(d=>'<section class="card"><h2 class="card-title">'+koLocalDate(d)+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+koByDate[d].join('')+'</div></section>').join('');
+  let koDatesSort=Object.keys(koByDate).sort((a,b)=>a.localeCompare(b));
+  let koHtml=koDatesSort.map(iso=>{
+    let label=iso==='9999-12-31'?'Késöbbi meccs':new Date(iso+'T12:00:00+02:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/\u00a0/g,' ');
+    return '<section class="card"><h2 class="card-title">'+label+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+koByDate[iso].join('')+'</div></section>';
+  }).join('');
   m.innerHTML=grpHtml+koHtml;
 }else if(MS.filt==='group'){let by=groupBy(rows,x=>x.g);m.innerHTML=Object.entries(by).map(([g,ms])=>'<section class="card"><h2 class="card-title">'+g+' csoport</h2>'+Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')+'</section>').join('')+koHtml}else if(isKoRound){let koRoundRounds=buildKO(),koRoundBronze=buildBronze(koRoundRounds),koRoundAll=koRoundRounds.flatMap(r=>r.matches).concat([koRoundBronze]),koRoundMs=koRoundAll.filter(km=>km.round===MS.round),koRoundLabel=(KO_ROUND_OPTIONS.find(o=>o.key===MS.round)||{}).label||MS.round;m.innerHTML='<section class="card"><h2 class="card-title">'+esc(koRoundLabel)+'</h2>'+(koRoundMs.length?koMatchRowsByDate(koRoundMs):'<div class="matches"><div class="community-empty">M&eacute;g nincs ehhez a k&ouml;rh&ouml;z el&eacute;rhet&#337; meccs.</div></div>')+'</section>'}else if(MS.filt==='round'){
   // Dátum szerint rendezve: fixtureKickoff alapján
