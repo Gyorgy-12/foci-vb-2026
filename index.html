@@ -8445,7 +8445,16 @@ async function loadMatchResultsFromBackendDb(){if(FROZEN_MODE||!WC26_RESULTS_REA
 async function loadMatchResultsOnceFromSdk(){if(!wc26Db)return false;try{let snap=await wc26Db.collection(WC26_RESULTS_COLLECTION).get(),incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});return mergeLiveResults(incoming)}catch(e){return false}}
 function listenMatchResults(){if(!wc26Db||wc26ResultsUnsub)return;try{wc26ResultsUnsub=wc26Db.collection(WC26_RESULTS_COLLECTION).onSnapshot(snap=>{let incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});mergeLiveResults(incoming)},async e=>{wc26BackendError=e.message||String(e);if(!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore();scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()});setTimeout(async()=>{if(!Object.keys(LIVE_RESULTS).length&&!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore()},900)}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS)}}
 function fixtureKickoff(m){return new Date(m.date+'T'+m.t+':00+03:00').getTime()}
-function localMatchTime(m,tz){try{return new Date(fixtureKickoff(m)).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:tz||Intl.DateTimeFormat().resolvedOptions().timeZone})}catch(e){return m.t}}
+function localMatchTime(m,tz){
+  try{
+    const lr=LIVE_RESULTS[m.id];
+    // Ha Firestore-ban van time, azt használjuk
+    const d=lr?.date||m.date,t=lr?.time||m.t;
+    if(d&&t){
+      const ts=new Date(d+'T'+t+':00+03:00').getTime();
+      return new Date(ts).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:tz||Intl.DateTimeFormat().resolvedOptions().timeZone});
+    }
+    return new Date(fixtureKickoff(m)).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:tz||Intl.DateTimeFormat().resolvedOptions().timeZone})}catch(e){return m.t}}
 function localMatchDate(m,tz){try{return new Date(fixtureKickoff(m)).toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:tz||Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/\u00a0/g,' ')}catch(e){return m.d}}
 function matchLockState(m){let r=LIVE_RESULTS[m.id];if(r&&r.finished)return'finished';if(r&&r.started)return'live';return Date.now()>=fixtureKickoff(m)?'live':'open'}
 function actualFor(m){return LIVE_RESULTS[m.id]||null}
@@ -8536,6 +8545,15 @@ function koLocalDate(d){
   }catch(e){return d;}
 }
 function koMatchKickoff(m){
+  // Ha LIVE_RESULTS-ban van date/time, azt használjuk
+  const lr=LIVE_RESULTS[m.id];
+  if(lr?.date&&lr?.time){
+    return new Date(lr.date+'T'+lr.time+':00+00:00').getTime();
+  }
+  // Ha m.date és m.t megvan (KO_SCHEDULE-ból), azt használjuk
+  if(m.date&&m.t){
+    return new Date(m.date+'T'+m.t+':00+00:00').getTime();
+  }
   const sched=koMatchSchedule(m);
   const M={'jün. 28.':'2026-06-28','jün. 29.':'2026-06-29','jün. 30.':'2026-06-30',
     'jül. 1.':'2026-07-01','jül. 2.':'2026-07-02','jül. 3.':'2026-07-03',
@@ -8551,7 +8569,7 @@ function koMatchKickoff(m){
 function koMatchScoreHtml(m){let p=koPred(m.id);if(!p)return '<div class="match-empty">-</div><div class="match-empty">-</div>';let ph=p.pen?'<small class="ko-pen">('+p.pH+')</small> ':'';let pa=p.pen?'<small class="ko-pen">('+p.pA+')</small> ':'';return '<div class="win">'+ph+p.h+'</div><div class="win">'+pa+p.a+'</div>'}
 const KO_ROUND_SHORT={'Legjobb 32':'L. 32','Nyolcaddöntő':'Nyolcad','Negyeddöntő':'Negyed','Elődöntő':'Elődöntő','Döntő':'Döntő','Bronzmeccs':'3. hely'};
 
-function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{if(m.date&&m.t){try{return new Date(m.date+'T'+m.t+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){}}let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
+function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{const _lrT=LIVE_RESULTS[m.id];const _md=_lrT?.date||m.date,_mt=_lrT?.time||m.t;if(_md&&_mt){try{return new Date(_md+'T'+_mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){}}let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
 
 function koMatchRowsByDate(ms){let sorted=ms.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.t||'').localeCompare(b.t||'')),by=groupBy(sorted,x=>koMatchSchedule(x).d||'Később'),order=[];sorted.forEach(x=>{let k=koMatchSchedule(x).d||'Később';if(!order.includes(k))order.push(k)});return order.map(d=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+by[d].map(koMatchRow).join('')+'</div>').join('')}
 function koMatchRowHtml(m){
@@ -8650,13 +8668,16 @@ function buildKO(){let en=koEntrants(),rounds=[],prev=[],ready=groupsComplete(),
   {id:'KO-R32-14',h:ge('1J'),a:ge('2H')},    // M86 → M95
   {id:'KO-R32-15',h:ge('1K'),a:gt('M87')},   // M87 → M96
   {id:'KO-R32-16',h:ge('2D'),a:ge('2G')},    // M88 → M95
-];// Ko pairs override a worker /ko-pairs endpointból (hivatalos ESPN párosítások)
-  const _koPairsOv=window.__WC26_KO_PAIRS__||{};
+];
+  // Ko pairs: LIVE_RESULTS (Firestore) → ko_pairs KV → buildKO
   pairs.forEach((p,i)=>{
-    const _ov=_koPairsOv[p.id];
-    if(_ov?.home&&_ov?.away){p.h={team:_ov.home,seed:''};p.a={team:_ov.away,seed:''};}
+    const lr=LIVE_RESULTS[p.id];
+    const ov=window.__WC26_KO_PAIRS__?.[p.id];
+    const home=lr?.homeTeam&&lr.homeTeam!=='TBD'?lr.homeTeam:ov?.home||null;
+    const away=lr?.awayTeam&&lr.awayTeam!=='TBD'?lr.awayTeam:ov?.away||null;
+    if(home&&away){p.h={team:home,seed:''};p.a={team:away,seed:''};}
   });
-  pairs.forEach((p,i)=>{let id=p.id,sch=KO_SCHEDULE[id]||{},lr=LIVE_RESULTS[id],hasLive=lr&&(lr.started||lr.finished)&&validScore(lr.h)&&validScore(lr.a),mNum=72+parseInt(id.split('-')[2]),label='M'+mNum;ms32.push({id,round:'R32',title:'Legjobb 32',label,h:p.h.team,a:p.a.team,hs:p.h.seed,as:p.a.seed,index:i+1,date:sch.date,t:sch.t,locked:!hasLive&&(!ready||!(p.h.team&&p.a.team))});});rounds.push({title:'Legjobb 32',matches:ms32});prev=ms32;
+pairs.forEach((p,i)=>{let id=p.id,sch=KO_SCHEDULE[id]||{},lr=LIVE_RESULTS[id],hasLive=lr&&(lr.started||lr.finished)&&validScore(lr.h)&&validScore(lr.a),mNum=72+parseInt(id.split('-')[2]),label='M'+mNum;ms32.push({id,round:'R32',title:'Legjobb 32',label,h:p.h.team,a:p.a.team,hs:p.h.seed,as:p.a.seed,index:i+1,date:sch.date,t:sch.t,locked:!hasLive&&(!ready||!(p.h.team&&p.a.team))});});rounds.push({title:'Legjobb 32',matches:ms32});prev=ms32;
 // A hivatalos FIFA egyenes-kiesés braket (Match 89-104) NEM egyszerű
 // szomszédos párosítást követ a Legjobb 32 győztesei között - az alábbi
 // indexpárok (0-based, a prev tömbre vonatkozóan) a valós FIFA/Wikipedia
