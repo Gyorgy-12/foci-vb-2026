@@ -8426,7 +8426,22 @@ function mergeLiveResults(next){let changed=false,pruneNeeded=false;Object.entri
 function wc26RestValue(v){if(!v||typeof v!=='object')return null;if('booleanValue'in v)return !!v.booleanValue;if('integerValue'in v)return +v.integerValue;if('doubleValue'in v)return +v.doubleValue;if('stringValue'in v)return v.stringValue;if('timestampValue'in v)return v.timestampValue;if('nullValue'in v)return null;return null}
 function wc26RestDocData(doc){let out={};Object.entries(doc?.fields||{}).forEach(([k,v])=>out[k]=wc26RestValue(v));return out}
 async function loadMatchResultsOnceFromFirestore(){if(FROZEN_MODE||!WC26_FIREBASE_CONFIG.projectId)return false;try{let url='https://firestore.googleapis.com/v1/projects/'+WC26_FIREBASE_CONFIG.projectId+'/databases/(default)/documents/'+WC26_RESULTS_COLLECTION+'?key='+encodeURIComponent(WC26_FIREBASE_CONFIG.apiKey),data=await fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null),incoming={};(data?.documents||[]).forEach(doc=>{let id=(doc.name||'').split('/').pop(),plain=wc26RestDocData(doc),r=normalizeLiveResult(id,plain);if(r)incoming[id]=r});return mergeLiveResults(incoming)}catch(e){return false}}
-async function loadMatchResultsFromBackendDb(){if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;try{let data=await fetch(WC26_RESULTS_READ_URL,{cache:'no-store'}).then(r=>r.ok?r.json():null);return data&&data.results?mergeLiveResults(data.results):false}catch(e){return false}}
+async function loadMatchResultsFromBackendDb(){if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;try{
+  // Ko schedule + results párhuzamos lekérdezése
+  const [data, koData] = await Promise.all([
+    fetch(WC26_RESULTS_READ_URL,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs'),{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
+  ]);
+  // KO schedule felülírása ha van frissebb adat
+  if(koData?.schedule){
+    for(const[id,sch]of Object.entries(koData.schedule)){
+      if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date;KO_SCHEDULE[id].t=sch.t;}
+    }
+  }
+  // KO párok tárolása
+  if(koData?.pairs) window.__WC26_KO_PAIRS__=koData.pairs;
+  return data&&data.results?mergeLiveResults(data.results):false;
+}catch(e){return false}}
 async function loadMatchResultsOnceFromSdk(){if(!wc26Db)return false;try{let snap=await wc26Db.collection(WC26_RESULTS_COLLECTION).get(),incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});return mergeLiveResults(incoming)}catch(e){return false}}
 function listenMatchResults(){if(!wc26Db||wc26ResultsUnsub)return;try{wc26ResultsUnsub=wc26Db.collection(WC26_RESULTS_COLLECTION).onSnapshot(snap=>{let incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});mergeLiveResults(incoming)},async e=>{wc26BackendError=e.message||String(e);if(!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore();scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()});setTimeout(async()=>{if(!Object.keys(LIVE_RESULTS).length&&!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore()},900)}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS)}}
 function fixtureKickoff(m){return new Date(m.date+'T'+m.t+':00+02:00').getTime()}
