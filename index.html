@@ -8650,7 +8650,13 @@ function buildKO(){let en=koEntrants(),rounds=[],prev=[],ready=groupsComplete(),
   {id:'KO-R32-14',h:ge('1J'),a:ge('2H')},    // M86 → M95
   {id:'KO-R32-15',h:ge('1K'),a:gt('M87')},   // M87 → M96
   {id:'KO-R32-16',h:ge('2D'),a:ge('2G')},    // M88 → M95
-];pairs.forEach((p,i)=>{let id=p.id,sch=KO_SCHEDULE[id]||{},lr=LIVE_RESULTS[id],hasLive=lr&&(lr.started||lr.finished)&&validScore(lr.h)&&validScore(lr.a),mNum=72+parseInt(id.split('-')[2]),label='M'+mNum;ms32.push({id,round:'R32',title:'Legjobb 32',label,h:p.h.team,a:p.a.team,hs:p.h.seed,as:p.a.seed,index:i+1,date:sch.date,t:sch.t,locked:!hasLive&&(!ready||!(p.h.team&&p.a.team))});});rounds.push({title:'Legjobb 32',matches:ms32});prev=ms32;
+];// Ko pairs override a worker /ko-pairs endpointból (hivatalos ESPN párosítások)
+  const _koPairsOv=window.__WC26_KO_PAIRS__||{};
+  pairs.forEach((p,i)=>{
+    const _ov=_koPairsOv[p.id];
+    if(_ov?.home&&_ov?.away){p.h={team:_ov.home,seed:''};p.a={team:_ov.away,seed:''};}
+  });
+  pairs.forEach((p,i)=>{let id=p.id,sch=KO_SCHEDULE[id]||{},lr=LIVE_RESULTS[id],hasLive=lr&&(lr.started||lr.finished)&&validScore(lr.h)&&validScore(lr.a),mNum=72+parseInt(id.split('-')[2]),label='M'+mNum;ms32.push({id,round:'R32',title:'Legjobb 32',label,h:p.h.team,a:p.a.team,hs:p.h.seed,as:p.a.seed,index:i+1,date:sch.date,t:sch.t,locked:!hasLive&&(!ready||!(p.h.team&&p.a.team))});});rounds.push({title:'Legjobb 32',matches:ms32});prev=ms32;
 // A hivatalos FIFA egyenes-kiesés braket (Match 89-104) NEM egyszerű
 // szomszédos párosítást követ a Legjobb 32 győztesei között - az alábbi
 // indexpárok (0-based, a prev tömbre vonatkozóan) a valós FIFA/Wikipedia
