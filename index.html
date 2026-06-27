@@ -8205,7 +8205,7 @@ let wc26Db=null,wc26Auth=null,wc26User=null,wc26BackendReady=false,wc26BackendEr
 function wc26FirebaseConfigured(){return !!(WC26_FIREBASE_CONFIG.apiKey&&WC26_FIREBASE_CONFIG.projectId&&WC26_FIREBASE_CONFIG.appId)}
 function wc26LoadScript(src){return new Promise((res,rej)=>{let old=document.querySelector('script[src="'+src+'"]');if(old){res();return}let s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Nem sikerult betolteni: '+src));document.head.appendChild(s)})}
 async function loadWc26Firebase(){if(FROZEN_MODE||!wc26FirebaseConfigured())return;try{if(!window.firebase||!firebase.initializeApp){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js')}if(!firebase.auth){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js')}if(!firebase.firestore){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js')}initWc26Firebase()}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()}}
-async function loadOwnTipsFromFirebase(){if(!wc26Db||!wc26User)return false;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;try{let doc=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();wc26RemoteDocExists=doc.exists;if(doc.exists){let d=doc.data()||{},remotePred=wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']),remoteKo=wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']);PRED=wc26CleanTips(remotePred);KO_PRED=wc26CleanTips(remoteKo);wc26ClearLocalPreds();wc26OwnTipsLoaded=true;render();return true}wc26OwnTipsLoaded=true;wc26ClearLocalPreds();render();return false}catch(e){wc26OwnTipsLoadFailed=true;wc26OwnTipsLoaded=false;wc26BackendError=e.message||String(e);return false}}
+async function loadOwnTipsFromFirebase(){if(!wc26Db||!wc26User)return false;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;try{let doc=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();wc26RemoteDocExists=doc.exists;if(doc.exists){let d=doc.data()||{},remotePred=wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']),remoteKo=wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']);PRED=wc26CleanTips(remotePred);KO_PRED=wc26CleanTips(remoteKo);wc26ClearLocalPreds();wc26OwnTipsLoaded=true;render();if(groupsComplete())syncKoPairsToWorker();return true}wc26OwnTipsLoaded=true;wc26ClearLocalPreds();render();return false}catch(e){wc26OwnTipsLoadFailed=true;wc26OwnTipsLoaded=false;wc26BackendError=e.message||String(e);return false}}
 function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();listenMatchResults();wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
 function communityGoalSum(obj){return Object.values(obj||{}).reduce((n,p)=>n+(validScore(p&&p.h)?+p.h:0)+(validScore(p&&p.a)?+p.a:0),0)}
 function gradeTip(p,r){if(!p||!r||!validScore(r.h)||!validScore(r.a))return{cat:'miss',pts:0,label:'Nincs tipp'};let ph=+p.h,pa=+p.a,rh=+r.h,ra=+r.a;if(ph===rh&&pa===ra)return{cat:'exact',pts:1,label:'Pontos'};if(ph-pa===rh-ra)return{cat:'diff',pts:.5,label:'Gólkülönbség'};if(Math.sign(ph-pa)===Math.sign(rh-ra))return{cat:'outcome',pts:.25,label:'Kimenetel'};return{cat:'miss',pts:0,label:'Téves'}}
@@ -8450,12 +8450,38 @@ function liveSyncInfo(now=Date.now()){let active=false,next=Infinity;for(let m o
 function lastWorkerSyncAt(){try{return +(localStorage.getItem(WC26_SYNC_LAST_KEY)||0)}catch(e){return 0}}
 function markWorkerSyncAt(t=Date.now()){try{localStorage.setItem(WC26_SYNC_LAST_KEY,String(t))}catch(e){}}
 function nextLiveSyncDelay(){let now=Date.now(),info=liveSyncInfo(now);if(document.hidden)return info.active?60*1000:WC26_SYNC_IDLE_MS/3;if(info.active)return WC26_SYNC_LIVE_MS;if(isFinite(info.next)){let untilWindow=info.next-now-WC26_SYNC_BEFORE_MS;return Math.max(WC26_SYNC_LIVE_MS,Math.min(WC26_SYNC_IDLE_MS,untilWindow))}return WC26_SYNC_IDLE_MS}
+
+function syncKoPairsToWorker(){
+  if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return;
+  try{
+    const rounds=buildKO(),bronze=buildBronze(rounds);
+    const all=[...rounds.flatMap(r=>r.matches)];
+    if(bronze&&(bronze.h||bronze.a))all.push(bronze);
+    const pairs={};
+    for(const m of all){
+      if(!m.h||!m.a||m.h==='?'||m.a==='?')continue;
+      // Csak akkor küldjük ha a csapatok csoportja teljesen lejátszott
+      const hGrp=ALL.includes(m.h)?FX.filter(x=>(x.h===m.h||x.a===m.h)):[];
+      const aGrp=ALL.includes(m.a)?FX.filter(x=>(x.h===m.a||x.a===m.a)):[];
+      const hDone=hGrp.length>0&&hGrp.every(x=>{const r=LIVE_RESULTS[x.id];return r&&r.finished;});
+      const aDone=aGrp.length>0&&aGrp.every(x=>{const r=LIVE_RESULTS[x.id];return r&&r.finished;});
+      if(hDone&&aDone){
+        pairs[m.id]={home:m.h,away:m.a};
+      }
+    }
+    if(!Object.keys(pairs).length)return;
+    const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs');
+    fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pairs})})
+      .catch(()=>{});
+  }catch(e){}
+}
 function scheduleLiveSync(delay){
   if(FROZEN_MODE)return;
   clearTimeout(wc26SyncTimer);
   let d=delay??nextLiveSyncDelay();
   wc26SyncTimer=setTimeout(async()=>{
     await syncLiveResults();
+    if(groupsComplete())syncKoPairsToWorker();
     scheduleLiveSync();
   },d);
 }
@@ -8491,7 +8517,7 @@ function koLocalDate(d){
       'jül. 11.':'2026-07-11','jül. 12.':'2026-07-12','jül. 14.':'2026-07-14',
       'jül. 15.':'2026-07-15','jül. 18.':'2026-07-18','jül. 19.':'2026-07-19'};
     const iso=M[d];if(!iso)return d;
-    return new Date(iso+'T12:00:00+02:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/ /g,' ');
+    return new Date(iso+'T12:00:00+00:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/ /g,' ');
   }catch(e){return d;}
 }
 function koMatchKickoff(m){
@@ -8504,13 +8530,13 @@ function koMatchKickoff(m){
     'jül. 15.':'2026-07-15','jül. 18.':'2026-07-18','jül. 19.':'2026-07-19'};
   const iso=M[sched.d];
   if(!iso||!sched.t)return null;
-  return new Date(iso+'T'+sched.t+':00+02:00').getTime();
+  return new Date(iso+'T'+sched.t+':00+00:00').getTime();
 }
 
 function koMatchScoreHtml(m){let p=koPred(m.id);if(!p)return '<div class="match-empty">-</div><div class="match-empty">-</div>';let ph=p.pen?'<small class="ko-pen">('+p.pH+')</small> ':'';let pa=p.pen?'<small class="ko-pen">('+p.pA+')</small> ':'';return '<div class="win">'+ph+p.h+'</div><div class="win">'+pa+p.a+'</div>'}
 const KO_ROUND_SHORT={'Legjobb 32':'L. 32','Nyolcaddöntő':'Nyolcad','Negyeddöntő':'Negyed','Elődöntő':'Elődöntő','Döntő':'Döntő','Bronzmeccs':'3. hely'};
 
-function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{if(m.date&&m.t){try{return new Date(m.date+'T'+m.t+':00+02:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){}}let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
+function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{if(m.date&&m.t){try{return new Date(m.date+'T'+m.t+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){}}let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
 
 function koMatchRowsByDate(ms){let sorted=ms.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.t||'').localeCompare(b.t||'')),by=groupBy(sorted,x=>koMatchSchedule(x).d||'Később'),order=[];sorted.forEach(x=>{let k=koMatchSchedule(x).d||'Később';if(!order.includes(k))order.push(k)});return order.map(d=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+by[d].map(koMatchRow).join('')+'</div>').join('')}
 function koMatchRowHtml(m){
@@ -8523,7 +8549,7 @@ function koMatchSections(){
   all=all.slice().sort((a,b)=>(koMatchKickoff(a)||0)-(koMatchKickoff(b)||0));
   let by=groupBy(all,m=>m.date||'9999-12-31');
   let entries=Object.entries(by).sort(([da],[db])=>da.localeCompare(db));
-  return entries.map(([iso,ms])=>{let label=iso==='9999-12-31'?'Későbbi meccs':new Date(iso+'T12:00:00+02:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/ /g,' ');return '<section class="card"><h2 class="card-title">'+label+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+ms.map(koMatchRow).join('')+'</div></section>';}).join('');
+  return entries.map(([iso,ms])=>{let label=iso==='9999-12-31'?'Későbbi meccs':new Date(iso+'T12:00:00+00:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/ /g,' ');return '<section class="card"><h2 class="card-title">'+label+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+ms.map(koMatchRow).join('')+'</div></section>';}).join('');
 }
 function groupBy(arr,fn){return arr.reduce((o,x)=>{let k=fn(x);(o[k]??=[]).push(x);return o},{})}
 function dateSection(k,rows){let byG=groupBy(rows,x=>x.g);return '<section class="card"><h2 class="card-title">'+k+'</h2>'+Object.entries(byG).map(([g,ms])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+ms[0].r+'. kör</span></div><div class="matches">'+ms.map(mrow).join('')+'</div>').join('')+'</section>'}
@@ -8546,7 +8572,7 @@ function renderMatches(){let rows=FX.slice(),m=document.getElementById('main'),k
   koItems.forEach(({km,d})=>{let key=d||'Későbbi meccs';if(!koByDate[key])koByDate[key]=[];koByDate[key].push(koMatchRow(km));});
   let koDatesSort=Object.keys(koByDate).sort((a,b)=>a.localeCompare(b));
   let koHtml=koDatesSort.map(iso=>{
-    let label=iso==='9999-12-31'?'Késöbbi meccs':new Date(iso+'T12:00:00+02:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/\u00a0/g,' ');
+    let label=iso==='9999-12-31'?'Késöbbi meccs':new Date(iso+'T12:00:00+00:00').toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/\u00a0/g,' ');
     return '<section class="card"><h2 class="card-title">'+label+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+koByDate[iso].join('')+'</div></section>';
   }).join('');
   m.innerHTML=grpHtml+koHtml;
