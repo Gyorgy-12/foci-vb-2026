@@ -8644,9 +8644,9 @@ function topCardsHtml(){
   const RC='<span style="display:inline-block;width:.5em;height:.72em;background:#e03040;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const YRC='<span style="display:inline-block;width:.8em;height:.72em;background:linear-gradient(90deg,#f5c842 50%,#e03040 50%);border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const byYellow=teams.filter(n=>fp[n].yellow>0)
-    .sort((a,b)=>fp[b].yellow-fp[a].yellow||a.localeCompare(b)).slice(0,5);
+    .sort((a,b)=>fp[b].yellow-fp[a].yellow||a.localeCompare(b)).slice(0,10);
   const byRed=teams.filter(n=>(fp[n].red+fp[n].yellowRed+fp[n].yellowPlusRed)>0)
-    .sort((a,b)=>(fp[b].red+fp[b].yellowRed+fp[b].yellowPlusRed)-(fp[a].red+fp[a].yellowRed+fp[a].yellowPlusRed)||a.localeCompare(b)).slice(0,5);
+    .sort((a,b)=>(fp[b].red+fp[b].yellowRed+fp[b].yellowPlusRed)-(fp[a].red+fp[a].yellowRed+fp[a].yellowPlusRed)||a.localeCompare(b));
   if(!byYellow.length&&!byRed.length)return'';
   // goalScorerStatRow-val AZONOS struktúra
   function cardStatRow(i,n,val,sub){
@@ -8661,7 +8661,7 @@ function topCardsHtml(){
   }
   let out='';
   if(byYellow.length){
-    out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 5</h2>'
+    out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 10</h2>'
       +'<div class="wc-stat-list stat-match-list">'
       +byYellow.map((n,i)=>{
         const t=fp[n];
@@ -8670,7 +8670,7 @@ function topCardsHtml(){
       +'</div></section>';
   }
   if(byRed.length){
-    out+='<section class="card"><h2 class="card-title">Legtöbb piros lap &ndash; Top 5</h2>'
+    out+='<section class="card"><h2 class="card-title">Piros lapok &ndash; Összes</h2>'
       +'<div class="wc-stat-list stat-match-list">'
       +byRed.map((n,i)=>{
         const t=fp[n];
