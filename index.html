@@ -8240,9 +8240,9 @@ async function wc26RenameProfile(){if(!wc26User||!wc26Db)return;let current=wc26
 function communityPredGradeClass(g){return g&&g.cat?' grade-'+g.cat:''}
 function communityPredScoreHtml(p,r,g){let tip=p&&validScore(p.h)&&validScore(p.a)?p.h+' - '+p.a:'-',real=r&&validScore(r.h)&&validScore(r.a)?r.h+' - '+r.a:'-',clock=liveClockLabel(r),isIntCom=r&&!r.finished&&String(r.status||'').toUpperCase().includes('INT'),clockPill=(clock?'<span class="tip-live-clock community-live-clock">'+clock+'</span>':'')+(isIntCom?'<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>':'');return'<div class="community-result"><div><span>Val&oacute;s</span><b class="community-real-score">'+clockPill+'<span class="community-real-value">'+esc(real)+'</span></b></div><div><span>Tipp</span><b>'+esc(tip)+'</b></div><small>'+esc(g?.label||'Várakozik')+'</small></div>'}
 function communityMatchRow(x,p){let r=actualFor(x),g=r&&(r.finished||r.started)&&validScore(r.h)&&validScore(r.a)?gradeTip(p,r):{cat:'pending',pts:0,label:'Várakozik'};return'<div class="community-pred'+communityPredGradeClass(g)+'"><div class="community-teams"><div class="community-match-line"><div class="community-team">'+crest(x.h,'24px')+'<span>'+esc(x.h)+'</span></div><span class="community-vs">-</span><div class="community-team">'+crest(x.a,'24px')+'<span>'+esc(x.a)+'</span></div></div><small>'+localMatchDate(x)+' · '+esc(x.g)+' csoport · '+x.r+'. kör</small></div>'+communityPredScoreHtml(p,r,g)+'</div>'}
-function communityMatchRows(item,round){let rows=FX.filter(x=>!round||x.r===round).map(x=>communityMatchRow(x,(item.pred||{})[x.id])).join('');return rows||'<div class="community-empty">Nincs megjeleníthető csoportkörös tipp.</div>'}
+function communityMatchRows(item,round){let rows=FX.filter(x=>!round||x.r===round).sort((a,b)=>fixtureKickoff(a)-fixtureKickoff(b)).map(x=>communityMatchRow(x,(item.pred||{})[x.id])).join('');return rows||'<div class="community-empty">Nincs megjeleníthető csoportkörös tipp.</div>'}
 function communityKoAll(item){return communityKoMatches(item.pred||{},item.ko||{})}
-function communityKoRows(item,rounds){rounds=Array.isArray(rounds)?rounds:[rounds];let ms=communityKoAll(item).filter(m=>!rounds[0]||rounds.includes(m.title)||rounds.includes(m.round));let rows=ms.map(m=>{let p=(item.ko||{})[m.id],r=actualFor({id:m.id}),g=r&&(r.finished||r.started)&&validScore(r.h)&&validScore(r.a)?gradeKoTip(p,r):{cat:'pending',pts:0,label:'Várakozik'},home=m.h||m.hs,away=m.a||m.as;return'<div class="community-pred'+communityPredGradeClass(g)+'"><div class="community-teams"><div class="community-match-line"><div class="community-team">'+(m.h?crest(m.h,'24px'):'')+'<span>'+esc(home||'')+'</span></div><span class="community-vs">-</span><div class="community-team">'+(m.a?crest(m.a,'24px'):'')+'<span>'+esc(away||'')+'</span></div></div><small>'+esc(m.title||m.round||'Kieséses kör')+'</small></div>'+communityPredScoreHtml(p,r,g)+'</div>'}).join('');return rows||'<div class="community-empty">Még nincs ilyen körhöz megjeleníthető tipp.</div>'}
+function communityKoRows(item,rounds){rounds=Array.isArray(rounds)?rounds:[rounds];let ms=communityKoAll(item).filter(m=>!rounds[0]||rounds.includes(m.title)||rounds.includes(m.round)).sort((a,b)=>(koMatchKickoff(a)||0)-(koMatchKickoff(b)||0));let rows=ms.map(m=>{let p=(item.ko||{})[m.id],r=actualFor({id:m.id}),g=r&&(r.finished||r.started)&&validScore(r.h)&&validScore(r.a)?gradeKoTip(p,r):{cat:'pending',pts:0,label:'Várakozik'},home=m.h||m.hs,away=m.a||m.as;return'<div class="community-pred'+communityPredGradeClass(g)+'"><div class="community-teams"><div class="community-match-line"><div class="community-team">'+(m.h?crest(m.h,'24px'):'')+'<span>'+esc(home||'')+'</span></div><span class="community-vs">-</span><div class="community-team">'+(m.a?crest(m.a,'24px'):'')+'<span>'+esc(away||'')+'</span></div></div><small>'+esc(m.title||m.round||'Kieséses kör')+'</small></div>'+communityPredScoreHtml(p,r,g)+'</div>'}).join('');return rows||'<div class="community-empty">Még nincs ilyen körhöz megjeleníthető tipp.</div>'}
 function fmtCommunityPts(n){let x=Math.round((+n||0)*100)/100;return x.toLocaleString('hu-HU',{minimumFractionDigits:Number.isInteger(x)?0:2,maximumFractionDigits:2})}
 function communityStatsHtml(s){let e=s.eff||communityEfficiency();return'<div class="community-grid community-grid-wide"><div class="community-stat highlight"><b>'+e.pct+'%</b><span>aktuális pontosság</span></div><div class="community-stat"><b>'+fmtCommunityPts(e.pts)+'/'+e.max+'</b><span>pont / élő vagy lezárt meccs</span></div><div class="community-stat"><b>'+s.groupCount+'</b><span>csoporttipp</span></div><div class="community-stat"><b>'+s.koCount+'</b><span>kieséses tipp</span></div><div class="community-stat"><b>'+s.goals+'</b><span>tippelt gól</span></div><div class="community-stat"><b>'+e.exact+'/'+e.diff+'/'+e.outcome+'</b><span>pontos · gólkül. · kimen.</span></div></div>'}
 function communityRankMeta(e){return e.max?fmtCommunityPts(e.pts)+' pont / '+e.max+' élő vagy lezárt meccs':'Nincs élő vagy lezárt meccs'}
@@ -8396,7 +8396,7 @@ function patchLiveRows(next){
   Object.keys(next||{}).forEach(id=>{
     const r=LIVE_RESULTS[id];
     if(!r)return;
-    const row=document.querySelector('[data-mid="'+id+'"]');
+    const row=document.querySelector('[data-mid="'+id+'"],[data-ko-mid="'+id+'"]');
     if(!row){
       // Ha modal nyitva van, az elem hiánya nem hiba (más fülön lehet)
       if(!document.querySelector('.tip-overlay'))ok=false;
@@ -8467,9 +8467,8 @@ function mergeLiveResults(next){let changed=false,pruneNeeded=false;Object.entri
       const modalOpen=!!document.querySelector('.tip-overlay');
       if(!modalOpen){
         let patched=patchLiveRows(next);
-        patchKoCards();
-        if(!patched&&S.tab!=='knockout')render();
-        if(!patched&&S.tab==='knockout')render();
+        if(S.tab==='knockout'){patchKoCards();}
+        else if(!patched){render();}
       }
     }
     refreshOpenTipModal();
@@ -8521,7 +8520,7 @@ function localMatchDate(m,tz){
     return fmt(fixtureKickoff(m));
   }catch(e){return m.date||m.d||'';}
 }
-function matchLockState(m){let r=LIVE_RESULTS[m.id];if(r&&r.finished)return'finished';if(r&&r.started)return'live';return Date.now()>=fixtureKickoff(m)?'live':'open'}
+function matchLockState(m){let r=LIVE_RESULTS[m.id];if(r&&r.finished)return'finished';if(r&&r.started)return'live';const ko=m.id&&m.id.startsWith('KO-');const ks=ko?KO_SCHEDULE[m.id]:null;const kick=ko?(ks?new Date(ks.date+'T'+ks.t+':00+00:00').getTime():null):fixtureKickoff(m);if(kick&&Date.now()>=kick)return'live';return'open'}
 function actualFor(m){return LIVE_RESULTS[m.id]||null}
 function fmtPts(n){let x=Math.round((+n||0)*100)/100;return(Math.round(x*100)%50===0)?x.toFixed(1):x.toFixed(2);}
 function tipScore(m){let p=getPred(m.id),r=actualFor(m);if(!p||!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return{cat:'',pts:0};let ph=+p.h,pa=+p.a,rh=+r.h,ra=+r.a;if(ph===rh&&pa===ra)return{cat:'exact',pts:1};let pdiff=ph-pa,rdiff=rh-ra;if(pdiff===rdiff)return{cat:'diff',pts:0.5};let pout=Math.sign(ph-pa),rout=Math.sign(rh-ra);if(pout===rout)return{cat:'outcome',pts:0.25};return{cat:'miss',pts:0};}
@@ -8549,7 +8548,27 @@ function liveNameMatch(a,b){let x=normLiveName(a),y=normLiveName(b);if(x===y)ret
 function pickLiveScore(m,side){let s=m?.status||{},team=m?.[side]||{};return team.score??team.currentScore??team.goals??m?.[side+'Score']??s?.[side+'Score']??null}
 function liveFinished(m){let s=m?.status||{},txt=String(s.finished??s.type??s.reason?.short??s.reason?.long??s.liveTime?.short??'').toLowerCase();return s.finished===true||txt.includes('finished')||txt==='ft'||txt.includes('full')}
 function liveStarted(m){let s=m?.status||{},txt=String(s.started??s.type??s.reason?.short??s.liveTime?.short??'').toLowerCase();return s.started===true||liveFinished(m)||txt.includes('live')||txt.includes('half')||txt.includes('ft')}
-function liveSyncInfo(now=Date.now()){let active=false,next=Infinity;for(let m of FX){let k=fixtureKickoff(m),r=LIVE_RESULTS[m.id];if(r&&r.finished)continue;if(now>=k-WC26_SYNC_BEFORE_MS&&now<=k+WC26_SYNC_AFTER_MS){active=true;break}if(k>now)next=Math.min(next,k)}return{active,next}}
+function liveSyncInfo(now=Date.now()){
+  let active=false,next=Infinity;
+  // Csoportmeccsek
+  for(let m of FX){
+    let k=fixtureKickoff(m),r=LIVE_RESULTS[m.id];
+    if(r&&r.finished)continue;
+    if(now>=k-WC26_SYNC_BEFORE_MS&&now<=k+WC26_SYNC_AFTER_MS){active=true;break}
+    if(k>now)next=Math.min(next,k);
+  }
+  if(active)return{active,next};
+  // KO meccsek
+  for(let id of Object.keys(KO_SCHEDULE)){
+    const sch=KO_SCHEDULE[id];
+    const r=LIVE_RESULTS[id];
+    if(r&&r.finished)continue;
+    const k=new Date(sch.date+'T'+sch.t+':00+00:00').getTime();
+    if(now>=k-WC26_SYNC_BEFORE_MS&&now<=k+WC26_SYNC_AFTER_MS){active=true;break}
+    if(k>now)next=Math.min(next,k);
+  }
+  return{active,next};
+}
 function lastWorkerSyncAt(){try{return +(localStorage.getItem(WC26_SYNC_LAST_KEY)||0)}catch(e){return 0}}
 function markWorkerSyncAt(t=Date.now()){try{localStorage.setItem(WC26_SYNC_LAST_KEY,String(t))}catch(e){}}
 function nextLiveSyncDelay(){let now=Date.now(),info=liveSyncInfo(now);if(document.hidden)return info.active?60*1000:WC26_SYNC_IDLE_MS/3;if(info.active)return WC26_SYNC_LIVE_MS;if(isFinite(info.next)){let untilWindow=info.next-now-WC26_SYNC_BEFORE_MS;return Math.max(WC26_SYNC_LIVE_MS,Math.min(WC26_SYNC_IDLE_MS,untilWindow))}return WC26_SYNC_IDLE_MS}
@@ -8661,7 +8680,7 @@ function koMatchKickoff(m){
 function koMatchScoreHtml(m){let p=koPred(m.id);if(!p)return '<div class="match-empty">-</div><div class="match-empty">-</div>';let ph=p.pen?'<small class="ko-pen">('+p.pH+')</small> ':'';let pa=p.pen?'<small class="ko-pen">('+p.pA+')</small> ':'';return '<div class="win">'+ph+p.h+'</div><div class="win">'+pa+p.a+'</div>'}
 const KO_ROUND_SHORT={'Legjobb 32':'L. 32','Nyolcaddöntő':'Nyolcad','Negyeddöntő':'Negyed','Elődöntő':'Elődöntő','Döntő':'Döntő','Bronzmeccs':'3. hely'};
 
-function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{const _lrT=LIVE_RESULTS[m.id];const _md=_lrT?.date||m.date,_mt=_lrT?.time||m.t;if(_md&&_mt){try{return new Date(_md+'T'+_mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){}}let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
+function koMatchRow(m){let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'',edit=FROZEN_MODE||m.locked?'':'<div class="mr-bell">&#9998;</div>';return '<div class="match-row ko-match-row'+(p?' predicted':'')+(m.locked?' locked':'')+'" data-ko-mid="'+m.id+'" data-mid="'+m.id+'"><div class="mr-date">'+( (function(){try{const _lrT=LIVE_RESULTS[m.id];const _md=_lrT?.date||m.date,_mt=_lrT?.time||m.t;if(_md&&_mt){try{return new Date(_md+'T'+_mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){}}let k=koMatchKickoff(m);return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');}catch(e){return s.t||'--:--';}})() )+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+(m.locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>')+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+(m.a?crest(m.a):'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+koMatchScoreHtml(m)+'</div>'+edit+'</div>'}
 
 function koMatchRowsByDate(ms){let sorted=ms.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.t||'').localeCompare(b.t||'')),by=groupBy(sorted,x=>koMatchSchedule(x).d||'Később'),order=[];sorted.forEach(x=>{let k=koMatchSchedule(x).d||'Később';if(!order.includes(k))order.push(k)});return order.map(d=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+by[d].map(koMatchRow).join('')+'</div>').join('')}
 function koMatchRowHtml(m){
