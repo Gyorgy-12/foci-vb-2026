@@ -8460,7 +8460,7 @@ async function loadMatchResultsFromBackendDb(){if(FROZEN_MODE||!WC26_RESULTS_REA
 }catch(e){return false}}
 async function loadMatchResultsOnceFromSdk(){if(!wc26Db)return false;try{let snap=await wc26Db.collection(WC26_RESULTS_COLLECTION).get(),incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});return mergeLiveResults(incoming)}catch(e){return false}}
 function listenMatchResults(){if(!wc26Db||wc26ResultsUnsub)return;try{wc26ResultsUnsub=wc26Db.collection(WC26_RESULTS_COLLECTION).onSnapshot(snap=>{let incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});mergeLiveResults(incoming)},async e=>{wc26BackendError=e.message||String(e);if(!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore();scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()});setTimeout(async()=>{if(!Object.keys(LIVE_RESULTS).length&&!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore()},900)}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS)}}
-function fixtureKickoff(m){return new Date(m.date+'T'+m.t+':00+03:00').getTime()}
+function fixtureKickoff(m){const isKo=!!(m.id&&m.id.startsWith('KO-'));if(isKo)return koMatchKickoff(m)||new Date(m.date+'T'+m.t+':00+00:00').getTime();return new Date(m.date+'T'+m.t+':00+03:00').getTime()}
 function localMatchTime(m,tz){
   try{
     const lr=LIVE_RESULTS[m.id];
