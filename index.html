@@ -8424,6 +8424,41 @@ function patchLiveRows(next){
   });
   return ok;
 }
+function patchKoCards(){
+  document.querySelectorAll('.ko-card[data-koid]').forEach(card=>{
+    const id=card.dataset.koid;
+    const rounds=buildKO();
+    const bronze=buildBronze(rounds);
+    const m=rounds.flatMap(r=>r.matches).concat([bronze]).find(x=>x.id===id);
+    if(!m)return;
+    const r=LIVE_RESULTS[id];
+    const p=koPred(id);
+    const hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a);
+    // Osztályok frissítése
+    card.classList.toggle('live-result',!!(hasReal));
+    card.classList.toggle('predicted',!hasReal&&!!p);
+    card.classList.toggle('locked',!!m.locked);
+    // Score frissítése a ko-team sorokon belül
+    const dh=hasReal?+r.h:(p?p.h:null);
+    const da=hasReal?+r.a:(p?p.a:null);
+    const dph=hasReal?(r.pH!=null?r.pH:null):(p&&p.pen?p.pH:null);
+    const dpa=hasReal?(r.pA!=null?r.pA:null):(p&&p.pen?p.pA:null);
+    const hasPen=dph!=null&&dpa!=null&&dh===da;
+    const w=dh!=null&&da!=null&&m.h&&m.a?(dh!==da?(dh>da?m.h:m.a):(hasPen&&dph!==dpa?(dph>dpa?m.h:m.a):null)):null;
+    const scores=card.querySelectorAll('.ko-score');
+    if(scores.length>=2){
+      scores[0].innerHTML=dh!=null?(hasPen&&dph!=null?'<span class="ko-pen">('+dph+')</span>'+dh:dh):'–';
+      scores[1].innerHTML=da!=null?(hasPen&&dpa!=null?'<span class="ko-pen">('+dpa+')</span>'+da:da):'–';
+    }
+    const teams=card.querySelectorAll('.ko-team');
+    if(teams.length>=2){
+      teams[0].classList.toggle('win',w===m.h);
+      teams[0].classList.toggle('dim',w!==null&&w!==m.h);
+      teams[1].classList.toggle('win',w===m.a);
+      teams[1].classList.toggle('dim',w!==null&&w!==m.a);
+    }
+  });
+}
 function mergeLiveResults(next){let changed=false,pruneNeeded=false;Object.entries(next||{}).forEach(([id,obj])=>{let r=normalizeLiveResult(id,obj);if(!r)return;let old=LIVE_RESULTS[id];if(old&&old.finished&&!r.finished)return;if(JSON.stringify(old)!==JSON.stringify(r)){LIVE_RESULTS[id]=r;changed=true;if(r.finished&&(!old||!old.finished||old.h!==r.h||old.a!==r.a))pruneNeeded=true}});if(changed){
     if(pruneNeeded)pruneStaleKoPred(true);
     if(['overview','matches','table','stats','community','knockout'].includes(S.tab)){
@@ -8432,7 +8467,9 @@ function mergeLiveResults(next){let changed=false,pruneNeeded=false;Object.entri
       const modalOpen=!!document.querySelector('.tip-overlay');
       if(!modalOpen){
         let patched=patchLiveRows(next);
-        if(!patched)render();
+        patchKoCards();
+        if(!patched&&S.tab!=='knockout')render();
+        if(!patched&&S.tab==='knockout')render();
       }
     }
     refreshOpenTipModal();
