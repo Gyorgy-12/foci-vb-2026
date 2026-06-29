@@ -3828,6 +3828,9 @@ body.modal-open{
   font:inherit;
   color:inherit;
 }
+.ko-score b.has-tip{
+  color:#ff6470!important;
+}
 
 .ko-pen{
   display:inline-block!important;
@@ -3838,10 +3841,9 @@ body.modal-open{
 }
 .ko-tip-ind{
   display:block!important;
-  font-size:.62em!important;
-  font-weight:800!important;
-  color:#7ec8e3!important;
-  opacity:.85!important;
+  font-size:inherit!important;
+  font-weight:900!important;
+  color:#e8edf0!important;
   line-height:1.1!important;
   text-align:right!important;
 }
@@ -8915,7 +8917,7 @@ function koWinner(match){if(!match.h||!match.a)return null;let r=LIVE_RESULTS[ma
 function koLoser(match){if(!match.h||!match.a)return null;let r=LIVE_RESULTS[match.id];if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.a:match.h;return null;}return rh>ra?match.a:match.h;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pH>p.pA?match.a:match.h;return p.h>p.a?match.a:match.h;}
 
 function buildBronze(rounds){let sf=rounds?.[3]?.matches||[],ready=groupsComplete(),l1=koLoser(sf[0]),l2=koLoser(sf[1]),sch=KO_SCHEDULE['KO-BR-1']||{};return {id:'KO-BR-1',round:'BR',title:'Bronzmeccs',label:'Harmadik hely&eacute;rt',h:l1,a:l2,hs:l1?'Elődöntő vesztese 1':'Elődöntő vesztese 1',as:l2?'Elődöntő vesztese 2':'Elődöntő vesztese 2',index:1,date:sch.date,t:sch.t,locked:!ready||!(l1&&l2)}}
-function koTeamLine(team,seed,score,cls,pen,tip){if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';return '<div class="ko-team '+(cls||'')+'">'+crest(team,'22px')+'<span class="ko-name">'+esc(team)+'</span><span class="ko-score">'+(pen!=null?'<small class="ko-pen">('+pen+')</small>':'')+'<b>'+(score==null?'-':score)+'</b>'+(tip!=null?'<small class="ko-tip-ind">→'+tip+'</small>':'')+'</span></div>'}
+function koTeamLine(team,seed,score,cls,pen,tip){if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';return '<div class="ko-team '+(cls||'')+'">'+crest(team,'22px')+'<span class="ko-name">'+esc(team)+'</span><span class="ko-score">'+(pen!=null?'<small class="ko-pen">('+pen+')</small>':'')+'<b class="'+(tip!=null?'has-tip':'')+'">'+(score==null?'-':score)+'</b>'+(tip!=null?'<span class="ko-tip-ind">'+tip+'</span>':'')+'</span></div>'}
 function koCard(m,row){var r=LIVE_RESULTS[m.id],hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),p=koPred(m.id);var dh=hasReal?+r.h:(p?p.h:null),da=hasReal?+r.a:(p?p.a:null);var dph=hasReal?(r.pH!=null?r.pH:null):(p&&p.pen?p.pH:null),dpa=hasReal?(r.pA!=null?r.pA:null):(p&&p.pen?p.pA:null);var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;if(dh!=null&&da!=null&&m.h&&m.a){if(dh!==da){w=dh>da?m.h:m.a;}else if(hasPen&&dph!==dpa){w=dph>dpa?m.h:m.a;}}var hw=w===m.h,aw=w===m.a;var rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';var sc=koTipScore(m),cls=[];if(hasReal)cls.push('live-result');else if(p){cls.push('predicted');}if(sc.cat==='exact')cls.push('result-exact');else if(sc.cat==='diff')cls.push('result-diff');else if(sc.cat==='outcome')cls.push('result-outcome');else if(sc.cat==='miss')cls.push('result-miss');if(m.locked)cls.push('locked');return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'+koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,(hasReal&&p)?p.h:null)+koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,(hasReal&&p)?p.a:null)+'</div>';}
 function koCol(title,matches,depth){let base=[1,2,4,8][depth]||1,step=Math.pow(2,depth+1);return '<div class="ko-col depth-'+(depth||0)+'"><h3>'+title+'</h3>'+matches.map((m,i)=>koCard(m,base+i*step)).join('')+'</div>'}
 function renderKO(){let m=document.getElementById('main'),rounds=buildKO(),bronze=buildBronze(rounds),r32=rounds[0].matches,r16=rounds[1].matches,qf=rounds[2].matches,sf=rounds[3].matches,fin=rounds[4].matches,ready=groupsComplete();m.className='main';let left=koCol('Legjobb 32',r32.slice(0,8),0)+koCol('Nyolcaddöntő',r16.slice(0,4),1)+koCol('Negyeddöntő',qf.slice(0,2),2)+koCol('Elődöntő',sf.slice(0,1),3),right=koCol('Elődöntő',sf.slice(1,2),3)+koCol('Negyeddöntő',qf.slice(2,4),2)+koCol('Nyolcaddöntő',r16.slice(4,8),1)+koCol('Legjobb 32',r32.slice(8,16),0),lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';m.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik hely&eacute;rt</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';activateCrests();let br=m.querySelector('.ko-bracket');if(br){br.scrollLeft=KO_SCROLL;requestAnimationFrame(()=>{br.scrollLeft=KO_SCROLL})}if(!FROZEN_MODE)m.querySelectorAll('[data-koid]').forEach(el=>el.onclick=e=>{e.stopPropagation();let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;openKoTip(el.dataset.koid)})}
