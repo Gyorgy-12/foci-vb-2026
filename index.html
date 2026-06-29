@@ -9081,8 +9081,8 @@ async function loadMatchResultsFromBackendDb(bypassCache=false){
     const resultsUrl=WC26_RESULTS_READ_URL+sep+bust;
     const koUrl=WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs')+'?t='+Date.now();
     const [data,koData]=await Promise.all([
-      fetch(resultsUrl,{cache:'no-store',headers:{'Cache-Control':'no-cache'}}).then(r=>r.ok?r.json():null).catch(()=>null),
-      fetch(koUrl,{cache:'no-store',headers:{'Cache-Control':'no-cache'}}).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(resultsUrl,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(koUrl,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     if(koData?.schedule){for(const[id,sch]of Object.entries(koData.schedule)){if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date||KO_SCHEDULE[id].date;KO_SCHEDULE[id].t=sch.t||sch.time||KO_SCHEDULE[id].t;}}}
     if(koData?.pairs)window.__WC26_KO_PAIRS__=koData.pairs;
@@ -9109,7 +9109,7 @@ async function syncLiveResults(opts={}){
     const {active}=liveSyncInfo();
     if(active&&WC26_RESULTS_READ_URL){
       const syncUrl=WC26_RESULTS_READ_URL.replace(/\/results$/,'/sync')+'?t='+Date.now();
-      const syncData=await fetch(syncUrl,{method:'POST',cache:'no-store',headers:{'Cache-Control':'no-cache'}}).then(r=>r.ok?r.json():null).catch(()=>null);
+      const syncData=await fetch(syncUrl,{method:'POST',cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       if(syncData?.results)mergeLiveResults(syncData.results);
     }
     let ok=await loadMatchResultsFromBackendDb(active||opts.force);
