@@ -8690,18 +8690,12 @@ const KO_ROUND_SHORT={'Legjobb 32':'L. 32','Nyolcaddöntő':'Nyolcad','Negyeddö
 
 function koMatchRow(m){
   let p=koPred(m.id),s=koMatchSchedule(m),cls=p?'win':'';
-  let r=LIVE_RESULTS[m.id];
   let sc=koTipScore(m);
   let state=matchLockState(m);
   let locked=state!=='open';
   let edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
   let rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')
     +(sc.cat==='exact'?' result-exact':sc.cat==='diff'?' result-diff':sc.cat==='outcome'?' result-outcome':sc.cat==='miss'?' result-miss':'');
-  let hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a);
-  let tipBadge=p&&hasReal
-    ?'<em class="mr-tip result-'+sc.cat+'">'+(sc.cat==='exact'?'Pontos':sc.cat==='diff'?'Gólkül.':sc.cat==='outcome'?'Kimenetel':'Téves')+'</em>'
-    :(p?'<em class="mr-tip">Tippelve</em>':'');
-  let stateBadge=matchStateBadge(m);
   let timeStr=(function(){try{
     const lr=LIVE_RESULTS[m.id],d=lr?.date||m.date,t=lr?.time||m.t;
     if(d&&t)return new Date(d+'T'+t+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});
@@ -8709,7 +8703,9 @@ function koMatchRow(m){
     return k?new Date(k).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}):(s.t||'--:--');
   }catch(e){return s.t||'--:--';}})();
   return '<div class="match-row ko-match-row'+rowCls+'" data-ko-mid="'+m.id+'" data-mid="'+m.id+'">'
-    +'<div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+tipBadge+stateBadge+'</div>'
+    +'<div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'
+    +(p?'<em class="mr-tip">Tippelve</em>':'')
+    +matchStateBadge(m)+'</div>'
     +'<div class="mr-sep"></div>'
     +'<div class="mr-teams">'
     +'<div class="mr-team '+cls+'">'+(m.h?crest(m.h):'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div>'
