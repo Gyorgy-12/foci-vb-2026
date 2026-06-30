@@ -10843,4 +10843,102 @@ localMatchDate=function(m,tz){
 
 function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),sc=koTipScore(m),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'?' result-exact':sc.cat==='diff'?' result-diff':sc.cat==='outcome'?' result-outcome':sc.cat==='miss'?' result-miss':''),r2=LIVE_RESULTS[m.id]||null,rs=r2&&validScore(r2.h)&&validScore(r2.a)?' '+r2.h+'-'+r2.a:'',badge=sc.cat==='exact'?'<em class="mr-live-state ok">Pontos</em>':sc.cat==='diff'?'<em class="mr-live-state diff">G&oacute;lk&uuml;l.</em>':sc.cat==='outcome'?'<em class="mr-live-state outcome">Kimenetel</em>':sc.cat==='miss'?'<em class="mr-live-state bad">Hib&aacute;s</em>':state==='finished'?'<em class="mr-live-state neutral">Lez&aacute;rt'+rs+'</em>':state==='live'?'<em class="mr-live-state live"><span></span>'+(liveClockLabel(r2)||'&Eacute;l&#337;')+rs+'</em>':locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>',ks=koMatchSchedule(m),timeStr=ks&&ks.t?ks.t:'--:--';return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+badge+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>'}
 
+
+/* ===== WC26 v27 official KO R32/R16 fixture sanity ===== */
+const WC26_OFFICIAL_KO_FIXTURES = {"KO-R32-1":{"date":"2026-06-28","t":"19:00","homeTeam":"South Africa","awayTeam":"Canada","espnId":"760486","round":32},"KO-R32-2":{"date":"2026-06-30","t":"01:00","homeTeam":"Netherlands","awayTeam":"Morocco","espnId":"760488","round":32},"KO-R32-3":{"date":"2026-06-29","t":"20:30","homeTeam":"Germany","awayTeam":"Paraguay","espnId":"760489","round":32},"KO-R32-4":{"date":"2026-06-29","t":"17:00","homeTeam":"Brazil","awayTeam":"Japan","espnId":"760487","round":32},"KO-R32-5":{"date":"2026-06-30","t":"17:00","homeTeam":"Ivory Coast","awayTeam":"Norway","espnId":"760490","round":32},"KO-R32-6":{"date":"2026-06-30","t":"21:00","homeTeam":"France","awayTeam":"Sweden","espnId":"760492","round":32},"KO-R32-7":{"date":"2026-07-01","t":"01:00","homeTeam":"Mexico","awayTeam":"Ecuador","espnId":"760491","round":32},"KO-R32-8":{"date":"2026-07-01","t":"16:00","homeTeam":"England","awayTeam":"DR Congo","espnId":"760495","round":32},"KO-R32-9":{"date":"2026-07-01","t":"20:00","homeTeam":"Belgium","awayTeam":"Senegal","espnId":"760493","round":32},"KO-R32-10":{"date":"2026-07-02","t":"00:00","homeTeam":"USA","awayTeam":"Bosnia and Herzegovina","espnId":"760494","round":32},"KO-R32-11":{"date":"2026-07-02","t":"19:00","homeTeam":"Spain","awayTeam":"Austria","espnId":"760497","round":32},"KO-R32-12":{"date":"2026-07-02","t":"23:00","homeTeam":"Portugal","awayTeam":"Croatia","espnId":"760496","round":32},"KO-R32-13":{"date":"2026-07-03","t":"03:00","homeTeam":"Switzerland","awayTeam":"Algeria","espnId":"760498","round":32},"KO-R32-14":{"date":"2026-07-03","t":"18:00","homeTeam":"Australia","awayTeam":"Egypt","espnId":"760499","round":32},"KO-R32-15":{"date":"2026-07-03","t":"22:00","homeTeam":"Argentina","awayTeam":"Cape Verde","espnId":"760500","round":32},"KO-R32-16":{"date":"2026-07-04","t":"01:30","homeTeam":"Colombia","awayTeam":"Ghana","espnId":"760501","round":32},"KO-R16-1":{"date":"2026-07-04","t":"21:00","homeTeam":"Paraguay","awayTeam":"TBD","espnId":"760503","round":16},"KO-R16-2":{"date":"2026-07-04","t":"17:00","homeTeam":"Canada","awayTeam":"Morocco","espnId":"760502","round":16},"KO-R16-3":{"date":"2026-07-06","t":"19:00","homeTeam":"TBD","awayTeam":"TBD","espnId":"760506","round":16},"KO-R16-4":{"date":"2026-07-07","t":"00:00","homeTeam":"TBD","awayTeam":"TBD","espnId":"760507","round":16},"KO-R16-5":{"date":"2026-07-05","t":"20:00","homeTeam":"Brazil","awayTeam":"TBD","espnId":"760504","round":16},"KO-R16-6":{"date":"2026-07-06","t":"00:00","homeTeam":"TBD","awayTeam":"TBD","espnId":"760505","round":16},"KO-R16-7":{"date":"2026-07-07","t":"16:00","homeTeam":"TBD","awayTeam":"TBD","espnId":"760508","round":16},"KO-R16-8":{"date":"2026-07-07","t":"20:00","homeTeam":"TBD","awayTeam":"TBD","espnId":"760509","round":16}};
+
+(function(){
+  Object.entries(WC26_OFFICIAL_KO_FIXTURES).forEach(([id,v])=>{
+    if(!KO_SCHEDULE[id]) KO_SCHEDULE[id]={};
+    KO_SCHEDULE[id].date=v.date;
+    KO_SCHEDULE[id].t=v.t;
+    if(typeof KO_ESPN_IDS!=='undefined' && v.espnId) KO_ESPN_IDS[id]=String(v.espnId);
+  });
+})();
+
+function wc26OfficialKoTeam(id, side){
+  const v=WC26_OFFICIAL_KO_FIXTURES[id];
+  if(!v)return null;
+  const name=side==='h'?v.homeTeam:v.awayTeam;
+  if(!name||name==='TBD')return null;
+  return normalizeTeamName(name);
+}
+
+var __wc26BuildKOV27 = buildKO;
+buildKO = function(){
+  const rounds=__wc26BuildKOV27();
+  try{
+    const r32=rounds?.[0]?.matches||[];
+    r32.forEach(m=>{
+      const v=WC26_OFFICIAL_KO_FIXTURES[m.id];
+      if(!v)return;
+      m.h=normalizeTeamName(v.homeTeam);
+      m.a=normalizeTeamName(v.awayTeam);
+      m.hs='';
+      m.as='';
+      m.espnId=String(v.espnId||'');
+      const info=wc26KoLocalInfo(m);
+      m.utcDate=info.utcDate;
+      m.utcT=info.utcT;
+      m.date=info.iso;
+      m.t=info.time;
+    });
+
+    // R16-nál csak a már hivatalos / ESPN-ből ismert konkrét csapatokat fixáljuk.
+    // A még TBD helyek továbbra is a bracket győzteséből jönnek.
+    (rounds?.[1]?.matches||[]).forEach(m=>{
+      const v=WC26_OFFICIAL_KO_FIXTURES[m.id];
+      if(!v)return;
+      const oh=wc26OfficialKoTeam(m.id,'h'), oa=wc26OfficialKoTeam(m.id,'a');
+      if(oh){m.h=oh;m.hs='';}
+      if(oa){m.a=oa;m.as='';}
+      m.espnId=String(v.espnId||m.espnId||'');
+      const info=wc26KoLocalInfo(m);
+      m.utcDate=info.utcDate;
+      m.utcT=info.utcT;
+      m.date=info.iso;
+      m.t=info.time;
+    });
+  }catch(e){}
+  return rounds;
+};
+
+var __wc26ActualForV27 = actualFor;
+actualFor = function(m){
+  const r=__wc26ActualForV27(m);
+  if(!m||!m.id||!String(m.id).startsWith('KO-'))return r;
+  const off=WC26_OFFICIAL_KO_FIXTURES[m.id];
+  if(!off)return r;
+  if(!r)return null;
+
+  // Ha Firestore-ban egy scheduled KO rekord rossz csapattal jött vissza,
+  // a kijelzésben ne duplikáljon rossz párosítást.
+  const scheduledLike = r.finished!==true && r.started!==true;
+  if(scheduledLike){
+    return {
+      ...r,
+      homeTeam: off.homeTeam!=='TBD'?off.homeTeam:r.homeTeam,
+      awayTeam: off.awayTeam!=='TBD'?off.awayTeam:r.awayTeam,
+      date: off.date,
+      time: off.t,
+      espnId: off.espnId||r.espnId
+    };
+  }
+  return r;
+};
+
+var __wc26DedupeKoMatchesV27 = wc26DedupeKoMatches;
+wc26DedupeKoMatches = function(arr){
+  // Első körben id alapján dedupolunk, mert két különböző slotba tévedt azonos
+  // csapatpár nem írhatja felül az official R32 slotot.
+  const seenId=new Set(), byId=[];
+  for(const m of arr||[]){
+    if(!m||!m.id)continue;
+    if(seenId.has(m.id))continue;
+    seenId.add(m.id);
+    byId.push(m);
+  }
+  return __wc26DedupeKoMatchesV27(byId);
+};
+
 </script></body></html>
