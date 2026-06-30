@@ -14403,4 +14403,206 @@ function wc26SafeLiveRepaintV58(){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v60 community score block: sane size + clock pill inline with score ===== */
+function communityPredScoreHtml(p,r,g){
+  const rr=wc26IsStartedOrFinishedResult(r)?r:null;
+  const realHtml=wc26CommunityScoreHtml(rr);
+  const tipHtml=wc26CommunityScoreHtml(p);
+  const clock=liveClockLabel(rr);
+  const isIntCom=rr&&!rr.finished&&String(rr.status||'').toUpperCase().includes('INT');
+
+  const stateBits=[];
+  if(rr&&!rr.finished){
+    const pills=wc26StatusPills(rr,{mode:'modal'});
+    if(pills)stateBits.push(pills);
+  }
+  if(clock)stateBits.push('<span class="tip-live-clock community-live-clock">'+clock+'</span>');
+  if(isIntCom)stateBits.push('<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>');
+
+  const stateHtml=stateBits.length?'<span class="community-state-inline">'+stateBits.join('')+'</span>':'';
+  const gradeCls=wc26CommunityGradeClass(g?.cat||'');
+  const gradeLabel=esc((rr&&g?.label)?g.label:'Várakozik');
+
+  return '<div class="community-result wc26-community-result-v60">'
+    +'<div class="community-score-col community-real-col">'
+      +'<span class="community-score-head">Valós</span>'
+      +'<b class="community-real-score community-score-value"><span class="community-value-line community-real-value-line">'+stateHtml+realHtml+'</span></b>'
+    +'</div>'
+    +'<div class="community-score-col community-tip-col">'
+      +'<span class="community-score-head">Tipp</span>'
+      +'<b class="community-score-value"><span class="community-value-line community-tip-value-line">'+tipHtml+'</span></b>'
+    +'</div>'
+    +'<small class="community-grade-note '+gradeCls+'">'+gradeLabel+'</small>'
+  +'</div>';
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Override the too-tiny v59 community result. This is the balanced size. */
+    .community-preview .community-pred{
+      grid-template-columns:minmax(0,1fr) clamp(190px,18vw,252px)!important;
+      column-gap:clamp(10px,1.2vw,16px)!important;
+      align-items:center!important;
+    }
+
+    .community-preview .community-pred .community-result,
+    .community-preview .community-pred .community-result.wc26-community-result-v58,
+    .community-preview .community-pred .community-result.wc26-community-result-v60{
+      min-width:clamp(190px,18vw,252px)!important;
+      width:clamp(190px,18vw,252px)!important;
+      max-width:clamp(190px,18vw,252px)!important;
+      display:grid!important;
+      grid-template-columns:minmax(84px,1fr) minmax(84px,1fr)!important;
+      column-gap:clamp(10px,.9vw,14px)!important;
+      row-gap:3px!important;
+      align-items:start!important;
+      justify-content:end!important;
+      text-align:right!important;
+      overflow:visible!important;
+    }
+
+    .community-preview .community-pred .community-result .community-score-col{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      justify-content:flex-start!important;
+      gap:3px!important;
+      min-width:0!important;
+      overflow:visible!important;
+    }
+
+    .community-preview .community-pred .community-result .community-score-head{
+      display:block!important;
+      font-size:clamp(10.5px,.70vw,12.5px)!important;
+      font-weight:950!important;
+      letter-spacing:.065em!important;
+      line-height:1!important;
+      text-transform:uppercase!important;
+      color:#bcd7f4!important;
+      margin:0 0 2px 0!important;
+      opacity:1!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-pred .community-result .community-score-value,
+    .community-preview .community-pred .community-result .community-real-score{
+      display:block!important;
+      font-size:clamp(18px,1.38vw,23px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      min-width:0!important;
+      max-width:100%!important;
+      color:#d7e0e6!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-pred .community-result .community-real-score{
+      color:#ff6f84!important;
+    }
+
+    .community-preview .community-pred .community-result .community-value-line,
+    .community-preview .community-pred .community-result .community-score-main,
+    .community-preview .community-pred .community-result .community-real-main,
+    .community-preview .community-pred .community-result .community-tip-main{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:4px!important;
+      font-size:inherit!important;
+      font-weight:inherit!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      vertical-align:baseline!important;
+    }
+
+    /* The minute/status pill is now ON THE SAME HORIZONTAL AXIS as the real score. */
+    .community-preview .community-pred .community-result .community-state-inline{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:flex-end!important;
+      gap:4px!important;
+      flex:0 0 auto!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      vertical-align:baseline!important;
+      margin-right:2px!important;
+    }
+
+    .community-preview .community-pred .community-result .community-live-clock,
+    .community-preview .community-pred .community-result .community-state-inline .tip-live-clock{
+      position:static!important;
+      right:auto!important;
+      top:auto!important;
+      transform:none!important;
+      margin:0!important;
+      min-width:auto!important;
+      padding:2px 7px!important;
+      font-size:clamp(8.5px,.58vw,10.5px)!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      border-radius:999px!important;
+    }
+
+    .community-preview .community-pred .community-result .community-score-pen{
+      font-size:.70em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      margin-left:1px!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-pred .community-result .community-real-col .community-score-pen{
+      color:#ff6f84!important;
+    }
+
+    .community-preview .community-pred .community-result .community-tip-col .community-score-pen{
+      color:#f0b85c!important;
+    }
+
+    .community-preview .community-pred .community-result .community-grade-note{
+      grid-column:1/-1!important;
+      justify-self:end!important;
+      margin-top:2px!important;
+      max-width:100%!important;
+      font-size:clamp(9.5px,.65vw,11px)!important;
+      line-height:1.05!important;
+      white-space:nowrap!important;
+    }
+
+    @media(max-width:720px){
+      .community-preview .community-pred{
+        grid-template-columns:1fr!important;
+      }
+      .community-preview .community-pred .community-result,
+      .community-preview .community-pred .community-result.wc26-community-result-v58,
+      .community-preview .community-pred .community-result.wc26-community-result-v60{
+        justify-self:end!important;
+        min-width:166px!important;
+        width:166px!important;
+        max-width:166px!important;
+        grid-template-columns:minmax(74px,1fr) minmax(74px,1fr)!important;
+        column-gap:8px!important;
+      }
+      .community-preview .community-pred .community-result .community-score-head{
+        font-size:10px!important;
+      }
+      .community-preview .community-pred .community-result .community-score-value,
+      .community-preview .community-pred .community-result .community-real-score{
+        font-size:17px!important;
+      }
+      .community-preview .community-pred .community-result .community-live-clock,
+      .community-preview .community-pred .community-result .community-state-inline .tip-live-clock{
+        font-size:8px!important;
+        padding:2px 6px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
