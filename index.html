@@ -13730,4 +13730,148 @@ function communityPredScoreHtml(p,r,g){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v49 exact group-card parity for KO left-bottom texts + original-size live pill ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Pixel-parity target: use the SAME visual recipe as the group-stage cards. */
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-tip{
+      font-size:clamp(11.5px,.75vw,14.5px)!important;
+      font-weight:900!important;
+      color:#27c96a!important;
+      margin-top:clamp(2px,.22vw,4px)!important;
+      line-height:1.14!important;
+      letter-spacing:0!important;
+      display:block!important;
+      padding:0!important;
+      min-width:0!important;
+      max-width:100%!important;
+      background:transparent!important;
+      border:0!important;
+      box-shadow:none!important;
+      border-radius:0!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+      text-overflow:clip!important;
+      text-align:center!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.ok,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.diff,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.outcome,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.bad,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.open,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.neutral{
+      font-size:clamp(11.5px,.75vw,14.5px)!important;
+      font-weight:950!important;
+      line-height:1.14!important;
+      letter-spacing:0!important;
+      display:block!important;
+      margin-top:0!important;
+      padding:0!important;
+      min-width:0!important;
+      max-width:100%!important;
+      background:transparent!important;
+      border:0!important;
+      box-shadow:none!important;
+      border-radius:0!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+      text-overflow:clip!important;
+      text-align:center!important;
+    }
+
+    /* Match the classic plain-text color logic from the group-stage cards */
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state{ color:#f0c275!important; }
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.ok{ color:var(--green)!important; }
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.diff{ color:#f0c275!important; }
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.outcome{ color:#ffb35f!important; }
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.bad{ color:#ff6876!important; }
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.open{ color:#27c96a!important; }
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.neutral{ color:#9eadb6!important; }
+
+    /* Keep the clock beside the score block, but restore the ORIGINAL pill size. */
+    .matches-main .match-row[data-ko-mid] .mr-scores{
+      position:relative!important;
+      overflow:visible!important;
+    }
+    .matches-main .match-row[data-ko-mid] .mr-score-wrap{
+      position:relative!important;
+      display:block!important;
+      width:auto!important;
+      overflow:visible!important;
+    }
+    .matches-main .match-row[data-ko-mid] .mr-score-lines{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:clamp(34px,5vw,56px)!important;
+      width:auto!important;
+      gap:clamp(5px,.52vw,8px)!important;
+    }
+    .matches-main .match-row[data-ko-mid] .mr-clock-row{
+      position:absolute!important;
+      right:calc(100% + 6px)!important;
+      top:50%!important;
+      transform:translateY(-50%)!important;
+      width:auto!important;
+      margin:0!important;
+      padding:0!important;
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:5px!important;
+      pointer-events:none!important;
+      z-index:4!important;
+    }
+    .matches-main .match-row[data-ko-mid] .mr-clock{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:clamp(24px,2.35vw,48px)!important;
+      padding:clamp(2px,.35vw,6px) clamp(5px,.8vw,13px)!important;
+      border-radius:999px!important;
+      background:rgba(255,90,104,.16)!important;
+      border:1px solid rgba(255,90,104,.32)!important;
+      color:#ff7b87!important;
+      font-size:clamp(10px,calc(0.22vw + 12px),16px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      transform:none!important;
+    }
+
+    @media(max-width:720px){
+      /* mobile group-card parity */
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-tip{
+        font-size:clamp(6.8px,1.8vw,8px)!important;
+        line-height:1!important;
+        margin-top:1px!important;
+      }
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.ok,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.diff,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.outcome,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.bad,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.open,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.neutral{
+        font-size:clamp(7.9px,2.1vw,9.9px)!important;
+        line-height:1.2!important;
+      }
+      .matches-main .match-row[data-ko-mid] .mr-clock-row{
+        right:calc(100% + 4px)!important;
+      }
+      .matches-main .match-row[data-ko-mid] .mr-clock{
+        min-width:34px!important;
+        padding:4px 10px!important;
+        font-size:11.5px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
