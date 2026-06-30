@@ -8500,6 +8500,32 @@ body.modal-open{
 }
 .tip-real-cell .wc26-mini-pen-label{display:none!important;}
 
+
+
+/* ===== WC26 v14 inline score penalty cleanup ===== */
+.mr-date .mr-tip-pen{display:none!important;}
+.wc26-card-score{
+  display:inline-flex!important;
+  align-items:baseline;
+  justify-content:center;
+  gap:3px;
+  white-space:nowrap;
+}
+.wc26-card-pen{
+  color:inherit!important;
+  font-size:.58em!important;
+  font-weight:950!important;
+  line-height:1!important;
+  opacity:.95!important;
+  transform:translateY(-.05em);
+}
+.mr-score-real .wc26-card-pen{color:#ff6f84!important;}
+.mr-score-tip .wc26-card-pen{color:#d7e0e6!important;opacity:.88!important;}
+.mr-score-single .wc26-card-pen{color:#d7e0e6!important;opacity:.88!important;}
+.mr-score-row{column-gap:5px!important;}
+.mr-score-real,.mr-score-tip,.mr-score-single{min-width:18px;}
+.mr-score-real .wc26-mini-pen-label,.mr-score-tip .wc26-mini-pen-label,.mr-score-single .wc26-mini-pen-label{display:none!important;}
+
 </style></head><body><div class="app"><div class="top" id="topBar"><div class="hdr"><div class="hdr-back">&lsaquo;</div><div class="li-box" id="liBox"><img id="liImg" alt="" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" loading="eager"><svg class="li-fb" viewBox="0 0 80 80" aria-hidden="true"><rect width="80" height="80" rx="12" fill="#0e1f27"/><circle cx="40" cy="40" r="25" fill="#e8edf0"/><path d="M40 14l8 14 16 3-11 12 2 16-15-7-15 7 2-16-11-12 16-3z" fill="#17232b"/></svg></div><div class="li-info"><div class="li-title">FIFA World Cup</div><div class="li-season">2026 <span class="chev">&#9662;</span></div></div><div class="hdr-acts"><div class="hdr-icon">&#8599;</div><div class="hdr-icon">&#9734;</div><div class="hdr-icon">&#9733;</div></div></div><nav class="tabs" id="tabs"><button class="tab active" data-tab="overview">&Aacute;ttekint&eacute;s</button><button class="tab" data-tab="table">Tabella</button><button class="tab" data-tab="matches">M&eacute;rk&#337;z&eacute;sek</button><button class="tab" data-tab="knockout">Egyenes kies&eacute;s</button><button class="tab" data-tab="stats">Statisztik&aacute;k</button><button class="tab" data-tab="community">K&ouml;z&ouml;ss&eacute;g</button></nav></div><div id="spacer"></div><div id="ctrlWrap"><div class="ctrl-bar" id="tblCtrl"><div class="ctrl-inner"><button class="pill active" data-f="all">&Ouml;sszes</button><button class="pill" data-f="home">Hazai</button><button class="pill" data-f="away">Idegen</button><div class="view-wrap" style="margin-left:0"><button class="sel-btn" id="tblRoundBtn" style="width:100%;min-width:0"><span class="sel-txt" id="tblRoundTxt">V&eacute;gleges</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="tblRoundDrop"></div></div><div class="view-wrap"><button class="view-btn" id="vBtn"><span class="hbars"><i></i><b></b></span></button><div class="drop" id="vDrop"><button data-v="short" class="active">R&ouml;vid</button><button data-v="full">Teljes</button><button data-v="form">Forma</button></div></div></div></div><div class="kc-bar hidden" id="koCtrl"><div class="kc-inner"><div class="sel-wrap"><button class="sel-btn" id="selBtn"><span class="sel-txt" id="selTxt">FIFA World Cup 2026 - egyenes kies&eacute;s</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="selDrop"><button data-b="format" class="active">FIFA World Cup 2026 - egyenes kies&eacute;s</button></div></div><button class="expand-btn">&#8599;</button></div></div><div class="ctrl-bar hidden" id="mCtrl"><div class="ctrl-inner"><button class="pill active" data-mf="date">D&aacute;tum szerint</button><button class="pill" data-mf="group">Csoport szerint</button><button class="pill" data-mf="round">K&ouml;r szerint</button><button class="pill" data-mf="team">Csapat szerint</button></div></div><div class="ctrl-bar hidden" id="mRoundBar"><div class="ctrl-inner"><div class="view-wrap" style="margin-left:0"><button class="sel-btn" id="roundSelBtn" style="min-width:clamp(86px,22vw,110px)"><span class="sel-txt" id="roundSelTxt">1. kör</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="roundSelDrop" style="min-width:clamp(100px,28vw,140px);max-height:50vh;overflow-y:auto"></div></div></div></div><div class="ctrl-bar hidden" id="mTeamBar"><div class="ctrl-inner" style="gap:clamp(7px,2vw,10px)"><div class="view-wrap" style="margin-left:0;flex:1"><button class="sel-btn" id="teamSelBtn" style="width:100%"><span class="sel-txt" id="teamSelTxt">Csapat kiv&aacute;laszt&aacute;sa</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="teamSelDrop" style="min-width:min(280px,calc(100vw - 36px));max-height:50vh;overflow-y:auto"></div></div></div></div></div><main id="main" class="main"></main></div><script>const D={"groups":[["A","Mexico","South Africa","South Korea","Czechia"],["B","Canada","Switzerland","Qatar","Bosnia and Herzegovina"],["C","Brazil","Morocco","Haiti","Scotland"],["D","USA","Paraguay","Australia","Turkiye"],["E","Germany","Curacao","Ivory Coast","Ecuador"],["F","Netherlands","Japan","Tunisia","Sweden"],["G","Belgium","Egypt","Iran","New Zealand"],["H","Spain","Cape Verde","Saudi Arabia","Uruguay"],["I","France","Senegal","Norway","Iraq"],["J","Argentina","Algeria","Austria","Jordan"],["K","Portugal","Uzbekistan","Colombia","DR Congo"],["L","England","Croatia","Ghana","Panama"]],"ids":{"Mexico":6710,"South Africa":6316,"South Korea":7804,"Czechia":8496,"Canada":5810,"Switzerland":6717,"Qatar":5902,"Bosnia and Herzegovina":10106,"Brazil":8256,"Morocco":6262,"Haiti":5934,"Scotland":8498,"USA":6713,"Paraguay":6724,"Australia":6716,"Turkiye":6595,"Germany":8570,"Curacao":287981,"Ivory Coast":6709,"Ecuador":6707,"Netherlands":6708,"Japan":6715,"Tunisia":6719,"Sweden":8520,"Belgium":8263,"Egypt":10255,"Iran":6711,"New Zealand":5820,"Spain":6720,"Cape Verde":5888,"Saudi Arabia":7795,"Uruguay":5796,"France":6723,"Senegal":6395,"Norway":8492,"Iraq":5819,"Argentina":6706,"Algeria":6317,"Austria":8255,"Jordan":5816,"Portugal":8361,"Uzbekistan":8700,"Colombia":8258,"DR Congo":6321,"England":8491,"Croatia":10155,"Ghana":6714,"Panama":5922}};
 const GROUPS=D.groups.map(g=>({key:g[0],teams:g.slice(1)})),TEAM_IDS=D.ids,ALL=GROUPS.flatMap(g=>g.teams);
 const VALID_TABS=new Set(['overview','table','matches','knockout','stats','community']);
@@ -9903,4 +9929,115 @@ function wc26DecorateTipModal(id,kind){
   const below=ov.querySelector('.tip-below-score');if(below){below.querySelectorAll('.wc26-state-indicators').forEach(x=>x.remove());}
 }
 
+
+
+/* ===== WC26 v14 score-column penalty placement =====
+   Match cards: real goals + real pens stay in the red actual column;
+   tip goals + tip pens stay together in the tip column. No left-side PEN pill spam. */
+function wc26CardScoreValue(score,pen){
+  return '<span class="wc26-card-score">'+(validScore(pen)?'<span class="wc26-card-pen">('+esc(pen)+')</span>':'')+'<span>'+esc(score)+'</span></span>';
+}
+function wc26ScoreWithPen(score,pen){return wc26CardScoreValue(score,pen)}
+function wc26CardTipPenHtml(p){return ''}
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),
+      rawSt=r&&r.status?String(r.status).toUpperCase():'',
+      isInt=rawSt.includes('INT'),
+      lines='';
+  const pHasPen=wc26HasPenScore(p);
+  if(p&&hasReal){
+    lines='<div class="mr-score-compare">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span></div>'
+      +'</div>';
+  }else lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  let pills=wc26StatusPills(r,{mode:'card'}),
+      clockRow=(hasReal&&r&&!r.finished&&(clock||isInt||pills))?'<div class="mr-clock-row">'+pills+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return clockRow?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+
+/* ===== WC26 v15: de-kapare penalty score UI + corrupted KO result display guard ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .matches-main .mr-scores{min-width:clamp(70px,8.2vw,96px)!important;}
+    .mr-score-row{display:flex;align-items:center;justify-content:center;gap:clamp(6px,.55vw,10px)!important;min-height:1.18em;}
+    .mr-score-real,.mr-score-tip,.mr-score-single{display:inline-flex!important;flex-direction:row!important;align-items:baseline!important;justify-content:center!important;gap:2px!important;line-height:1!important;white-space:nowrap!important;}
+    .mr-score-real{color:#ff6f84!important;font-weight:950!important;}
+    .mr-score-tip{color:#d7e0e6!important;font-weight:900!important;opacity:.96!important;}
+    .mr-score-real .wc26-card-pen,.mr-score-tip .wc26-card-pen,.mr-score-single .wc26-card-pen{color:#ff6f84!important;font-size:.58em!important;font-weight:950!important;margin-left:1px!important;letter-spacing:-.02em!important;vertical-align:baseline!important;opacity:.95!important;}
+    .mr-score-single.mr-score-real .wc26-card-pen{color:#ff6f84!important;}
+    .mr-score-compare,.mr-score-actual-only,.mr-score-tip-only{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:clamp(5px,.52vw,8px)!important;}
+    .wc26-card-score{display:inline-flex!important;align-items:baseline!important;justify-content:center!important;gap:1px!important;white-space:nowrap!important;}
+    .wc26-card-score>span:last-child{line-height:1!important;}
+    .mr-date .mr-tip-pen{display:none!important;}
+    .wc26-mini-pen-label{display:none!important;}
+  `;
+  document.head.appendChild(st);
+})();
+function wc26RawArrayLen(v){try{if(Array.isArray(v))return v.length;if(typeof v==='string')return JSON.parse(v||'[]').length}catch(e){}return 0}
+function wc26NormalizeResultForDisplay(id,r){
+  if(!r)return null;
+  const out={...r};
+  const hasScore=validScore(out.h)&&validScore(out.a);
+  const hasPens=wc26HasPenScore(out);
+  const events=wc26RawArrayLen(out.scorers)+wc26RawArrayLen(out.redCards)+wc26RawArrayLen(out.yellowCards);
+  const st=String((out.status||'')+' '+(out.minute||'')).toUpperCase();
+  if(hasPens){out.started=true;out.finished=true;out.status='PEN';out.minute=null;}
+  else if(out.finished){
+    out.started=true;
+    if(st.includes('AET'))out.status='AET';
+    else if(st.includes('PEN'))out.status='PEN';
+    else out.status='FT';
+    out.minute=null;
+  }else if(hasScore&&(events||(!st.includes('SCHEDULED')&&st.trim()))){
+    out.started=true;
+  }
+  return out;
+}
+function actualFor(m){return wc26NormalizeResultForDisplay(m&&m.id,LIVE_RESULTS[m&&m.id]||null)}
+function matchLockState(m){let r=actualFor({id:m.id});if(r&&r.finished)return'finished';if(r&&r.started)return'live';const ko=m.id&&m.id.startsWith('KO-');const ks=ko?KO_SCHEDULE[m.id]:null;const kick=ko?(ks?new Date(ks.date+'T'+ks.t+':00+00:00').getTime():null):fixtureKickoff(m);if(kick&&Date.now()>=kick)return'live';return'open'}
+function wc26CardScoreValue(score,pen){return '<span class="wc26-card-score"><span>'+esc(score)+'</span>'+(validScore(pen)?'<span class="wc26-card-pen">('+esc(pen)+')</span>':'')+'</span>'}
+function wc26ScoreWithPen(score,pen){return wc26CardScoreValue(score,pen)}
+function wc26CardTipPenHtml(p){return ''}
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),rawSt=r&&r.status?String(r.status).toUpperCase():'',isInt=rawSt.includes('INT'),lines='';
+  const pHasPen=wc26HasPenScore(p);
+  if(p&&hasReal){
+    lines='<div class="mr-score-compare">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span></div>'
+      +'</div>';
+  }else lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  let pills=wc26StatusPills(r,{mode:'card'}),clockRow=(hasReal&&r&&!r.finished&&(clock||isInt||pills))?'<div class="mr-clock-row">'+pills+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return clockRow?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),sc=koTipScore(m),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'||sc.cat==='exact-pen-exact'?' result-exact':sc.cat==='diff'||sc.cat==='exact-pen-diff'||sc.cat==='draw-pen-diff'?' result-diff':sc.cat==='outcome'||sc.cat==='exact-pen-outcome'||sc.cat==='draw-pen-outcome'||sc.cat==='draw'?' result-outcome':sc.cat==='miss'?' result-miss':''),sch=KO_SCHEDULE[m.id]||{},md=sch.date||m.date||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].date)||'',mt=sch.t||m.t||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].time)||'',timeStr=md&&mt?(()=>{try{return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){return mt}})():'--:--';return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26MatchStateBadgeAny(m)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>'}
+function koWinner(match){if(!match.h||!match.a)return null;let r=actualFor({id:match.id});if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pen==='h'?match.h:p.pen==='a'?match.a:null;if(validScore(p.h)&&validScore(p.a)){if(+p.h>+p.a)return match.h;if(+p.a>+p.h)return match.a;if(validScore(p.pH)&&validScore(p.pA)&&+p.pH!==+p.pA)return +p.pH>+p.pA?match.h:match.a;}return null}
 tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();loadMatchResultsFromBackendDb(true).finally(()=>{wc26LoadKoPairsFromWorker(true).catch(()=>{});scheduleLiveSync();ensureLivePaintLoop();});syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();</script></body></html>
