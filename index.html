@@ -10705,4 +10705,142 @@ liveClockLabel = function(r){
   return __wc26LiveClockLabelV24(r);
 };
 
+
+/* ===== WC26 v25 bigger community goal indicators ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-result{
+      min-width:clamp(188px,18vw,268px)!important;
+      grid-template-columns:repeat(2,minmax(82px,auto))!important;
+      gap:8px 18px!important;
+    }
+    .community-result .community-score-value{
+      font-size:clamp(24px,2.2vw,32px)!important;
+      gap:7px!important;
+      line-height:1!important;
+    }
+    .community-result .community-score-main{
+      font-size:inherit!important;
+      line-height:1!important;
+    }
+    .community-result .community-score-pen{
+      font-size:.84em!important;
+      line-height:1!important;
+    }
+    .community-result .community-score-col{
+      gap:5px!important;
+    }
+    .community-result .community-score-head{
+      font-size:11px!important;
+    }
+    @media (max-width: 720px){
+      .community-result{
+        min-width:166px!important;
+        grid-template-columns:repeat(2,minmax(72px,auto))!important;
+        gap:7px 14px!important;
+      }
+      .community-result .community-score-value{
+        font-size:22px!important;
+        gap:5px!important;
+      }
+      .community-result .community-score-head{
+        font-size:10px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v26 KO schedule/date sanity ===== */
+(function(){
+  const fixed={
+    'KO-R16-3':{date:'2026-07-06',t:'19:00'},
+    'KO-R16-4':{date:'2026-07-07',t:'00:00'},
+    'KO-R16-5':{date:'2026-07-05',t:'20:00'},
+    'KO-R16-6':{date:'2026-07-06',t:'00:00'}
+  };
+  Object.entries(fixed).forEach(([id,v])=>{
+    if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=v.date;KO_SCHEDULE[id].t=v.t;}
+  });
+})();
+
+function wc26KoUtcSource(m){
+  if(!m||!m.id)return null;
+  const sch=KO_SCHEDULE[m.id];
+  if(sch&&sch.date&&sch.t)return{date:sch.date,t:sch.t};
+  const lr=LIVE_RESULTS[m.id];
+  if(lr&&lr.date&&lr.time)return{date:lr.date,t:lr.time};
+  if(m.utcDate&&m.utcT)return{date:m.utcDate,t:m.utcT};
+  if(m.date&&m.t)return{date:m.date,t:m.t};
+  return null;
+}
+function wc26PartsInTz(dt,tz){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(dt);
+  const o={}; parts.forEach(p=>{if(p.type!=='literal')o[p.type]=p.value;});
+  return o;
+}
+function wc26KoLocalInfo(m,tz){
+  const src=wc26KoUtcSource(m);
+  if(!src||!src.date||!src.t)return{iso:m?.date||'',label:m?.date||'',time:m?.t||'',utcDate:src?.date||'',utcT:src?.t||''};
+  const zone=tz||Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const dt=new Date(src.date+'T'+src.t+':00+00:00');
+  const p=wc26PartsInTz(dt,zone);
+  const iso=p.year+'-'+p.month+'-'+p.day;
+  const label=dt.toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:zone}).replace(/\u00a0/g,' ');
+  const time=dt.toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:zone});
+  return{iso,label,time,utcDate:src.date,utcT:src.t};
+}
+var __wc26BuildKOV26=buildKO;
+buildKO=function(){
+  const rounds=__wc26BuildKOV26();
+  try{
+    rounds.forEach(r=>(r.matches||[]).forEach(m=>{
+      const info=wc26KoLocalInfo(m);
+      m.utcDate=info.utcDate;
+      m.utcT=info.utcT;
+      m.date=info.iso;
+      m.t=info.time;
+    }));
+  }catch(e){}
+  return rounds;
+};
+var __wc26BuildBronzeV26=buildBronze;
+buildBronze=function(rounds){
+  const m=__wc26BuildBronzeV26(rounds);
+  try{
+    const info=wc26KoLocalInfo(m);
+    m.utcDate=info.utcDate;
+    m.utcT=info.utcT;
+    m.date=info.iso;
+    m.t=info.time;
+  }catch(e){}
+  return m;
+};
+koMatchSchedule=function(m){
+  const info=wc26KoLocalInfo(m);
+  return{d:info.label,t:info.time,date:info.iso,utcDate:info.utcDate,utcT:info.utcT};
+};
+koMatchKickoff=function(m){
+  const src=wc26KoUtcSource(m);
+  if(src&&src.date&&src.t){
+    const ms=new Date(src.date+'T'+src.t+':00+00:00').getTime();
+    if(Number.isFinite(ms))return ms;
+  }
+  return null;
+};
+var __wc26LocalMatchTimeV26=localMatchTime;
+localMatchTime=function(m,tz){
+  if(m&&m.id&&String(m.id).startsWith('KO-'))return wc26KoLocalInfo(m,tz).time||'';
+  return __wc26LocalMatchTimeV26(m,tz);
+};
+var __wc26LocalMatchDateV26=localMatchDate;
+localMatchDate=function(m,tz){
+  if(m&&m.id&&String(m.id).startsWith('KO-'))return wc26KoLocalInfo(m,tz).label||'';
+  return __wc26LocalMatchDateV26(m,tz);
+};
+
+function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),sc=koTipScore(m),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'?' result-exact':sc.cat==='diff'?' result-diff':sc.cat==='outcome'?' result-outcome':sc.cat==='miss'?' result-miss':''),r2=LIVE_RESULTS[m.id]||null,rs=r2&&validScore(r2.h)&&validScore(r2.a)?' '+r2.h+'-'+r2.a:'',badge=sc.cat==='exact'?'<em class="mr-live-state ok">Pontos</em>':sc.cat==='diff'?'<em class="mr-live-state diff">G&oacute;lk&uuml;l.</em>':sc.cat==='outcome'?'<em class="mr-live-state outcome">Kimenetel</em>':sc.cat==='miss'?'<em class="mr-live-state bad">Hib&aacute;s</em>':state==='finished'?'<em class="mr-live-state neutral">Lez&aacute;rt'+rs+'</em>':state==='live'?'<em class="mr-live-state live"><span></span>'+(liveClockLabel(r2)||'&Eacute;l&#337;')+rs+'</em>':locked?'<em class="mr-live-state neutral">Z&aacute;rolva</em>':'<em class="mr-live-state open">Tippelhet&#337;</em>',ks=koMatchSchedule(m),timeStr=ks&&ks.t?ks.t:'--:--';return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+badge+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>'}
+
 </script></body></html>
