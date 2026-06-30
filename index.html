@@ -11204,4 +11204,333 @@ function scoreHtml(x){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v30 compact left badges + tighter KO score spacing ===== */
+function wc26KoShortLabel(g){
+  const cat=String(g?.cat||'');
+  const map={
+    'exact':'Pont',
+    'exact-pen-exact':'Pont+tizi',
+    'exact-pen-diff':'Pont+t.gk.',
+    'exact-pen-outcome':'Pont+t.kim.',
+    'draw':'Dönt.',
+    'draw-pen-exact':'Dönt.+tp.',
+    'draw-pen-diff':'Dönt.+tgk.',
+    'draw-pen-outcome':'Dönt.+tkim.',
+    'diff':'Gólkül.',
+    'outcome':'Kimen.',
+    'miss':'Téves'
+  };
+  return map[cat]||g?.label||'';
+}
+function wc26KoBadge(sc,state,r2){
+  const base=sc?.base||wc26KoBaseCat(sc?.cat);
+  if(sc&&sc.cat){
+    const label=sc.label||wc26KoShortLabel(sc);
+    return '<em class="mr-live-state '+wc26KoStateClass(base)+'">'+esc(label)+'</em>';
+  }
+  const rs=r2&&validScore(r2.h)&&validScore(r2.a)?' '+r2.h+'-'+r2.a:'';
+  if(state==='finished')return'<em class="mr-live-state neutral">Lez.</em>';
+  if(state==='live')return'<em class="mr-live-state live"><span></span>'+(liveClockLabel(r2)||'Élő')+rs+'</em>';
+  return'<em class="mr-live-state open">Tipp.</em>';
+}
+function wc26KoScoreLine(realScore, tipScore, realPen, tipPen){
+  return '<span class="mr-ko-score-line">'
+    +'<span class="mr-ko-real-pack"><span class="mr-ko-real-score">'+esc(realScore)+'</span>'+wc26KoPenSpan(realPen,'mr-ko-real-pen')+'</span>'
+    +'<span class="mr-ko-tip-pack"><span class="mr-ko-tip-score">'+esc(tipScore)+'</span>'+wc26KoPenSpan(tipPen,'mr-ko-tip-pen')+'</span>'
+    +'</span>';
+}
+koMatchRow=function(m){
+  let p=koPred(m.id),
+      cls=p?'win':'',
+      state=matchLockState({id:m.id}),
+      sc=koTipScore(m),
+      base=sc.base||wc26KoBaseCat(sc.cat),
+      locked=state!=='open',
+      edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',
+      rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+        (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':''),
+      r2=LIVE_RESULTS[m.id]||null,
+      badge=wc26KoBadge(sc,state,r2),
+      ks=koMatchSchedule(m),
+      timeStr=ks&&ks.t?ks.t:'--:--';
+  return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tipp.</em>':'')+badge+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+};
+wc26MatchStateBadgeAny=function(m){
+  const id=m&&m.id,ko=id&&id.startsWith('KO-'),st=matchLockState({id}),sc=ko?koTipScore(m):tipScore(m),r=actualFor({id}),rs=r&&validScore(r.h)&&validScore(r.a)?' '+r.h+'-'+r.a:'',clk=liveClockLabel(r);
+  if(ko)return wc26KoBadge(sc,st,r);
+  if(sc.cat==='exact')return'<em class="mr-live-state ok">Pont</em>';
+  if(sc.cat==='diff')return'<em class="mr-live-state diff">Gólkül.</em>';
+  if(sc.cat==='outcome')return'<em class="mr-live-state outcome">Kimen.</em>';
+  if(sc.cat==='miss')return'<em class="mr-live-state bad">Hibás</em>';
+  if(st==='finished')return'<em class="mr-live-state neutral">Lez.'+rs+'</em>';
+  if(st==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'Élő')+rs+'</em>';
+  return'<em class="mr-live-state open">Tipp.</em>';
+};
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .mr-date{
+      min-width:clamp(58px,7.6vw,94px)!important;
+      padding-left:clamp(2px,.45vw,7px)!important;
+      padding-right:clamp(3px,.55vw,8px)!important;
+    }
+    .mr-tip{
+      font-size:clamp(8.4px,.58vw,11px)!important;
+      line-height:1!important;
+      margin-top:1px!important;
+    }
+    .mr-live-state{
+      max-width:clamp(48px,5.2vw,76px)!important;
+      min-width:0!important;
+      padding:1px 2px!important;
+      font-size:clamp(8px,.55vw,11px)!important;
+      line-height:.98!important;
+      white-space:normal!important;
+      overflow:visible!important;
+      text-align:center!important;
+      letter-spacing:-.02em!important;
+      word-break:normal!important;
+    }
+    .mr-ko-score-line{
+      gap:0!important;
+      justify-content:flex-end!important;
+      width:100%!important;
+    }
+    .mr-ko-real-pack,
+    .mr-ko-tip-pack{
+      min-width:auto!important;
+      gap:2px!important;
+      justify-content:flex-end!important;
+      flex:0 0 auto!important;
+    }
+    .mr-ko-tip-pack{
+      margin-left:clamp(3px,.35vw,5px)!important;
+    }
+    .mr-ko-real-pen,
+    .mr-ko-tip-pen,
+    .mr-real-pen-only,
+    .mr-tip-pen-only{
+      font-size:.82em!important;
+      margin-left:1px!important;
+    }
+    .mr-scores{
+      gap:clamp(5px,1.2vw,8px)!important;
+      text-align:right!important;
+    }
+    @media(max-width:640px){
+      .mr-date{min-width:54px!important;}
+      .mr-live-state{max-width:46px!important;font-size:8px!important;}
+      .mr-ko-tip-pack{margin-left:2px!important;}
+      .mr-ko-real-pack,.mr-ko-tip-pack{gap:1.5px!important;}
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v31 KO penalty winner + reactive penalty modal ===== */
+function wc26KoPredSafe(id){
+  try{return typeof koPred==='function'?koPred(id):null}catch(e){return null}
+}
+function wc26KoActualSafe(id){
+  try{return typeof actualFor==='function'?actualFor({id}):null}catch(e){return LIVE_RESULTS?.[id]||null}
+}
+function wc26KoPenaltyWinnerSide(scoreA,scoreB,penA,penB){
+  if(validScore(scoreA)&&validScore(scoreB)&&Number(scoreA)!==Number(scoreB)) return Number(scoreA)>Number(scoreB)?'h':'a';
+  if(validScore(penA)&&validScore(penB) && Number(penA)!==Number(penB)) return Number(penA)>Number(penB)?'h':'a';
+  return null;
+}
+koWinner=function(match){
+  if(!match||!match.h||!match.a) return null;
+  const r=wc26KoActualSafe(match.id);
+  const realSide=r?wc26KoPenaltyWinnerSide(r.h,r.a,r.pH,r.pA):null;
+  if(realSide==='h') return match.h;
+  if(realSide==='a') return match.a;
+  const p=wc26KoPredSafe(match.id);
+  const tipSide=p?wc26KoPenaltyWinnerSide(p.h,p.a,p.pH,p.pA):null;
+  if(tipSide==='h') return match.h;
+  if(tipSide==='a') return match.a;
+  return null;
+};
+koLoser=function(match){
+  if(!match||!match.h||!match.a) return null;
+  const r=wc26KoActualSafe(match.id);
+  const realSide=r?wc26KoPenaltyWinnerSide(r.h,r.a,r.pH,r.pA):null;
+  if(realSide==='h') return match.a;
+  if(realSide==='a') return match.h;
+  const p=wc26KoPredSafe(match.id);
+  const tipSide=p?wc26KoPenaltyWinnerSide(p.h,p.a,p.pH,p.pA):null;
+  if(tipSide==='h') return match.a;
+  if(tipSide==='a') return match.h;
+  return null;
+};
+
+function wc26KoModalBaseCat(id){
+  const p=wc26KoPredSafe(id), r=wc26KoActualSafe(id);
+  if(!p||!r||!validScore(p.h)||!validScore(p.a)||!validScore(r.h)||!validScore(r.a) || typeof gradeKoTip!=='function') return '';
+  try{
+    const g=gradeKoTip(p,r);
+    const cat=String(g?.cat||'');
+    if(cat==='miss') return 'miss';
+    if(cat==='draw-pen-outcome') return 'outcome';
+    if(cat.startsWith('exact')) return 'exact';
+    if(cat.startsWith('draw') || cat.includes('diff')) return 'diff';
+    if(cat.includes('outcome')) return 'outcome';
+    return cat;
+  }catch(e){ return ''; }
+}
+function wc26FindLabelEl(root, needle){
+  needle=String(needle||'').toLowerCase();
+  return [...root.querySelectorAll('*')].find(el=>{
+    const t=(el.textContent||'').trim().toLowerCase();
+    return t===needle || t.includes(needle);
+  })||null;
+}
+function wc26FindCardForLabel(labelEl, root){
+  if(!labelEl) return null;
+  let el=labelEl;
+  for(let i=0;i<7&&el&&el!==root;i++,el=el.parentElement){
+    const r=el.getBoundingClientRect();
+    if(r.width>220 && r.height>52) return el;
+  }
+  return labelEl.parentElement||null;
+}
+function wc26ApplyKoModalReactiveUI(overlay){
+  if(!overlay) return;
+  const id=overlay.dataset?.tipId||'';
+  if(!id.startsWith('KO-')) return;
+  const base=wc26KoModalBaseCat(id);
+  overlay.classList.remove('wc26-ko-modal-exact','wc26-ko-modal-diff','wc26-ko-modal-outcome','wc26-ko-modal-miss');
+  if(base) overlay.classList.add('wc26-ko-modal-'+base);
+
+  const tipLabel = wc26FindLabelEl(overlay,'A te tipped');
+  const tipCard = wc26FindCardForLabel(tipLabel, overlay);
+  if(tipCard) tipCard.classList.add('wc26-ko-tip-summary');
+
+  const penLabel = wc26FindLabelEl(overlay,'Tizenegyesek');
+  const penCard = wc26FindCardForLabel(penLabel, overlay);
+  if(penCard) penCard.classList.add('wc26-ko-penalty-panel');
+
+  const saveBtn=[...overlay.querySelectorAll('button, .btn, [role="button"]')].find(el=>(el.textContent||'').trim().toLowerCase().includes('zárolva'));
+  if(saveBtn) saveBtn.classList.add('wc26-ko-lock-btn');
+}
+(function(){
+  const _openKoTip = typeof openKoTip==='function' ? openKoTip : null;
+  if(_openKoTip){
+    openKoTip = function(id){
+      const out = _openKoTip.apply(this, arguments);
+      requestAnimationFrame(()=>{
+        const ov=document.querySelector('.tip-overlay[data-tip-id="'+id+'"]') || document.querySelector('.tip-overlay:last-of-type');
+        wc26ApplyKoModalReactiveUI(ov);
+      });
+      return out;
+    };
+  }
+})();
+(function(){
+  const mo = new MutationObserver(()=>{
+    document.querySelectorAll('.tip-overlay[data-tip-id]').forEach(ov=>wc26ApplyKoModalReactiveUI(ov));
+  });
+  mo.observe(document.documentElement,{childList:true,subtree:true});
+  const st=document.createElement('style');
+  st.textContent=`
+    .wc26-ko-modal-exact .wc26-ko-tip-summary{
+      background:linear-gradient(180deg,rgba(49,182,112,.16),rgba(38,115,77,.14))!important;
+      border-color:rgba(56,218,132,.55)!important;
+      box-shadow:0 0 0 1px rgba(56,218,132,.12) inset!important;
+    }
+    .wc26-ko-modal-diff .wc26-ko-tip-summary{
+      background:linear-gradient(180deg,rgba(245,183,47,.13),rgba(122,86,17,.12))!important;
+      border-color:rgba(255,214,86,.52)!important;
+      box-shadow:0 0 0 1px rgba(255,214,86,.10) inset!important;
+    }
+    .wc26-ko-modal-outcome .wc26-ko-tip-summary{
+      background:linear-gradient(180deg,rgba(255,161,71,.13),rgba(120,71,16,.12))!important;
+      border-color:rgba(255,184,98,.52)!important;
+      box-shadow:0 0 0 1px rgba(255,184,98,.10) inset!important;
+    }
+    .wc26-ko-modal-miss .wc26-ko-tip-summary{
+      background:linear-gradient(180deg,rgba(221,77,104,.14),rgba(105,33,48,.13))!important;
+      border-color:rgba(255,109,134,.52)!important;
+      box-shadow:0 0 0 1px rgba(255,109,134,.10) inset!important;
+    }
+    .wc26-ko-modal-exact .wc26-ko-tip-summary,
+    .wc26-ko-modal-diff .wc26-ko-tip-summary,
+    .wc26-ko-modal-outcome .wc26-ko-tip-summary,
+    .wc26-ko-modal-miss .wc26-ko-tip-summary,
+    .wc26-ko-modal-exact .wc26-ko-penalty-panel,
+    .wc26-ko-modal-diff .wc26-ko-penalty-panel,
+    .wc26-ko-modal-outcome .wc26-ko-penalty-panel,
+    .wc26-ko-modal-miss .wc26-ko-penalty-panel{
+      transition:all .18s ease;
+    }
+    .wc26-ko-modal-exact .wc26-ko-penalty-panel{
+      border-color:rgba(56,218,132,.40)!important;
+      box-shadow:0 0 0 1px rgba(56,218,132,.08) inset!important;
+    }
+    .wc26-ko-modal-diff .wc26-ko-penalty-panel{
+      border-color:rgba(255,214,86,.38)!important;
+      box-shadow:0 0 0 1px rgba(255,214,86,.07) inset!important;
+    }
+    .wc26-ko-modal-outcome .wc26-ko-penalty-panel{
+      border-color:rgba(255,184,98,.38)!important;
+      box-shadow:0 0 0 1px rgba(255,184,98,.07) inset!important;
+    }
+    .wc26-ko-modal-miss .wc26-ko-penalty-panel{
+      border-color:rgba(255,109,134,.40)!important;
+      box-shadow:0 0 0 1px rgba(255,109,134,.08) inset!important;
+    }
+  `;
+  document.head.appendChild(st);
+  setTimeout(()=>{ try{ if(typeof render==='function') render(); }catch(e){} }, 60);
+})();
+
+
+/* ===== WC26 v32 bigger VALÓS / TIPP indicators ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-result .community-score-head{
+      font-size:clamp(12.5px,.9vw,16px)!important;
+      font-weight:950!important;
+      letter-spacing:.075em!important;
+      line-height:1!important;
+      opacity:1!important;
+      color:#a9c6e8!important;
+      text-shadow:0 1px 0 rgba(0,0,0,.28)!important;
+    }
+    .community-result .community-real-col .community-score-head{
+      color:#9fbee0!important;
+    }
+    .community-result .community-tip-col .community-score-head{
+      color:#b7cdea!important;
+    }
+
+    /* Ha máshol is van ilyen kis VALÓS / TIPP header, kapja meg ugyanezt. */
+    .wc26-score-head,
+    .score-head,
+    .mr-score-head,
+    .tip-score-head,
+    .community-score-head{
+      font-size:clamp(12.5px,.9vw,16px)!important;
+      font-weight:950!important;
+      letter-spacing:.075em!important;
+      line-height:1!important;
+    }
+
+    @media(max-width:720px){
+      .community-result .community-score-head,
+      .wc26-score-head,
+      .score-head,
+      .mr-score-head,
+      .tip-score-head{
+        font-size:12px!important;
+        letter-spacing:.065em!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
