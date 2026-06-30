@@ -13122,4 +13122,305 @@ function communityPredScoreHtml(p,r,g){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v44 pixel tighten: KO left labels smaller + clock pill absolute, no score shift ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Bal alsó két szöveg: még kisebb, group-card alatti méretre húzva */
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-tip,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state{
+      font-size:clamp(6.8px,.40vw,8.3px)!important;
+      line-height:.98!important;
+      font-weight:900!important;
+      letter-spacing:-.035em!important;
+      margin-top:1px!important;
+      padding:0!important;
+      min-width:0!important;
+      max-width:100%!important;
+      background:transparent!important;
+      border:0!important;
+      box-shadow:none!important;
+      border-radius:0!important;
+      white-space:nowrap!important;
+      overflow:visible!important;
+      text-overflow:clip!important;
+      text-align:center!important;
+      transform:none!important;
+    }
+
+    /* A színek maradnak, de a KO badge ne legyen optikailag nagyobb, mint a sima csoportos */
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.ok,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.diff,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.outcome,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.bad{
+      font-size:clamp(6.8px,.40vw,8.3px)!important;
+      line-height:.98!important;
+    }
+
+    /* A score/tipp oszlop pozíciója fix marad.
+       Az élő perc pirula ABSZOLÚT ül mellette, tehát nem tolja el a számokat. */
+    .matches-main .match-row[data-ko-mid] .mr-scores{
+      position:relative!important;
+      overflow:visible!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-wrap{
+      position:relative!important;
+      display:block!important;
+      width:auto!important;
+      overflow:visible!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-lines{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:clamp(34px,5vw,56px)!important;
+      width:auto!important;
+      gap:clamp(5px,.52vw,8px)!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-clock-row{
+      position:absolute!important;
+      right:calc(100% + 6px)!important;
+      top:50%!important;
+      transform:translateY(-50%)!important;
+      width:auto!important;
+      margin:0!important;
+      padding:0!important;
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:5px!important;
+      pointer-events:none!important;
+      z-index:4!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-clock{
+      min-width:auto!important;
+      padding:3px 9px!important;
+      font-size:clamp(10px,.74vw,13px)!important;
+      line-height:1!important;
+      transform:none!important;
+      white-space:nowrap!important;
+    }
+
+    /* A score sorok maradjanak ott, ahol eddig; a pirula nem része a flow-nak. */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only{
+      margin:0!important;
+      transform:none!important;
+    }
+
+    @media(max-width:720px){
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-tip,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.ok,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.diff,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.outcome,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.bad{
+        font-size:7.2px!important;
+        line-height:.98!important;
+        letter-spacing:-.04em!important;
+      }
+
+      .matches-main .match-row[data-ko-mid] .mr-clock-row{
+        right:calc(100% + 4px)!important;
+      }
+
+      .matches-main .match-row[data-ko-mid] .mr-clock{
+        padding:2px 7px!important;
+        font-size:10px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v45 community modal cleanup: no floating live pill freakshow ===== */
+function communityPredScoreHtml(p,r,g){
+  const rr = wc26IsStartedOrFinishedResult(r) ? r : null;
+  const realHtml = wc26CommunityScoreHtml(rr);
+  const tipHtml = wc26CommunityScoreHtml(p);
+  const clock = liveClockLabel(rr), isIntCom = rr && !rr.finished && String(rr.status||'').toUpperCase().includes('INT');
+  const statusBits = [];
+  if(rr && !rr.finished){
+    const pills = wc26StatusPills(rr,{mode:'modal'});
+    if(pills) statusBits.push(pills);
+  }
+  if(clock) statusBits.push('<span class="tip-live-clock community-live-clock">'+clock+'</span>');
+  if(isIntCom) statusBits.push('<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>');
+  const stateHtml = statusBits.length ? '<span class="community-state-line">'+statusBits.join('')+'</span>' : '';
+  const gradeCls=wc26CommunityGradeClass(g?.cat||'');
+  const gradeLabel=esc((rr && g?.label) ? g.label : 'Várakozik');
+  return '<div class="community-result">'
+    +'<div class="community-score-col community-real-col"><span class="community-score-head">Valós</span><b class="community-real-score community-score-value">'+stateHtml+'<span class="community-real-main">'+realHtml+'</span></b></div>'
+    +'<div class="community-score-col community-tip-col"><span class="community-score-head">Tipp</span><b class="community-score-value"><span class="community-tip-main">'+tipHtml+'</span></b></div>'
+    +'<small class="community-grade-note '+gradeCls+'">'+gradeLabel+'</small>'
+    +'</div>';
+}
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Community modal score columns: tidy, consistent, no absolute floating minute pill */
+    .community-preview .community-result{
+      grid-template-columns:repeat(2,minmax(74px,auto))!important;
+      gap:8px 14px!important;
+      align-items:start!important;
+      justify-content:end!important;
+      text-align:right!important;
+    }
+    .community-preview .community-result .community-score-col{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      gap:4px!important;
+      min-width:0!important;
+    }
+    .community-preview .community-result .community-score-head{
+      display:block!important;
+      font-size:18px!important;
+      font-weight:1000!important;
+      letter-spacing:.08em!important;
+      line-height:1!important;
+      text-transform:uppercase!important;
+      color:#bcd7f4!important;
+      margin-bottom:4px!important;
+      opacity:1!important;
+    }
+    .community-preview .community-result .community-score-value,
+    .community-preview .community-result .community-real-score{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      justify-content:flex-start!important;
+      gap:4px!important;
+      line-height:1!important;
+      min-width:0!important;
+    }
+    .community-preview .community-result .community-state-line{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:flex-end!important;
+      gap:6px!important;
+      flex-wrap:wrap!important;
+      min-height:0!important;
+    }
+    .community-preview .community-result .community-real-main,
+    .community-preview .community-result .community-tip-main{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:6px!important;
+      font-size:clamp(27px,2.4vw,36px)!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+    .community-preview .community-result .community-live-clock{
+      position:static!important;
+      right:auto!important;
+      margin:0!important;
+      min-width:auto!important;
+      padding:2px 8px!important;
+      font-size:10px!important;
+      line-height:1.2!important;
+      white-space:nowrap!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      border-radius:999px!important;
+    }
+    .community-preview .community-result .community-grade-note{
+      grid-column:1/-1!important;
+      justify-self:end!important;
+      margin-top:2px!important;
+    }
+    @media(max-width:720px){
+      .community-preview .community-result .community-score-head{font-size:14px!important;}
+      .community-preview .community-result .community-real-main,
+      .community-preview .community-result .community-tip-main{font-size:24px!important;}
+      .community-preview .community-result .community-state-line{gap:4px!important;}
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v46 community modal: big headers AND big score contents ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-preview .community-result .community-score-head{
+      font-size:18px!important;
+      font-weight:1000!important;
+      letter-spacing:.08em!important;
+      line-height:1!important;
+      text-transform:uppercase!important;
+      color:#bcd7f4!important;
+      margin-bottom:4px!important;
+      opacity:1!important;
+    }
+
+    /* not just the headers: the actual content under VALÓS / TIPP also stays large */
+    .community-preview .community-result .community-score-value,
+    .community-preview .community-result .community-real-score{
+      font-size:clamp(28px,2.5vw,38px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      color:#fff!important;
+    }
+
+    .community-preview .community-result .community-real-score{
+      color:#ff6969!important;
+    }
+
+    .community-preview .community-result .community-real-main,
+    .community-preview .community-result .community-tip-main,
+    .community-preview .community-result .community-score-main{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:6px!important;
+      font-size:inherit!important;
+      font-weight:inherit!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-result .community-score-pen{
+      font-size:.72em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-result .community-real-col .community-score-pen{
+      color:#ff6969!important;
+    }
+
+    .community-preview .community-result .community-tip-col .community-score-pen{
+      color:#f0b85c!important;
+    }
+
+    .community-preview .community-result .community-state-line{
+      margin-bottom:2px!important;
+    }
+
+    @media(max-width:720px){
+      .community-preview .community-result .community-score-head{
+        font-size:14px!important;
+      }
+      .community-preview .community-result .community-score-value,
+      .community-preview .community-result .community-real-score{
+        font-size:24px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
