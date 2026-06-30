@@ -12188,4 +12188,237 @@ koMatchRow=function(m){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v38 KO cards: strict group-stage parity, penalties only as extension ===== */
+
+/* Full, non-shortened labels so the KO card logic feels like the group cards too. */
+function wc26KoDisplayLabel(g){
+  const cat=String(g?.cat||'');
+  const map={
+    'exact':'Pontos',
+    'exact-pen-exact':'Pontos + tizi pontos',
+    'exact-pen-diff':'Pontos + tizi gólkül.',
+    'exact-pen-outcome':'Pontos + tizi kimenetel',
+    'draw':'Döntetlen',
+    'draw-pen-exact':'Döntetlen + tizi pontos',
+    'draw-pen-diff':'Döntetlen + tizi gólkül.',
+    'draw-pen-outcome':'Döntetlen + tizi kimenetel',
+    'diff':'Gólkülönbség',
+    'outcome':'Kimenetel',
+    'miss':'Téves'
+  };
+  return map[cat]||g?.label||'';
+}
+
+/* KO badges keep the same family as the group-stage left-column badges. */
+function wc26KoBadge(sc,state,r2){
+  const base=sc?.base||wc26KoBaseCat(sc?.cat);
+  if(sc&&sc.cat){
+    return '<em class="mr-live-state '+wc26KoStateClass(base)+'">'+esc(wc26KoDisplayLabel(sc))+'</em>';
+  }
+  const rs=r2&&validScore(r2.h)&&validScore(r2.a)?' '+r2.h+'-'+r2.a:'';
+  if(state==='finished')return'<em class="mr-live-state neutral">Lezárt'+rs+'</em>';
+  if(state==='live')return'<em class="mr-live-state live"><span></span>'+(liveClockLabel(r2)||'Élő')+'</em>';
+  return'<em class="mr-live-state open">Tippelhető</em>';
+}
+
+/* Penalty helpers: these are the only KO-specific visual extension we keep. */
+function wc26KoPenSpan(value, cls){
+  return validScore(value) ? '<span class="'+cls+'">('+esc(value)+')</span>' : '';
+}
+function wc26KoScoreLine(realScore, tipScore, realPen, tipPen){
+  return '<span class="mr-ko-score-line">'
+    +'<span class="mr-ko-real-pack"><span class="mr-ko-real-score">'+esc(realScore)+'</span>'+wc26KoPenSpan(realPen,'mr-ko-real-pen')+'</span>'
+    +'<span class="mr-ko-tip-pack"><span class="mr-ko-tip-score">'+esc(tipScore)+'</span>'+wc26KoPenSpan(tipPen,'mr-ko-tip-pen')+'</span>'
+    +'</span>';
+}
+
+/* Classic scoreHtml flow like the group cards:
+   - same live wrapper / clock row logic
+   - only the KO line contents differ when penalties exist */
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),
+      rawSt=r&&r.status?String(r.status).toUpperCase():'',
+      isInt=rawSt.includes('INT'),
+      lines='',
+      isKo=x.id&&x.id.startsWith('KO-');
+
+  if(isKo&&p&&hasReal){
+    const tipPenOk=p.pen&&validScore(p.pH)&&validScore(p.pA);
+    lines = wc26KoScoreLine(r.h,p.h,validScore(r.pH)?r.pH:null,tipPenOk?p.pH:null)
+          + wc26KoScoreLine(r.a,p.a,validScore(r.pA)?r.pA:null,tipPenOk?p.pA:null);
+  }else if(isKo&&p){
+    let pph=p.pen&&validScore(p.pH)?'<span class="mr-tip-pen-only">('+p.pH+')</span>':'',
+        ppa=p.pen&&validScore(p.pA)?'<span class="mr-tip-pen-only">('+p.pA+')</span>':'';
+    lines='<span class="mr-ko-score-line">'
+         +'<span class="mr-ko-real-pack"><span class="match-empty">-</span></span>'
+         +'<span class="mr-ko-tip-pack"><span class="mr-ko-tip-score">'+esc(p.h)+'</span>'+pph+'</span>'
+         +'</span>'
+         +'<span class="mr-ko-score-line">'
+         +'<span class="mr-ko-real-pack"><span class="match-empty">-</span></span>'
+         +'<span class="mr-ko-tip-pack"><span class="mr-ko-tip-score">'+esc(p.a)+'</span>'+ppa+'</span>'
+         +'</span>';
+  }else if(isKo&&hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-real-pen-only">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-real-pen-only">('+r.pA+')</span>':'';
+    lines='<span class="mr-ko-score-line">'
+         +'<span class="mr-ko-real-pack"><span class="mr-ko-real-score">'+esc(r.h)+'</span>'+ph+'</span>'
+         +'<span class="mr-ko-tip-pack"><span class="match-empty">-</span></span>'
+         +'</span>'
+         +'<span class="mr-ko-score-line">'
+         +'<span class="mr-ko-real-pack"><span class="mr-ko-real-score">'+esc(r.a)+'</span>'+pa+'</span>'
+         +'<span class="mr-ko-tip-pack"><span class="match-empty">-</span></span>'
+         +'</span>';
+  }else if(p&&hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind">('+r.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+ph+scorePair(r.h,p.h,'win')+'</span>'
+         +'<span class="mr-pen-wrap">'+pa+scorePair(r.a,p.a,'win')+'</span>';
+  }else if(p){
+    let pph=p.pen&&validScore(p.pH)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pH+')</span>':'',
+        ppa=p.pen&&validScore(p.pA)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+pph+'<div class="win">'+p.h+'</div></span>'
+         +'<span class="mr-pen-wrap">'+ppa+'<div class="win">'+p.a+'</div></span>';
+  }else if(hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pA+')</span>':'';
+    lines='<div class="mr-actual">'+r.h+ph+'</div><div class="mr-actual">'+r.a+pa+'</div>';
+  }else{
+    lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  let clockRow=(clock||isInt)?'<div class="mr-clock-row">'+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return hasReal&&(clock||isInt)?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+
+/* KO row = same HTML skeleton / ordering / positioning philosophy as group-stage mrow(). */
+koMatchRow=function(m){
+  let p=koPred(m.id),
+      cls=p?'win':'',
+      state=matchLockState({id:m.id}),
+      sc=koTipScore(m),
+      base=sc.base||wc26KoBaseCat(sc.cat),
+      locked=state!=='open',
+      edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',
+      rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+        (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':''),
+      r2=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null,
+      badge=wc26KoBadge(sc,state,r2),
+      ks=koMatchSchedule(m),
+      timeStr=ks&&ks.t?ks.t:'--:--';
+
+  return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+badge+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+};
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Reset KO special hacks so the base card layout stays identical to group cards */
+    .match-row[data-ko-mid] .mr-date .mr-tip{
+      font-size:inherit!important;
+      line-height:inherit!important;
+      letter-spacing:inherit!important;
+      margin-top:0!important;
+    }
+    .match-row[data-ko-mid] .mr-date .mr-live-state{
+      max-width:inherit!important;
+      min-width:inherit!important;
+      padding:inherit!important;
+      font-size:inherit!important;
+      line-height:inherit!important;
+      white-space:inherit!important;
+      overflow:inherit!important;
+      text-align:inherit!important;
+      letter-spacing:inherit!important;
+      word-break:inherit!important;
+      margin-top:0!important;
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+    }
+    .match-row[data-ko-mid] .wc26-ko-core-tip,
+    .match-row[data-ko-mid] .wc26-ko-left-clock,
+    .match-row[data-ko-mid] .wc26-ko-score-stack,
+    .match-row[data-ko-mid] .wc26-ko-score-indicators,
+    .match-row[data-ko-mid] .wc26-ko-score-clock{
+      all:unset!important;
+      display:none!important;
+    }
+
+    /* Penalty score rendering only: keep same right-column placement, only add tiny score-pen spacing */
+    .match-row[data-ko-mid] .mr-ko-score-line{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:0!important;
+      width:100%!important;
+      line-height:1!important;
+      font-variant-numeric:tabular-nums!important;
+      white-space:nowrap!important;
+    }
+    .match-row[data-ko-mid] .mr-ko-real-pack,
+    .match-row[data-ko-mid] .mr-ko-tip-pack{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:2px!important;
+      min-width:auto!important;
+      flex:0 0 auto!important;
+    }
+    .match-row[data-ko-mid] .mr-ko-tip-pack{
+      margin-left:0!important;
+    }
+    .match-row[data-ko-mid] .mr-ko-real-score{
+      color:#ff6470!important;
+      font-weight:950!important;
+      font-size:inherit!important;
+      line-height:1!important;
+    }
+    .match-row[data-ko-mid] .mr-ko-tip-score{
+      color:#f2f6f8!important;
+      font-weight:950!important;
+      font-size:inherit!important;
+      line-height:1!important;
+    }
+    .match-row[data-ko-mid] .mr-ko-real-pen,
+    .match-row[data-ko-mid] .mr-real-pen-only{
+      color:#ff6470!important;
+      font-weight:950!important;
+      font-size:.88em!important;
+      line-height:1!important;
+      margin-left:1px!important;
+      opacity:1!important;
+    }
+    .match-row[data-ko-mid] .mr-ko-tip-pen,
+    .match-row[data-ko-mid] .mr-tip-pen-only{
+      color:#f0b85c!important;
+      font-weight:950!important;
+      font-size:.88em!important;
+      line-height:1!important;
+      margin-left:1px!important;
+      opacity:1!important;
+    }
+
+    /* Ensure KO score wrapper behaves exactly like the generic one */
+    .match-row[data-ko-mid] .mr-score-wrap,
+    .match-row[data-ko-mid] .mr-score-lines,
+    .match-row[data-ko-mid] .mr-clock-row{
+      display:flex!important;
+    }
+    .match-row[data-ko-mid] .mr-score-wrap{
+      flex-direction:column!important;
+      align-items:flex-end!important;
+    }
+    .match-row[data-ko-mid] .mr-score-lines{
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      width:100%!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
