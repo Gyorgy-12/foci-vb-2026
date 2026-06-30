@@ -8353,12 +8353,13 @@ const WC26_FIREBASE_CONFIG={apiKey:"AIzaSyDrq7tIR6TUc645EX7bazv0ggvIlxmoq3A",aut
 const WC26_COMMUNITY_COLLECTION='wc26_community_predictions_v1';
 const WC26_USER_COLLECTION='wc26_users_v1';
 const WC26_RESULTS_COLLECTION='wc26_match_results_v1';
+const WC26_LIVE_COLLECTION='wc26_live_matches_v1';
 let wc26Db=null,wc26Auth=null,wc26User=null,wc26BackendReady=false,wc26BackendError='',wc26CommunityItems=[],wc26AutosaveTimer=null,wc26CommunityUnsub=null,wc26ResultsUnsub=null,wc26OwnTipsLoaded=false,wc26OwnTipsLoadFailed=false,wc26RemoteDocExists=false;
 function wc26FirebaseConfigured(){return !!(WC26_FIREBASE_CONFIG.apiKey&&WC26_FIREBASE_CONFIG.projectId&&WC26_FIREBASE_CONFIG.appId)}
 function wc26LoadScript(src){return new Promise((res,rej)=>{let old=document.querySelector('script[src="'+src+'"]');if(old){res();return}let s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Nem sikerult betolteni: '+src));document.head.appendChild(s)})}
 async function loadWc26Firebase(){if(FROZEN_MODE||!wc26FirebaseConfigured())return;try{if(!window.firebase||!firebase.initializeApp){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js')}if(!firebase.auth){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js')}if(!firebase.firestore){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js')}initWc26Firebase()}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()}}
 async function loadOwnTipsFromFirebase(){if(!wc26Db||!wc26User)return false;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;try{let doc=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();wc26RemoteDocExists=doc.exists;if(doc.exists){let d=doc.data()||{},remotePred=wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']),remoteKo=wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']);PRED=wc26CleanTips(remotePred);KO_PRED=wc26CleanTips(remoteKo);wc26ClearLocalPreds();wc26OwnTipsLoaded=true;render();if(groupsComplete())syncKoPairsToWorker();return true}wc26OwnTipsLoaded=true;/* nincs remote doc: a helyi tippeket nem töröljük */render();return false}catch(e){wc26OwnTipsLoadFailed=true;wc26OwnTipsLoaded=false;wc26BackendError=e.message||String(e);return false}}
-function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();/* match results now come only from Worker memóriás/Firestore snapshot, not Firestore onSnapshot */wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();render();await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
+function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();listenWc26LiveMatches();/* live results now come from Firestore live_matches onSnapshot; final results from Worker /results */wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();render();await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
 function communityGoalSum(obj){return Object.values(obj||{}).reduce((n,p)=>n+(validScore(p&&p.h)?+p.h:0)+(validScore(p&&p.a)?+p.a:0),0)}
 function gradeTip(p,r){if(!p||!r||!validScore(r.h)||!validScore(r.a))return{cat:'miss',pts:0,label:'Nincs tipp'};let ph=+p.h,pa=+p.a,rh=+r.h,ra=+r.a;if(ph===rh&&pa===ra)return{cat:'exact',pts:1,label:'Pontos'};if(ph-pa===rh-ra)return{cat:'diff',pts:.5,label:'Gólkülönbség'};if(Math.sign(ph-pa)===Math.sign(rh-ra))return{cat:'outcome',pts:.25,label:'Kimenetel'};return{cat:'miss',pts:0,label:'Téves'}}
 function communityWithTips(pred,ko,fn){let oldP=PRED,oldK=KO_PRED;try{PRED=pred||{};KO_PRED=ko||{};return fn()}finally{PRED=oldP;KO_PRED=oldK}}
@@ -9269,6 +9270,86 @@ function ensureLivePaintLoop(){
     if(liveSyncInfo().active)syncLiveResults({skipRetry:true}).catch(()=>{});
   },WC26_SYNC_LIVE_MS);
 }
+
+/* ===== WC26 FIRESTORE LIVE-DOC v11 =====
+   Clean free-tier path for 10-20 users:
+   - live_matches/{matchId} realtime listener handles live rendering
+   - /results is only final/historical bootstrap, not 30s polling
+   - no frontend /sync, no KV, no full collection polling every live tick
+*/
+let wc26LiveMatchesUnsub=null;
+let wc26LiveFallbackTimer=null;
+function wc26PlainFirestoreData(doc){try{return doc&&typeof doc.data==='function'?doc.data():{};}catch(e){return{}}}
+function listenWc26LiveMatches(){
+  if(FROZEN_MODE||!wc26Db||wc26LiveMatchesUnsub)return;
+  try{
+    wc26LiveMatchesUnsub=wc26Db.collection(WC26_LIVE_COLLECTION)
+      .where('liveActive','==',true)
+      .onSnapshot(snap=>{
+        const incoming={};
+        snap.forEach(doc=>{incoming[doc.id]=wc26PlainFirestoreData(doc)});
+        if(Object.keys(incoming).length)mergeLiveResults(incoming);
+      },err=>{
+        wc26BackendError=err&&err.message?err.message:String(err||'live listener error');
+        // Ha a security rules még nem engedi az új collectiont, Worker fallbackből is tudunk olvasni.
+        startWc26LiveWorkerFallback();
+        if(S.tab==='community')renderCommunity();
+      });
+  }catch(e){
+    wc26BackendError=e.message||String(e);
+    startWc26LiveWorkerFallback();
+  }
+}
+function startWc26LiveWorkerFallback(){
+  if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL)return;
+  const tick=()=>{
+    if(document.hidden)return;
+    const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/live-results')+'?t='+Date.now();
+    fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null).then(data=>{if(data&&data.results)mergeLiveResults(data.results)}).catch(()=>{});
+  };
+  tick();
+  wc26LiveFallbackTimer=setInterval(tick,WC26_SYNC_LIVE_MS);
+}
+async function loadMatchResultsFromBackendDb(bypassCache=false){
+  if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;
+  try{
+    const bust=bypassCache?'t='+Date.now():'r='+Math.floor(Date.now()/120000);
+    const sep=WC26_RESULTS_READ_URL.includes('?')?'&':'?';
+    const data=await fetch(WC26_RESULTS_READ_URL+sep+bust,{cache:bypassCache?'reload':'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
+    wc26LoadKoPairsFromWorker(false).catch(()=>{});
+    if(data&&data.results){
+      Object.entries(data.results).forEach(([id,r])=>{if(id.startsWith('KO-')&&r&&r.date&&r.time&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=r.date;KO_SCHEDULE[id].t=r.time;}});
+      return mergeLiveResults(data.results);
+    }
+    return false;
+  }catch(e){return false;}
+}
+function scheduleLiveSync(delay){
+  if(FROZEN_MODE)return;
+  clearTimeout(wc26SyncTimer);
+  // Live közben már Firestore listener frissít. Ez csak ritka final/historikus bootstrap.
+  const d=delay??WC26_SYNC_IDLE_MS;
+  wc26SyncTimer=setTimeout(async()=>{
+    try{await loadMatchResultsFromBackendDb(false);}
+    finally{scheduleLiveSync(WC26_SYNC_IDLE_MS);}
+  },d);
+}
+async function syncLiveResults(opts={}){
+  // NINCS frontend /sync. Láthatóság/tabváltáskor csak final results bootstrap + listener fallback.
+  if(syncLiveResults._running)return false;
+  syncLiveResults._running=true;
+  try{
+    if(wc26Db&&!wc26LiveMatchesUnsub)listenWc26LiveMatches();
+    if(opts.force)return await loadMatchResultsFromBackendDb(true);
+    return true;
+  }finally{syncLiveResults._running=false;}
+}
+function ensureLivePaintLoop(){
+  // v11: nem indítunk 30 mp-es /results pollingot. Firestore onSnapshot fest.
+  if(wc26Db&&!wc26LiveMatchesUnsub)listenWc26LiveMatches();
+}
+/* ===== /WC26 FIRESTORE LIVE-DOC v11 ===== */
+
 /* ===== /WC26 LIVE SMOOTH 30S FIX v4 ===== */
 function topScorersList(){let counts={};FX.forEach(x=>{let r=LIVE_RESULTS[x.id];if(!r||!Array.isArray(r.scorers))return;r.scorers.forEach(s=>{if(!s.player||s.og)return;let team=s.team==='a'?x.a:x.h,key=s.player+'|'+team;if(!counts[key])counts[key]={player:s.player,team,goals:0};counts[key].goals++})});return Object.values(counts).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player)).slice(0,20)}
 function goalScorerStatRow(i,s){return '<div class="wc-stat-row"><div class="wc-stat-rank">'+i+'</div><div class="wc-stat-main"><div class="wc-stat-name stat-game-name">'+crest(s.team,'16px')+'<span class="stat-game-text">'+esc(s.player)+'</span></div><div class="wc-stat-sub">'+esc(s.team)+'</div></div><div class="wc-stat-val">'+s.goals+'</div></div>'}
