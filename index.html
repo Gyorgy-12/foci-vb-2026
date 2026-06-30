@@ -10941,4 +10941,146 @@ wc26DedupeKoMatches = function(arr){
   return __wc26DedupeKoMatchesV27(byId);
 };
 
+
+/* ===== WC26 v28 KO penalty-aware scoring display ===== */
+function wc26KoBaseCat(cat){
+  cat=String(cat||'');
+  if(!cat)return '';
+  if(cat==='miss')return 'miss';
+  if(cat.indexOf('exact')===0)return 'exact';
+  if(cat==='draw-pen-outcome')return 'outcome';
+  if(cat.indexOf('draw')===0)return 'diff';
+  if(cat.indexOf('diff')>=0)return 'diff';
+  if(cat.indexOf('outcome')>=0)return 'outcome';
+  if(cat==='exact')return 'exact';
+  return cat;
+}
+function wc26KoStateClass(base){
+  return base==='exact'?'ok':base==='diff'?'diff':base==='outcome'?'outcome':base==='miss'?'bad':'neutral';
+}
+function wc26KoScoreClass(base){
+  return base==='exact'?'win':base==='diff'?'diff':base==='outcome'?'outcome':base==='miss'?'wrong':'win';
+}
+function wc26KoShortLabel(g){
+  const cat=String(g?.cat||'');
+  const map={
+    'exact':'Pontos',
+    'exact-pen-exact':'Pontos + tizi pontos',
+    'exact-pen-diff':'Pontos + tizi gólkül.',
+    'exact-pen-outcome':'Pontos + tizi kimenetel',
+    'draw':'Döntetlen',
+    'draw-pen-exact':'Döntetlen + tizi pontos',
+    'draw-pen-diff':'Döntetlen + tizi gólkül.',
+    'draw-pen-outcome':'Döntetlen + tizi kimenetel',
+    'diff':'Gólkülönbség',
+    'outcome':'Kimenetel',
+    'miss':'Téves'
+  };
+  return map[cat]||g?.label||'';
+}
+function wc26KoGrade(m){
+  const p=KO_PRED[m?.id];
+  const r=actualFor({id:m?.id});
+  if(!p||!r||!validScore(p.h)||!validScore(p.a)||!validScore(r.h)||!validScore(r.a))return{cat:'',base:'',pts:0,label:''};
+  const g=gradeKoTip(p,r);
+  const base=wc26KoBaseCat(g.cat);
+  return{...g,base,label:wc26KoShortLabel(g)};
+}
+koTipScore=function(x){
+  const g=wc26KoGrade(x||{});
+  return{cat:g.cat||'',base:g.base||'',pts:g.pts||0,label:g.label||''};
+};
+wc26KoCardGrade=function(m){
+  const g=wc26KoGrade(m||{});
+  return{cat:g.base||'',rawCat:g.cat||'',label:g.label||'',pts:g.pts||0};
+};
+communityPredGradeClass=function(g){
+  if(!g||!g.cat)return'';
+  return' grade-'+wc26KoBaseCat(g.cat);
+};
+function wc26KoBadge(sc,state,r2){
+  const base=sc?.base||wc26KoBaseCat(sc?.cat);
+  if(sc&&sc.cat){
+    const label=sc.label||wc26KoShortLabel(sc);
+    return '<em class="mr-live-state '+wc26KoStateClass(base)+'">'+esc(label)+'</em>';
+  }
+  const rs=r2&&validScore(r2.h)&&validScore(r2.a)?' '+r2.h+'-'+r2.a:'';
+  if(state==='finished')return'<em class="mr-live-state neutral">Lezárt'+rs+'</em>';
+  if(state==='live')return'<em class="mr-live-state live"><span></span>'+(liveClockLabel(r2)||'Élő')+rs+'</em>';
+  return'<em class="mr-live-state open">Tippelhető</em>';
+}
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),
+      rawSt=r&&r.status?String(r.status).toUpperCase():'',
+      isInt=rawSt.includes('INT'),
+      lines='';
+  const isKo=x.id&&x.id.startsWith('KO-');
+  const kg=isKo?wc26KoGrade(x):null;
+  const tipCls=isKo?wc26KoScoreClass(kg.base):'win';
+
+  if(p&&hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind">('+r.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+ph+scorePair(r.h,p.h,tipCls)+'</span>'
+         +'<span class="mr-pen-wrap">'+pa+scorePair(r.a,p.a,tipCls)+'</span>';
+  }else if(p){
+    let pph=p.pen&&validScore(p.pH)?'<span class="mr-pen-ind">('+p.pH+')</span>':'',
+        ppa=p.pen&&validScore(p.pA)?'<span class="mr-pen-ind">('+p.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+pph+'<div class="win">'+p.h+'</div></span>'
+         +'<span class="mr-pen-wrap">'+ppa+'<div class="win">'+p.a+'</div></span>';
+  }else if(hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind">('+r.pA+')</span>':'';
+    lines='<div class="mr-actual">'+ph+r.h+'</div><div class="mr-actual">'+pa+r.a+'</div>';
+  }else{
+    lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+  let clockRow=(clock||isInt)?'<div class="mr-clock-row">'+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return hasReal&&(clock||isInt)?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+koMatchRow=function(m){
+  let p=koPred(m.id),
+      cls=p?'win':'',
+      state=matchLockState({id:m.id}),
+      sc=koTipScore(m),
+      base=sc.base||wc26KoBaseCat(sc.cat),
+      locked=state!=='open',
+      edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',
+      rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+        (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':''),
+      r2=LIVE_RESULTS[m.id]||null,
+      badge=wc26KoBadge(sc,state,r2),
+      ks=koMatchSchedule(m),
+      timeStr=ks&&ks.t?ks.t:'--:--';
+  return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+badge+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+};
+wc26MatchStateBadgeAny=function(m){
+  const id=m&&m.id,ko=id&&id.startsWith('KO-'),st=matchLockState({id}),sc=ko?koTipScore(m):tipScore(m),r=actualFor({id}),rs=r&&validScore(r.h)&&validScore(r.a)?' '+r.h+'-'+r.a:'',clk=liveClockLabel(r);
+  if(ko)return wc26KoBadge(sc,st,r);
+  if(sc.cat==='exact')return'<em class="mr-live-state ok">Pontos</em>';
+  if(sc.cat==='diff')return'<em class="mr-live-state diff">Gólkül.</em>';
+  if(sc.cat==='outcome')return'<em class="mr-live-state outcome">Kimenetel</em>';
+  if(sc.cat==='miss')return'<em class="mr-live-state bad">Hibás</em>';
+  if(st==='finished')return'<em class="mr-live-state neutral">Lezárt'+rs+'</em>';
+  if(st==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'Élő')+rs+'</em>';
+  return'<em class="mr-live-state open">Tippelhető</em>';
+};
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .mr-live-state.ok{background:rgba(46,204,113,.14)!important;border-color:rgba(46,204,113,.36)!important;color:#54efa0!important;}
+    .mr-live-state.diff{background:rgba(255,213,79,.13)!important;border-color:rgba(255,213,79,.34)!important;color:#ffe27a!important;}
+    .mr-live-state.outcome{background:rgba(255,169,64,.13)!important;border-color:rgba(255,169,64,.34)!important;color:#ffb35f!important;}
+    .mr-live-state.bad{background:rgba(255,95,116,.13)!important;border-color:rgba(255,95,116,.34)!important;color:#ff7b91!important;}
+    .mr-score-pair .diff,.mr-score-pair .outcome,.mr-score-pair .wrong{font-weight:950!important;}
+    .mr-score-pair .diff{color:#ffe27a!important;}
+    .mr-score-pair .outcome{color:#ffb35f!important;}
+    .mr-score-pair .wrong{color:#ff7b91!important;}
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
