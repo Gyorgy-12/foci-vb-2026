@@ -12879,4 +12879,247 @@ function communityPredScoreHtml(p,r,g){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v42 KO card polish: smaller left-bottom texts + live pill beside score indicators ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* KO cards: make the left-bottom labels match the lighter/smaller group-card feel */
+    .match-row[data-ko-mid] .mr-date .mr-tip,
+    .match-row[data-ko-mid] .mr-date .mr-live-state{
+      font-size:clamp(8px,1.55vw,9px)!important;
+      line-height:1.02!important;
+      letter-spacing:-0.01em!important;
+    }
+
+    .match-row[data-ko-mid] .mr-date .mr-tip{
+      margin-top:1px!important;
+    }
+
+    .match-row[data-ko-mid] .mr-date .mr-live-state{
+      margin-top:1px!important;
+      max-width:58px!important;
+    }
+
+    /* Keep state labels compact even for longer texts */
+    .match-row[data-ko-mid] .mr-date .mr-live-state.diff,
+    .match-row[data-ko-mid] .mr-date .mr-live-state.outcome,
+    .match-row[data-ko-mid] .mr-date .mr-live-state.bad,
+    .match-row[data-ko-mid] .mr-date .mr-live-state.ok,
+    .match-row[data-ko-mid] .mr-date .mr-live-state.open,
+    .match-row[data-ko-mid] .mr-date .mr-live-state.neutral{
+      white-space:normal!important;
+      overflow:visible!important;
+      text-overflow:clip!important;
+      word-break:break-word!important;
+    }
+
+    /* KO live minute pill should live in the score area, not feel stuck to the far-right edge */
+    .match-row[data-ko-mid] .mr-score-wrap{
+      align-items:center!important;
+    }
+
+    .match-row[data-ko-mid] .mr-clock-row{
+      width:auto!important;
+      align-self:center!important;
+      justify-content:center!important;
+      margin:0 0 6px 0!important;
+    }
+
+    .match-row[data-ko-mid] .mr-score-lines{
+      align-items:flex-end!important;
+      width:100%!important;
+    }
+
+    /* Keep the live minute pill visually tucked right next to the score/indicator block */
+    .match-row[data-ko-mid] .mr-clock{
+      transform:none!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v43 pixel-pass: KO card metrics copied back to group-card geometry ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* 1) KO left column labels: exact small group-card behaviour, no KO jumbo labels */
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-tip,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state{
+      font-size:clamp(7.6px,.48vw,9.4px)!important;
+      line-height:1.05!important;
+      font-weight:900!important;
+      letter-spacing:0!important;
+      margin-top:1px!important;
+      display:block!important;
+      max-width:100%!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+      text-overflow:clip!important;
+      text-align:center!important;
+      padding:0!important;
+      min-width:0!important;
+      background:transparent!important;
+      border:0!important;
+      box-shadow:none!important;
+      border-radius:0!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.ok,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.diff,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.outcome,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.bad,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.open,
+    .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state.neutral{
+      white-space:nowrap!important;
+      word-break:normal!important;
+      overflow:hidden!important;
+    }
+
+    /* 2) KO live minute pill: group-card score grid placement.
+          It sits BESIDE the score block, not in the left column and not floating above the far edge. */
+    .matches-main .match-row[data-ko-mid] .mr-score-wrap{
+      display:grid!important;
+      grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
+      align-items:center!important;
+      justify-content:end!important;
+      gap:clamp(5px,.85vw,10px)!important;
+      width:auto!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-clock-row{
+      display:flex!important;
+      grid-column:1!important;
+      grid-row:1!important;
+      align-items:center!important;
+      justify-content:center!important;
+      align-self:center!important;
+      width:auto!important;
+      margin:0!important;
+      padding:0!important;
+      gap:5px!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-lines{
+      display:flex!important;
+      grid-column:2!important;
+      grid-row:1!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:inherit!important;
+      min-width:clamp(34px,5vw,56px)!important;
+      width:auto!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-clock{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:clamp(24px,2.35vw,48px)!important;
+      padding:clamp(2px,.35vw,6px) clamp(5px,.8vw,13px)!important;
+      border-radius:999px!important;
+      background:rgba(255,90,104,.16)!important;
+      border:1px solid rgba(255,90,104,.32)!important;
+      color:#ff7b87!important;
+      font-size:clamp(10px,calc(0.22vw + 12px),16px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      transform:none!important;
+    }
+
+    /* 3) KO score rows: use group-card spacing; penalty only gets tiny inner spacing. */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(5px,.52vw,8px)!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-row{
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(6px,.55vw,10px)!important;
+      min-height:1.18em!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-single{
+      display:inline-flex!important;
+      flex-direction:row!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:2px!important;
+      min-width:18px!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .wc26-card-score{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:2px!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-single.mr-score-real{
+      color:#ff6f84!important;
+      font-weight:950!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-single:not(.mr-score-real){
+      color:#d7e0e6!important;
+      font-weight:900!important;
+      opacity:.96!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-real .wc26-card-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-single.mr-score-real .wc26-card-pen{
+      color:#ff6f84!important;
+      font-size:.72em!important;
+      font-weight:950!important;
+      margin-left:1px!important;
+      letter-spacing:-.02em!important;
+      opacity:1!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-tip .wc26-card-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-single:not(.mr-score-real) .wc26-card-pen{
+      color:#f0b85c!important;
+      font-size:.72em!important;
+      font-weight:950!important;
+      margin-left:1px!important;
+      letter-spacing:-.02em!important;
+      opacity:1!important;
+    }
+
+    /* 4) Mobile parity: same compact label size as group cards. */
+    @media(max-width:720px){
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-tip,
+      .matches-main .match-row[data-ko-mid] .mr-date .mr-live-state{
+        font-size:9.2px!important;
+        line-height:1.08!important;
+      }
+      .matches-main .match-row[data-ko-mid] .mr-score-wrap{
+        grid-template-columns:auto minmax(30px,auto)!important;
+        gap:5px!important;
+      }
+      .matches-main .match-row[data-ko-mid] .mr-score-lines{
+        min-width:30px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
