@@ -12421,4 +12421,462 @@ koMatchRow=function(m){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v39 single KO modal strip + bigger community VALÓS/TIPP ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* KO modal: no double stripe.
+       Use the original group-modal style: ONE inset strip via box-shadow, no extra border-left. */
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet{
+      border-left:0!important;
+      opacity:1!important;
+      background:#1c2730!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-diff,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-outcome{
+      box-shadow:inset 7px 0 0 rgba(40,209,108,.98),0 22px 70px rgba(0,0,0,.52)!important;
+      border-color:rgba(40,209,108,.28)!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-diff,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-diff{
+      box-shadow:inset 7px 0 0 rgba(255,230,102,.98),0 22px 70px rgba(0,0,0,.52)!important;
+      border-color:rgba(255,230,102,.28)!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-outcome,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-outcome{
+      box-shadow:inset 7px 0 0 rgba(255,132,0,.98),0 22px 70px rgba(0,0,0,.52)!important;
+      border-color:rgba(255,132,0,.3)!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-miss{
+      box-shadow:inset 7px 0 0 rgba(240,64,80,.98),0 22px 70px rgba(0,0,0,.52)!important;
+      border-color:rgba(240,64,80,.28)!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.live-locked{
+      box-shadow:inset 7px 0 0 rgba(255,92,104,.88),0 22px 70px rgba(0,0,0,.52)!important;
+      border-color:rgba(255,112,124,.28)!important;
+    }
+
+    /* Community profile modal: make VALÓS / TIPP headers properly visible.
+       This is intentionally late + very specific so older tiny rules cannot win. */
+    .community-preview .community-result .community-score-head,
+    .community-preview [data-community-tab] ~ * .community-result .community-score-head,
+    .community-preview .community-score-head{
+      display:block!important;
+      font-size:clamp(15px,1.12vw,19px)!important;
+      font-weight:1000!important;
+      letter-spacing:.08em!important;
+      line-height:1!important;
+      text-transform:uppercase!important;
+      opacity:1!important;
+      color:#bcd7f4!important;
+      text-shadow:0 1px 0 rgba(0,0,0,.38)!important;
+      margin-bottom:3px!important;
+    }
+
+    .community-preview .community-result .community-score-col{
+      gap:6px!important;
+    }
+
+    .community-preview .community-result .community-score-value{
+      font-size:clamp(26px,2.35vw,34px)!important;
+      line-height:1!important;
+    }
+
+    @media(max-width:720px){
+      .community-preview .community-result .community-score-head,
+      .community-preview .community-score-head{
+        font-size:14px!important;
+        letter-spacing:.07em!important;
+      }
+      .community-preview .community-result .community-score-value{
+        font-size:24px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v40 HARD RESET: KO match cards = group card clone; penalties only extension ===== */
+
+/* Classic badge mapping. KO penalty categories are compressed back into the same
+   visible badge family as group-stage cards, so the left column cannot explode. */
+function wc26GradeBadge(cat){
+  cat=String(cat||'');
+  if(cat==='exact'||cat==='exact-pen-exact')return'<em class="mr-live-state ok">Pontos</em>';
+  if(cat==='diff'||cat==='exact-pen-diff'||cat==='draw-pen-diff')return'<em class="mr-live-state diff">G&oacute;lk&uuml;l.</em>';
+  if(cat==='outcome'||cat==='exact-pen-outcome'||cat==='draw-pen-outcome'||cat==='draw')return'<em class="mr-live-state outcome">Kimenetel</em>';
+  if(cat==='miss')return'<em class="mr-live-state bad">Hib&aacute;s</em>';
+  return'';
+}
+function wc26KoBaseCat(cat){
+  cat=String(cat||'');
+  if(!cat)return '';
+  if(cat==='miss')return 'miss';
+  if(cat.indexOf('exact')===0)return 'exact';
+  if(cat.indexOf('diff')>=0)return 'diff';
+  if(cat.indexOf('draw')===0||cat.indexOf('outcome')>=0)return 'outcome';
+  return cat;
+}
+function wc26KoScoreClass(base){
+  return base==='exact'?'win':base==='diff'?'diff':base==='outcome'?'outcome':base==='miss'?'wrong':'win';
+}
+function wc26KoStateClass(base){
+  return base==='exact'?'ok':base==='diff'?'diff':base==='outcome'?'outcome':base==='miss'?'bad':'neutral';
+}
+function wc26KoGrade(m){
+  const p=KO_PRED[m?.id];
+  const r=actualFor({id:m?.id});
+  if(!p||!r||!validScore(p.h)||!validScore(p.a)||!validScore(r.h)||!validScore(r.a))return{cat:'',base:'',pts:0,label:''};
+  const g=gradeKoTip(p,r);
+  const base=wc26KoBaseCat(g.cat);
+  return{...g,base};
+}
+function koTipScore(x){
+  const g=wc26KoGrade(x||{});
+  return{cat:g.cat||'',base:g.base||'',pts:g.pts||0,label:g.label||''};
+}
+function wc26KoBadge(sc,state,r2){
+  const grade=wc26GradeBadge(sc?.cat||'');
+  if(grade)return grade;
+  const clk=liveClockLabel(r2);
+  if(state==='finished')return'';
+  if(state==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
+  if(state==='open')return'<em class="mr-live-state open">Tippelhet&#337;</em>';
+  return'<em class="mr-live-state neutral">Z&aacute;rolva</em>';
+}
+
+/* Score value: same score-row structure as group cards.
+   Only extension: score + (pen) where real pen is red and tip pen is orange. */
+function wc26CardScoreValue(score,pen){
+  return '<span class="wc26-card-score"><span>'+esc(score)+'</span>'+(validScore(pen)?'<span class="wc26-card-pen">('+esc(pen)+')</span>':'')+'</span>';
+}
+function wc26ScoreWithPen(score,pen){return wc26CardScoreValue(score,pen)}
+function wc26CardTipPenHtml(p){return''}
+
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),
+      rawSt=r&&r.status?String(r.status).toUpperCase():'',
+      isInt=rawSt.includes('INT'),
+      lines='';
+  const pHasPen=wc26HasPenScore(p);
+
+  if(p&&hasReal){
+    lines='<div class="mr-score-compare">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span></div>'
+      +'</div>';
+  }else{
+    lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  let pills=wc26StatusPills(r,{mode:'card'}),
+      clockRow=(hasReal&&r&&!r.finished&&(clock||isInt||pills))?'<div class="mr-clock-row">'+pills+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return clockRow?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+
+/* KO row = same order and skeleton as group-stage mrow(), with only data-ko-mid and KO funcs swapped in. */
+koMatchRow=function(m){
+  let p=koPred(m.id),
+      cls=p?'win':'',
+      state=matchLockState({id:m.id}),
+      sc=koTipScore(m),
+      base=sc.base||wc26KoBaseCat(sc.cat),
+      locked=state!=='open',
+      edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',
+      rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+        (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':''),
+      r2=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null,
+      badge=wc26KoBadge(sc,state,r2),
+      ks=koMatchSchedule(m),
+      timeStr=ks&&ks.t?ks.t:'--:--';
+
+  return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+badge+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+};
+
+/* Community profile modal: inject big VALÓS/TIPP with inline styles too, so no older CSS can shrink them. */
+function wc26CommunityHead(label){
+  return '<span class="community-score-head" style="display:block!important;font-size:18px!important;font-weight:1000!important;letter-spacing:.08em!important;line-height:1!important;text-transform:uppercase!important;color:#bcd7f4!important;margin-bottom:4px!important;">'+label+'</span>';
+}
+function communityPredScoreHtml(p,r,g){
+  const rr = wc26IsStartedOrFinishedResult(r) ? r : null;
+  const realHtml = wc26CommunityScoreHtml(rr);
+  const tipHtml = wc26CommunityScoreHtml(p);
+  const clock=liveClockLabel(rr), isIntCom=rr&&!rr.finished&&String(rr.status||'').toUpperCase().includes('INT');
+  const stateHtml=(rr&&!rr.finished?wc26StatusPills(rr,{mode:'modal'}):'')
+    +(clock?'<span class="tip-live-clock community-live-clock">'+clock+'</span>':'')
+    +(isIntCom?'<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>':'');
+  return '<div class="community-result">'
+    +'<div class="community-score-col community-real-col">'+wc26CommunityHead('Valós')+'<b class="community-real-score community-score-value">'+stateHtml+realHtml+'</b></div>'
+    +'<div class="community-score-col community-tip-col">'+wc26CommunityHead('Tipp')+'<b class="community-score-value">'+tipHtml+'</b></div>'
+    +'</div>';
+}
+
+/* CSS hard reset: KO cards inherit the same size/position/pill behavior as group cards.
+   Any previous KO-specific hacks are killed here. */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* kill old KO-specific lanes/pills */
+    .match-row[data-ko-mid] .wc26-ko-core-tip,
+    .match-row[data-ko-mid] .wc26-ko-left-clock,
+    .match-row[data-ko-mid] .wc26-ko-score-stack,
+    .match-row[data-ko-mid] .wc26-ko-score-indicators,
+    .match-row[data-ko-mid] .wc26-ko-score-clock{
+      all:unset!important;
+      display:none!important;
+    }
+
+    /* exact same left-column flow as group cards */
+    .match-row[data-ko-mid] .mr-date .mr-tip{
+      font-size:inherit!important;
+      line-height:inherit!important;
+      letter-spacing:inherit!important;
+      margin-top:inherit!important;
+      display:block!important;
+      max-width:100%!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+      text-overflow:clip!important;
+      text-align:center!important;
+    }
+    .match-row[data-ko-mid] .mr-date .mr-live-state{
+      font-size:inherit!important;
+      line-height:inherit!important;
+      letter-spacing:inherit!important;
+      margin-top:inherit!important;
+      display:block!important;
+      max-width:100%!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+      text-overflow:clip!important;
+      text-align:center!important;
+      padding:0!important;
+      min-width:0!important;
+      background:transparent!important;
+      border:0!important;
+      box-shadow:none!important;
+      border-radius:0!important;
+    }
+    .match-row[data-ko-mid] .mr-live-state.live{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:4px!important;
+      padding:2px 8px!important;
+      border-radius:999px!important;
+      background:rgba(255,90,104,.16)!important;
+      border:1px solid rgba(255,90,104,.34)!important;
+      box-shadow:none!important;
+    }
+
+    /* identical score container; only score+pen tiny gap */
+    .match-row[data-ko-mid] .mr-score-wrap,
+    .match-row[data-ko-mid] .mr-score-lines,
+    .match-row[data-ko-mid] .mr-score-compare,
+    .match-row[data-ko-mid] .mr-score-actual-only,
+    .match-row[data-ko-mid] .mr-score-tip-only{
+      display:flex!important;
+    }
+    .match-row[data-ko-mid] .mr-score-wrap,
+    .match-row[data-ko-mid] .mr-score-compare,
+    .match-row[data-ko-mid] .mr-score-actual-only,
+    .match-row[data-ko-mid] .mr-score-tip-only{
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+    }
+    .match-row[data-ko-mid] .mr-score-lines{
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      width:100%!important;
+    }
+    .match-row[data-ko-mid] .mr-score-row{
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(6px,.55vw,10px)!important;
+      min-height:1.18em!important;
+    }
+    .match-row[data-ko-mid] .mr-score-real,
+    .match-row[data-ko-mid] .mr-score-tip,
+    .match-row[data-ko-mid] .mr-score-single{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:2px!important;
+      min-width:18px!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+    .match-row[data-ko-mid] .mr-score-real,
+    .match-row[data-ko-mid] .mr-score-single.mr-score-real{
+      color:#ff6f84!important;
+      font-weight:950!important;
+    }
+    .match-row[data-ko-mid] .mr-score-tip,
+    .match-row[data-ko-mid] .mr-score-single:not(.mr-score-real){
+      color:#d7e0e6!important;
+      font-weight:900!important;
+      opacity:.96!important;
+    }
+    .match-row[data-ko-mid] .mr-score-real .wc26-card-pen,
+    .match-row[data-ko-mid] .mr-score-single.mr-score-real .wc26-card-pen{
+      color:#ff6f84!important;
+      font-size:.72em!important;
+      font-weight:950!important;
+      margin-left:1px!important;
+      letter-spacing:-.02em!important;
+    }
+    .match-row[data-ko-mid] .mr-score-tip .wc26-card-pen,
+    .match-row[data-ko-mid] .mr-score-single:not(.mr-score-real) .wc26-card-pen{
+      color:#f0b85c!important;
+      font-size:.72em!important;
+      font-weight:950!important;
+      margin-left:1px!important;
+      letter-spacing:-.02em!important;
+      opacity:1!important;
+    }
+
+    /* single modal strip only */
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet{
+      border-left:0!important;
+      background:#1c2730!important;
+      opacity:1!important;
+    }
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet::before,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet::after{
+      display:none!important;
+      content:none!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-diff,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-outcome{
+      box-shadow:inset 7px 0 0 rgba(40,209,108,.98),0 22px 70px rgba(0,0,0,.52)!important;
+    }
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-diff,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-diff{
+      box-shadow:inset 7px 0 0 rgba(255,230,102,.98),0 22px 70px rgba(0,0,0,.52)!important;
+    }
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-outcome,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-outcome{
+      box-shadow:inset 7px 0 0 rgba(255,132,0,.98),0 22px 70px rgba(0,0,0,.52)!important;
+    }
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-miss{
+      box-shadow:inset 7px 0 0 rgba(240,64,80,.98),0 22px 70px rgba(0,0,0,.52)!important;
+    }
+
+    /* community profile modal VALÓS / TIPP */
+    .community-preview .community-modal .community-result .community-score-head,
+    .community-preview .community-score-head{
+      display:block!important;
+      font-size:18px!important;
+      font-weight:1000!important;
+      letter-spacing:.08em!important;
+      line-height:1!important;
+      text-transform:uppercase!important;
+      color:#bcd7f4!important;
+      margin-bottom:4px!important;
+      opacity:1!important;
+    }
+    .community-preview .community-modal .community-result .community-score-value{
+      font-size:clamp(27px,2.4vw,36px)!important;
+      line-height:1!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v41 restore HT / FT / PEN indicators in match modals ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* v19 hid the modal status pills entirely. Restore them cleanly. */
+    .tip-sheet .wc26-modal-status{
+      display:flex!important;
+      justify-content:center!important;
+      align-items:center!important;
+      flex-wrap:wrap!important;
+      gap:8px!important;
+      margin:12px auto 0!important;
+      width:100%!important;
+    }
+
+    .tip-sheet .wc26-modal-status .wc26-state-indicators{
+      display:inline-flex!important;
+      justify-content:center!important;
+      align-items:center!important;
+      gap:8px!important;
+      flex-wrap:wrap!important;
+    }
+
+    .tip-sheet .wc26-modal-status .wc26-status-pill{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:40px!important;
+      height:28px!important;
+      padding:0 12px!important;
+      border-radius:999px!important;
+      font-size:13px!important;
+      font-weight:900!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      box-shadow:none!important;
+      opacity:1!important;
+    }
+
+    .tip-sheet .wc26-modal-status .wc26-status-pill.ht{
+      background:rgba(74,198,255,.14)!important;
+      border:1px solid rgba(74,198,255,.34)!important;
+      color:#8ddcff!important;
+    }
+    .tip-sheet .wc26-modal-status .wc26-status-pill.ft{
+      background:rgba(42,220,123,.14)!important;
+      border:1px solid rgba(42,220,123,.34)!important;
+      color:#78f0aa!important;
+    }
+    .tip-sheet .wc26-modal-status .wc26-status-pill.pen{
+      background:rgba(255,184,64,.14)!important;
+      border:1px solid rgba(255,184,64,.34)!important;
+      color:#ffc96a!important;
+    }
+    .tip-sheet .wc26-modal-status .wc26-status-pill.aet{
+      background:rgba(196,168,255,.14)!important;
+      border:1px solid rgba(196,168,255,.34)!important;
+      color:#d8c4ff!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
