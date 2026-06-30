@@ -11083,4 +11083,125 @@ wc26MatchStateBadgeAny=function(m){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v29 KO score colors: tip white, real pen red, tip pen orange ===== */
+function wc26KoPenSpan(value, cls){
+  return validScore(value) ? '<span class="'+cls+'">('+esc(value)+')</span>' : '';
+}
+function wc26KoScoreLine(realScore, tipScore, realPen, tipPen){
+  return '<span class="mr-ko-score-line">'
+    +'<span class="mr-ko-real-pack"><span class="mr-ko-real-score">'+esc(realScore)+'</span>'+wc26KoPenSpan(realPen,'mr-ko-real-pen')+'</span>'
+    +'<span class="mr-ko-tip-pack"><span class="mr-ko-tip-score">'+esc(tipScore)+'</span>'+wc26KoPenSpan(tipPen,'mr-ko-tip-pen')+'</span>'
+    +'</span>';
+}
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),
+      rawSt=r&&r.status?String(r.status).toUpperCase():'',
+      isInt=rawSt.includes('INT'),
+      lines='',
+      isKo=x.id&&x.id.startsWith('KO-');
+
+  if(isKo&&p&&hasReal){
+    const tipPenOk=p.pen&&validScore(p.pH)&&validScore(p.pA);
+    lines = wc26KoScoreLine(r.h,p.h,validScore(r.pH)?r.pH:null,tipPenOk?p.pH:null)
+          + wc26KoScoreLine(r.a,p.a,validScore(r.pA)?r.pA:null,tipPenOk?p.pA:null);
+  }else if(p&&hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind">('+r.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+ph+scorePair(r.h,p.h,'win')+'</span>'
+         +'<span class="mr-pen-wrap">'+pa+scorePair(r.a,p.a,'win')+'</span>';
+  }else if(p){
+    let pph=p.pen&&validScore(p.pH)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pH+')</span>':'',
+        ppa=p.pen&&validScore(p.pA)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+pph+'<div class="win">'+p.h+'</div></span>'
+         +'<span class="mr-pen-wrap">'+ppa+'<div class="win">'+p.a+'</div></span>';
+  }else if(hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pA+')</span>':'';
+    lines='<div class="mr-actual">'+r.h+ph+'</div><div class="mr-actual">'+r.a+pa+'</div>';
+  }else{
+    lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  let clockRow=(clock||isInt)?'<div class="mr-clock-row">'+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return hasReal&&(clock||isInt)?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .mr-ko-score-line{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:clamp(13px,1.45vw,22px)!important;
+      width:100%!important;
+      line-height:1!important;
+      font-variant-numeric:tabular-nums!important;
+      white-space:nowrap!important;
+    }
+    .mr-ko-real-pack,
+    .mr-ko-tip-pack{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:4px!important;
+      min-width:clamp(32px,3.7vw,55px)!important;
+      justify-content:flex-end!important;
+    }
+    .mr-ko-real-score{
+      color:#ff6470!important;
+      font-weight:950!important;
+      font-size:inherit!important;
+      line-height:1!important;
+    }
+    .mr-ko-tip-score{
+      color:#f2f6f8!important;
+      font-weight:950!important;
+      font-size:inherit!important;
+      line-height:1!important;
+    }
+    .mr-ko-real-pen,
+    .mr-real-pen-only{
+      color:#ff6470!important;
+      font-weight:950!important;
+      font-size:.88em!important;
+      line-height:1!important;
+      opacity:1!important;
+    }
+    .mr-ko-tip-pen,
+    .mr-tip-pen-only{
+      color:#f0b85c!important;
+      font-weight:950!important;
+      font-size:.88em!important;
+      line-height:1!important;
+      opacity:1!important;
+    }
+    .mr-score-pair .win,
+    .mr-scores .win{
+      color:#f2f6f8!important;
+    }
+    .mr-score-pair .diff,
+    .mr-score-pair .outcome,
+    .mr-score-pair .wrong{
+      color:#f2f6f8!important;
+    }
+    .mr-live-state.ok,
+    .mr-live-state.diff,
+    .mr-live-state.outcome,
+    .mr-live-state.bad{
+      max-width:clamp(82px,8.5vw,150px)!important;
+      white-space:normal!important;
+      text-align:center!important;
+      line-height:1.04!important;
+    }
+    @media(max-width:640px){
+      .mr-ko-score-line{gap:10px!important;}
+      .mr-ko-real-pack,.mr-ko-tip-pack{min-width:28px!important;gap:3px!important;}
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
