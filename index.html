@@ -14210,4 +14210,439 @@ function wc26RenderBehindModalLive(){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v52 live stats + KO scorers + smaller community score block ===== */
+
+/* Top scorers must count EVERY live result, including KO matches, not only FX group fixtures. */
+function wc26SafeArr(v){
+  if(Array.isArray(v)) return v;
+  if(typeof v === 'string'){
+    try{
+      const x = JSON.parse(v);
+      return Array.isArray(x) ? x : [];
+    }catch(e){ return []; }
+  }
+  return [];
+}
+function wc26TeamForScorer(id, r, s){
+  const m = (typeof wc26FindAnyMatch === 'function' ? wc26FindAnyMatch(id) : null) || FX_BY_ID?.[id] || {};
+  const home = normalizeTeamName(r?.homeTeam || m.h || m.homeTeam || m.home || '');
+  const away = normalizeTeamName(r?.awayTeam || m.a || m.awayTeam || m.away || '');
+  const raw = String(s?.team || s?.side || s?.teamSide || '').trim();
+  const low = raw.toLowerCase();
+  if(low === 'a' || low === 'away') return away || raw || 'Unknown';
+  if(low === 'h' || low === 'home') return home || raw || 'Unknown';
+  if(raw && raw.length > 1) return normalizeTeamName(raw);
+  return home || away || 'Unknown';
+}
+function topScorersList(){
+  const counts = {};
+  const seen = new Set();
+
+  function ingest(id, rawResult){
+    if(!id || seen.has(id)) return;
+    seen.add(id);
+
+    const r = normalizeLiveResult(id, rawResult) || rawResult;
+    if(!r) return;
+
+    const scorers = wc26SafeArr(r.scorers);
+    if(!scorers.length) return;
+
+    scorers.forEach(s=>{
+      const player = String(s?.player || s?.playerName || s?.name || '').trim();
+      if(!player || s?.og) return;
+      const team = wc26TeamForScorer(id, r, s);
+      const key = player + '|' + team;
+      if(!counts[key]) counts[key] = { player, team, goals:0 };
+      counts[key].goals++;
+    });
+  }
+
+  Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>ingest(id,r));
+
+  /* Some older code paths only keep group fixtures in FX; keep this as a fallback. */
+  (FX || []).forEach(x=>{
+    if(LIVE_RESULTS && LIVE_RESULTS[x.id]) ingest(x.id, LIVE_RESULTS[x.id]);
+  });
+
+  return Object.values(counts)
+    .sort((a,b)=>b.goals-a.goals || a.player.localeCompare(b.player,'hu'))
+    .slice(0,20);
+}
+
+/* Force live stat pages to actually fetch the latest /results, then repaint.
+   This fixes top-scorers waiting on stale in-memory LIVE_RESULTS. */
+async function wc26RefreshLiveStatsNow(){
+  try{
+    if(typeof loadMatchResultsFromBackendDb === 'function'){
+      await loadMatchResultsFromBackendDb(true);
+    }else if(typeof syncLiveResults === 'function'){
+      await syncLiveResults({force:true,skipRetry:true});
+    }
+  }catch(e){}
+
+  try{
+    if(['overview','stats','community'].includes(S?.tab)){
+      if(typeof render === 'function') render();
+    }
+    if(typeof refreshCommunityPreviews === 'function') refreshCommunityPreviews();
+    if(typeof activateCrests === 'function') activateCrests();
+  }catch(e){}
+}
+
+(function(){
+  if(window.__WC26_STATS_FORCE_REFRESH_30S__) clearInterval(window.__WC26_STATS_FORCE_REFRESH_30S__);
+  window.__WC26_STATS_FORCE_REFRESH_30S__ = setInterval(()=>{
+    if(['overview','stats','community'].includes(S?.tab)){
+      wc26RefreshLiveStatsNow();
+    }
+  }, 30000);
+
+  /* Also refresh shortly after this patch loads. */
+  setTimeout(wc26RefreshLiveStatsNow, 300);
+  setTimeout(wc26RefreshLiveStatsNow, 1800);
+})();
+
+/* Community profile modal: smaller headers AND smaller values. No billboard typography. */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-preview .community-pred{
+      grid-template-columns:minmax(0,1fr) clamp(174px,18vw,238px)!important;
+      align-items:center!important;
+      column-gap:clamp(10px,1.25vw,16px)!important;
+    }
+
+    .community-preview .wc26-community-result-v51,
+    .community-preview .community-result.wc26-community-result-v51,
+    .community-preview .community-result{
+      min-width:clamp(174px,18vw,238px)!important;
+      width:clamp(174px,18vw,238px)!important;
+      max-width:clamp(174px,18vw,238px)!important;
+      display:grid!important;
+      grid-template-columns:minmax(76px,1fr) minmax(76px,1fr)!important;
+      column-gap:clamp(8px,.85vw,12px)!important;
+      row-gap:3px!important;
+      align-items:start!important;
+      justify-content:end!important;
+      text-align:right!important;
+      overflow:visible!important;
+    }
+
+    .community-preview .community-score-col{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      justify-content:flex-start!important;
+      gap:2px!important;
+      min-width:0!important;
+      overflow:visible!important;
+    }
+
+    .community-preview .community-score-head{
+      display:block!important;
+      font-size:clamp(9.5px,.62vw,11.5px)!important;
+      font-weight:950!important;
+      letter-spacing:.065em!important;
+      line-height:1!important;
+      text-transform:uppercase!important;
+      color:#bcd7f4!important;
+      margin:0 0 1px 0!important;
+      opacity:1!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-score-value,
+    .community-preview .community-real-score{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      justify-content:flex-start!important;
+      gap:2px!important;
+      font-size:clamp(15.5px,1.12vw,19px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      min-width:0!important;
+      max-width:100%!important;
+      white-space:nowrap!important;
+      color:#d7e0e6!important;
+    }
+
+    .community-preview .community-real-score{
+      color:#ff6f84!important;
+    }
+
+    .community-preview .community-value-line,
+    .community-preview .community-score-main{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:3px!important;
+      font-size:inherit!important;
+      font-weight:inherit!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-score-pen{
+      font-size:.68em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      margin-left:1px!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-real-col .community-score-pen{
+      color:#ff6f84!important;
+    }
+
+    .community-preview .community-tip-col .community-score-pen{
+      color:#f0b85c!important;
+    }
+
+    .community-preview .community-state-line{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:flex-end!important;
+      gap:4px!important;
+      flex-wrap:nowrap!important;
+      margin:0!important;
+      max-width:100%!important;
+      white-space:nowrap!important;
+    }
+
+    .community-preview .community-live-clock{
+      position:static!important;
+      right:auto!important;
+      margin:0!important;
+      min-width:auto!important;
+      padding:1px 6px!important;
+      font-size:8.8px!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      border-radius:999px!important;
+    }
+
+    .community-preview .community-grade-note{
+      grid-column:1/-1!important;
+      justify-self:end!important;
+      margin-top:1px!important;
+      max-width:100%!important;
+      font-size:clamp(9px,.62vw,10.5px)!important;
+      line-height:1.05!important;
+      white-space:nowrap!important;
+    }
+
+    @media(max-width:720px){
+      .community-preview .community-pred{
+        grid-template-columns:1fr!important;
+      }
+      .community-preview .wc26-community-result-v51,
+      .community-preview .community-result.wc26-community-result-v51,
+      .community-preview .community-result{
+        justify-self:end!important;
+        min-width:150px!important;
+        width:150px!important;
+        max-width:150px!important;
+        grid-template-columns:minmax(68px,1fr) minmax(68px,1fr)!important;
+        column-gap:7px!important;
+      }
+      .community-preview .community-score-head{
+        font-size:9px!important;
+      }
+      .community-preview .community-score-value,
+      .community-preview .community-real-score{
+        font-size:15px!important;
+      }
+      .community-preview .community-live-clock{
+        font-size:8px!important;
+        padding:1px 5px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v53 all statistics listen to knockout rounds ===== */
+function wc26KoRoundMetaFromId(id){
+  id=String(id||'');
+  if(id.includes('R32'))return{title:'Legjobb 32',round:32};
+  if(id.includes('R16'))return{title:'Nyolcaddöntő',round:16};
+  if(id.includes('QF'))return{title:'Negyeddöntő',round:8};
+  if(id.includes('SF'))return{title:'Elődöntő',round:4};
+  if(id.includes('BR'))return{title:'Bronzmeccs',round:3};
+  if(id.includes('F-'))return{title:'Döntő',round:2};
+  return{title:'Kieséses kör',round:0};
+}
+function wc26KoIndexFromId(id){
+  const m=String(id||'').match(/-(\d+)$/);
+  return m?+m[1]:0;
+}
+function wc26ActualReadyForStats(m){
+  const id=typeof m==='string'?m:m?.id;
+  const r=actualFor({id});
+  return r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a)?{...r,h:+r.h,a:+r.a}:null;
+}
+function wc26NormalizeKoStatMatch(m){
+  if(!m||!m.id)return null;
+  const lr=LIVE_RESULTS?.[m.id]||null;
+  const meta=wc26KoRoundMetaFromId(m.id);
+  const h=normalizeTeamName((lr&&(lr.homeTeam||lr.home))||m.h||m.homeTeam||m.home||m.hs||'');
+  const a=normalizeTeamName((lr&&(lr.awayTeam||lr.away))||m.a||m.awayTeam||m.away||m.as||'');
+  return {
+    ...m,
+    id:m.id,
+    h:h&&h!=='TBD'?h:(m.h||m.homeTeam||''),
+    a:a&&a!=='TBD'?a:(m.a||m.awayTeam||''),
+    title:m.title||meta.title,
+    round:m.round||meta.round,
+    index:m.index||wc26KoIndexFromId(m.id),
+    g:'',
+    d:(m.date||lr?.date||''),
+    locked:false
+  };
+}
+function wc26AllKoStatMatches(pred=PRED,ko=KO_PRED){
+  const byId=new Map();
+  function add(m){
+    const n=wc26NormalizeKoStatMatch(m);
+    if(n&&n.id)byId.set(n.id,{...(byId.get(n.id)||{}),...n});
+  }
+  try{(typeof wc26AllKoMatches==='function'?wc26AllKoMatches():[]).forEach(add);}catch(e){}
+  try{(typeof communityKoMatches==='function'?communityKoMatches(pred,ko):[]).forEach(add);}catch(e){}
+  Object.keys(ko||{}).forEach(id=>{
+    if(String(id).startsWith('KO-')) add({id,...wc26KoRoundMetaFromId(id),index:wc26KoIndexFromId(id)});
+  });
+  Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{
+    if(!String(id).startsWith('KO-'))return;
+    const meta=wc26KoRoundMetaFromId(id);
+    add({id,...meta,index:wc26KoIndexFromId(id),h:r?.homeTeam||r?.home||'',a:r?.awayTeam||r?.away||'',date:r?.date,time:r?.time});
+  });
+  return [...byId.values()].filter(m=>m&&m.id).sort((a,b)=>(koMatchKickoff(a)||0)-(koMatchKickoff(b)||0)||String(a.id).localeCompare(String(b.id)));
+}
+function wc26AllStatMatches(){
+  return (FX||[]).concat(wc26AllKoStatMatches());
+}
+function wc26StatBucket(cat){
+  cat=String(cat||'');
+  if(cat==='miss')return'miss';
+  if(cat.indexOf('exact')===0)return'exact';
+  if(cat==='diff'||cat.indexOf('diff')>=0||cat==='draw'||cat.indexOf('draw-pen-diff')===0||cat.indexOf('draw-pen-exact')===0)return'diff';
+  if(cat==='outcome'||cat.indexOf('outcome')>=0||cat.indexOf('draw')===0)return'outcome';
+  return cat||'miss';
+}
+function wc26GradeForStat(m,preds,isKo){
+  const r=wc26ActualReadyForStats(m);
+  if(!r)return null;
+  const p=isKo?(preds||KO_PRED||{})[m.id]:(preds||PRED||{})[m.id];
+  const g=isKo?gradeKoTip(p,r):gradeTip(p,r);
+  return g&&g.cat?g:null;
+}
+
+/* Community/player efficiency: group + EVERY KO live/finished match. */
+communityEfficiency=function(pred=PRED,ko=KO_PRED){
+  let out={pts:0,max:0,pct:0,exact:0,diff:0,outcome:0,miss:0,played:0,groupPlayed:0,koPlayed:0};
+  (FX||[]).forEach(m=>{
+    const g=wc26GradeForStat(m,pred,false);if(!g)return;
+    const b=wc26StatBucket(g.cat);out.max++;out.groupPlayed++;out.pts+=g.pts;out[b]=(out[b]||0)+1;
+  });
+  wc26AllKoStatMatches(pred,ko).forEach(m=>{
+    const g=wc26GradeForStat(m,ko,true);if(!g)return;
+    const b=wc26StatBucket(g.cat);out.max++;out.koPlayed++;out.pts+=g.pts;out[b]=(out[b]||0)+1;
+  });
+  out.played=out.max;
+  out.pct=out.max?+(out.pts/out.max*100).toFixed(2):0;
+  return out;
+};
+
+/* Efficiency widgets: include KO rounds and bucket penalty categories correctly. */
+statEffForMatches=function(matches,preds,isKo){
+  let out={pts:0,max:0,pct:0,exact:0,diff:0,outcome:0,miss:0};
+  (matches||[]).forEach(m=>{
+    const g=wc26GradeForStat(m,preds,isKo);if(!g)return;
+    const b=wc26StatBucket(g.cat);out.max++;out.pts+=g.pts;out[b]=(out[b]||0)+1;
+  });
+  out.pct=out.max?+(out.pts/out.max*100).toFixed(2):0;
+  return out;
+};
+statsRoundEfficiencyHtml=function(){
+  let ko=wc26AllKoStatMatches(PRED,KO_PRED),cards=[
+    ['1. kör',statEffForMatches(FX.filter(m=>m.r===1),PRED,false)],
+    ['2. kör',statEffForMatches(FX.filter(m=>m.r===2),PRED,false)],
+    ['3. kör',statEffForMatches(FX.filter(m=>m.r===3),PRED,false)],
+    ['Legjobb 32',statEffForMatches(ko.filter(m=>m.title==='Legjobb 32'),KO_PRED,true)],
+    ['Nyolcaddöntő',statEffForMatches(ko.filter(m=>m.title==='Nyolcaddöntő'),KO_PRED,true)],
+    ['Negyeddöntő',statEffForMatches(ko.filter(m=>m.title==='Negyeddöntő'),KO_PRED,true)],
+    ['Elődöntő',statEffForMatches(ko.filter(m=>m.title==='Elődöntő'),KO_PRED,true)],
+    ['Döntők',statEffForMatches(ko.filter(m=>m.title==='Döntő'||m.title==='Bronzmeccs'),KO_PRED,true)]
+  ];
+  return'<section class="card"><h2 class="card-title">Hatékonyság fordulónként</h2><div class="stat-round-grid">'+cards.map(x=>statRoundCard(x[0],x[1])).join('')+'</div></section>';
+};
+tipEfficiency=function(){
+  const grp=[];
+  (FX||[]).forEach(m=>{const g=wc26GradeForStat(m,PRED,false);if(g)grp.push(g);});
+  const koArr=[];
+  wc26AllKoStatMatches(PRED,KO_PRED).forEach(m=>{const g=wc26GradeForStat(m,KO_PRED,true);if(g)koArr.push(g);});
+  function count(arr,b){return arr.filter(x=>wc26StatBucket(x.cat)===b).length;}
+  const grpPts=grp.reduce((s,x)=>s+x.pts,0),koPts=koArr.reduce((s,x)=>s+x.pts,0);
+  return {
+    grpPts,grpMax:grp.length,grpPlayed:grp.length,grpExact:count(grp,'exact'),grpDiff:count(grp,'diff'),grpOutcome:count(grp,'outcome'),grpMiss:count(grp,'miss'),
+    koPts,koMax:koArr.length,koPlayed2:koArr.length,koExact:count(koArr,'exact'),koDiff:count(koArr,'diff'),koOutcome:count(koArr,'outcome'),koMiss:count(koArr,'miss'),
+    totalPts:grpPts+koPts,totalMax:grp.length+koArr.length,totalPlayed:grp.length+koArr.length
+  };
+};
+function koPlayed(){return wc26AllKoStatMatches(PRED,KO_PRED).map(m=>({m,p:koPred(m.id)})).filter(x=>x.p&&x.m.h&&x.m.a)}
+
+/* Fair play/top cards: include KO live docs too. */
+calcFairPlay=function(){
+  const fp={};
+  function ensure(n){n=normalizeTeamName(n||''); if(!n)return null; if(!fp[n])fp[n]={yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0}; return n;}
+  (ALL||[]).forEach(ensure);
+  wc26AllStatMatches().forEach(m=>{
+    const r=LIVE_RESULTS?.[m.id]; if(!r||!(r.started||r.finished))return;
+    const h=ensure(r.homeTeam||m.h),a=ensure(r.awayTeam||m.a);
+    wc26SafeArr(r.yellowCards).forEach(c=>{const t=(String(c.team||'').toLowerCase()==='a'||String(c.team||'').toLowerCase()==='away')?a:h;if(t&&fp[t])fp[t].yellow++;});
+    wc26SafeArr(r.redCards).forEach(c=>{const t=(String(c.team||'').toLowerCase()==='a'||String(c.team||'').toLowerCase()==='away')?a:h;if(!t||!fp[t])return;if(c.yellowRed)fp[t].yellowRed++;else if(c.yellowPlusRed)fp[t].yellowPlusRed++;else fp[t].red++;});
+  });
+  Object.values(fp).forEach(t=>{t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5);});
+  return fp;
+};
+
+/* Top matches: real KO results are first-class citizens too. */
+function wc26StatResultFor(m,isKo){
+  const r=wc26ActualReadyForStats(m);
+  if(r)return{m,p:{h:+r.h,a:+r.a,pH:r.pH,pA:r.pA},source:'Valós'};
+  const p=isKo?koPred(m.id):getPred(m.id);
+  return p&&validScore(p.h)&&validScore(p.a)?{m,p,source:'Tipp'}:null;
+}
+topMatchesHtml=function(){
+  const group=(FX||[]).map(m=>wc26StatResultFor(m,false)).filter(Boolean);
+  const ko=wc26AllKoStatMatches(PRED,KO_PRED).map(m=>wc26StatResultFor(m,true)).filter(Boolean);
+  const res=group.concat(ko);
+  const goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
+  const diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
+  return '<section class="card"><h2 class="card-title">Leggólosabb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'+(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'goals')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs adat','Élő/lezárt meccsek és tippek után frissül','0')).join(''))+'</div></section>'
+    +'<section class="card"><h2 class="card-title">Legnagyobb gólkülönbségek - Top 20</h2><div class="wc-stat-list stat-match-list">'+(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs adat','Élő/lezárt meccsek és tippek után frissül','0')).join(''))+'</div></section>';
+};
+
+/* Phase summary helpers: live KO counts as active, not only FT. */
+finishedActual=function(m){let r=wc26ActualReadyForStats(m);return r?{h:+r.h,a:+r.a,pH:r.pH,pA:r.pA}:null;};
+actualFinishedCount=function(matches){return (matches||[]).filter(m=>wc26ActualReadyForStats(m)).length;};
+statMatchesFrom=function(matches,ko){return (matches||[]).map(m=>wc26StatResultFor(m,!!ko)).filter(x=>x&&x.m&&x.m.h&&x.m.a);};
+
+/* Current tab refresh: stats must keep listening while KO matches are live. */
+(function(){
+  if(window.__WC26_V53_STATS_KO_REFRESH__) clearInterval(window.__WC26_V53_STATS_KO_REFRESH__);
+  window.__WC26_V53_STATS_KO_REFRESH__=setInterval(()=>{
+    if(['overview','stats','community'].includes(S?.tab)){
+      try{ if(typeof wc26RefreshLiveStatsNow==='function') wc26RefreshLiveStatsNow(); else if(typeof render==='function') render(); }catch(e){}
+    }
+  },15000);
+})();
+
 </script></body></html>
