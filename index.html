@@ -14605,4 +14605,45 @@ function communityPredScoreHtml(p,r,g){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v61 community live pill bigger + slightly higher ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-preview .community-pred .community-result .community-state-inline{
+      align-items:baseline!important;
+      margin-right:4px!important;
+      transform:translateY(-1px)!important;
+    }
+
+    .community-preview .community-pred .community-result .community-live-clock,
+    .community-preview .community-pred .community-result .community-state-inline .tip-live-clock{
+      position:relative!important;
+      top:-2px!important;
+      transform:none!important;
+      padding:3px 9px!important;
+      min-width:34px!important;
+      font-size:clamp(9.8px,.72vw,12px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      border-radius:999px!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      white-space:nowrap!important;
+    }
+
+    @media(max-width:720px){
+      .community-preview .community-pred .community-result .community-live-clock,
+      .community-preview .community-pred .community-result .community-state-inline .tip-live-clock{
+        top:-1px!important;
+        padding:2px 7px!important;
+        min-width:30px!important;
+        font-size:9px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
