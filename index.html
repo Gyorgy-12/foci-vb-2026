@@ -10667,4 +10667,42 @@ actualFor = function(m){
   return r;
 };
 
+
+/* ===== WC26 v23 remove community grade pills ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-result .community-grade-note{display:none!important;}
+    .community-result{grid-template-columns:repeat(2,minmax(72px,auto))!important;}
+  `;
+  document.head.appendChild(st);
+})();
+function communityPredScoreHtml(p,r,g){
+  const rr = wc26IsStartedOrFinishedResult(r) ? r : null;
+  const realHtml = wc26CommunityScoreHtml(rr);
+  const tipHtml = wc26CommunityScoreHtml(p);
+  const clock=liveClockLabel(rr), isIntCom=rr&&!rr.finished&&String(rr.status||'').toUpperCase().includes('INT');
+  const stateHtml=(rr&&!rr.finished?wc26StatusPills(rr,{mode:'modal'}):'')
+    +(clock?'<span class="tip-live-clock community-live-clock">'+clock+'</span>':'')
+    +(isIntCom?'<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>':'');
+  return '<div class="community-result">'
+    +'<div class="community-score-col community-real-col"><span class="community-score-head">Valós</span><b class="community-real-score community-score-value">'+stateHtml+realHtml+'</b></div>'
+    +'<div class="community-score-col community-tip-col"><span class="community-score-head">Tipp</span><b class="community-score-value">'+tipHtml+'</b></div>'
+    +'</div>';
+}
+
+
+/* ===== WC26 v24 live PEN / ET display sanity ===== */
+var __wc26LiveClockLabelV24 = liveClockLabel;
+liveClockLabel = function(r){
+  if(!r || !r.started || r.finished) return '';
+  const s = String((r.status||'')+' '+(r.minute||'')+' '+(r.period||'')+' '+(r.shortDetail||'')+' '+(r.displayClock||'')).toUpperCase();
+
+  // During a live penalty shootout the worker sends status/minute = PEN.
+  // Show it as PEN, not generic LIVE.
+  if(wc26HasPenScore(r) || /\bPEN\b/.test(s) || s.includes('PENALTY') || s.includes('SHOOTOUT')) return 'PEN';
+
+  return __wc26LiveClockLabelV24(r);
+};
+
 </script></body></html>
