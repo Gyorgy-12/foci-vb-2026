@@ -11713,4 +11713,292 @@ koMatchRow=function(m){
   },30000);
 })();
 
+
+/* ===== WC26 v35 KO cards use the same core left-column UX as group cards ===== */
+function wc26KoDisplayLabel(g){
+  const cat=String(g?.cat||'');
+  const map={
+    'exact':'Pontos',
+    'exact-pen-exact':'Pontos + tizi pontos',
+    'exact-pen-diff':'Pontos + tizi gólkül.',
+    'exact-pen-outcome':'Pontos + tizi kimenetel',
+    'draw':'Döntetlen',
+    'draw-pen-exact':'Döntetlen + tizi pontos',
+    'draw-pen-diff':'Döntetlen + tizi gólkül.',
+    'draw-pen-outcome':'Döntetlen + tizi kimenetel',
+    'diff':'Gólkülönbség',
+    'outcome':'Kimenetel',
+    'miss':'Téves'
+  };
+  return map[cat]||g?.label||'';
+}
+function wc26KoBadge(sc,state,r2){
+  const base=sc?.base||wc26KoBaseCat(sc?.cat);
+  if(sc&&sc.cat){
+    return '<em class="mr-live-state '+wc26KoStateClass(base)+'">'+esc(wc26KoDisplayLabel(sc))+'</em>';
+  }
+  const rs=r2&&validScore(r2.h)&&validScore(r2.a)?' '+r2.h+'-'+r2.a:'';
+  if(state==='finished')return'<em class="mr-live-state neutral">Lezárt'+rs+'</em>';
+  if(state==='live')return'<em class="mr-live-state live"><span></span>'+(liveClockLabel(r2)||'Élő')+rs+'</em>';
+  return'<em class="mr-live-state open">Tippelhető</em>';
+}
+function wc26KoLiveClockPill(r){
+  const clk=liveClockLabel(r);
+  if(!r||!r.started||r.finished||!clk) return '';
+  return '<em class="mr-live-state live wc26-ko-left-clock"><span></span>'+esc(clk)+'</em>';
+}
+koMatchRow=function(m){
+  let p=koPred(m.id),
+      cls=p?'win':'',
+      state=matchLockState({id:m.id}),
+      sc=koTipScore(m),
+      base=sc.base||wc26KoBaseCat(sc.cat),
+      locked=state!=='open',
+      edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',
+      rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+        (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':''),
+      r2=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null,
+      livePill=wc26KoLiveClockPill(r2),
+      badge=wc26KoBadge(sc,state,r2),
+      ks=koMatchSchedule(m),
+      timeStr=ks&&ks.t?ks.t:'--:--';
+
+  // Ha a live perc pill már kint van bal oldalon, ne duplázzuk fölöslegesen ugyanoda.
+  if(livePill && !(sc&&sc.cat)) badge='';
+
+  return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'">'
+    +'<div class="mr-date">'
+      +timeStr
+      +'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'
+      +livePill
+      +(p?'<em class="mr-tip wc26-ko-core-tip">Tippelve</em>':'')
+      +badge
+    +'</div>'
+    +'<div class="mr-sep"></div>'
+    +'<div class="mr-teams">'
+      +'<div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div>'
+      +'<div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div>'
+    +'</div>'
+    +'<div class="mr-scores">'+scoreHtml(m)+'</div>'
+    +edit
+    +'</div>';
+};
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .wc26-ko-core-tip{
+      font-size:clamp(11px,.72vw,13px)!important;
+      line-height:1.02!important;
+      margin-top:2px!important;
+      letter-spacing:0!important;
+    }
+    .wc26-ko-left-clock{
+      margin-top:2px!important;
+      max-width:none!important;
+      white-space:nowrap!important;
+    }
+    /* KO-ban is ugyanaz a basic badge-flow, mint a csoportkörnél */
+    .match-row[data-ko-mid] .mr-date .mr-live-state{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      margin-top:2px!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v36 KO modal side strip + live clock beside score indicators ===== */
+
+/* KO modal bal oldali színcsík, ugyanabban a vizuális logikában, mint a csoportkörös modaloknál */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet{
+      border-left:7px solid transparent!important;
+      background:#1c2730!important;
+      opacity:1!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"].wc26-ko-modal-exact .tip-sheet,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-diff,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-exact-pen-outcome{
+      border-left-color:#23d77b!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"].wc26-ko-modal-diff .tip-sheet,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-diff,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-exact,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-diff{
+      border-left-color:#ffe35d!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"].wc26-ko-modal-outcome .tip-sheet,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-outcome,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-draw-pen-outcome{
+      border-left-color:#ff9f2e!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"].wc26-ko-modal-miss .tip-sheet,
+    .tip-overlay[data-tip-kind="ko"] .tip-sheet.result-miss{
+      border-left-color:#ff5e75!important;
+    }
+
+    .tip-overlay[data-tip-kind="ko"] .sheet-top{
+      background:#1c2730!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+/* A KO live időjelző nem a bal infóoszlopba kerül, hanem a score / eredményindikátor oldalára */
+function wc26KoScoreClock(r){
+  const clk=liveClockLabel(r);
+  if(!r||!r.started||r.finished||!clk) return '';
+  return '<span class="wc26-ko-score-clock"><span></span>'+esc(clk)+'</span>';
+}
+
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),
+      rawSt=r&&r.status?String(r.status).toUpperCase():'',
+      isInt=rawSt.includes('INT'),
+      lines='',
+      isKo=x.id&&x.id.startsWith('KO-');
+
+  if(isKo&&p&&hasReal){
+    const tipPenOk=p.pen&&validScore(p.pH)&&validScore(p.pA);
+    lines = wc26KoScoreLine(r.h,p.h,validScore(r.pH)?r.pH:null,tipPenOk?p.pH:null)
+          + wc26KoScoreLine(r.a,p.a,validScore(r.pA)?r.pA:null,tipPenOk?p.pA:null);
+  }else if(p&&hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind">('+r.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+ph+scorePair(r.h,p.h,'win')+'</span>'
+         +'<span class="mr-pen-wrap">'+pa+scorePair(r.a,p.a,'win')+'</span>';
+  }else if(p){
+    let pph=p.pen&&validScore(p.pH)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pH+')</span>':'',
+        ppa=p.pen&&validScore(p.pA)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+pph+'<div class="win">'+p.h+'</div></span>'
+         +'<span class="mr-pen-wrap">'+ppa+'<div class="win">'+p.a+'</div></span>';
+  }else if(hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pA+')</span>':'';
+    lines='<div class="mr-actual">'+r.h+ph+'</div><div class="mr-actual">'+r.a+pa+'</div>';
+  }else{
+    lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  if(isKo){
+    const clockBadge=wc26KoScoreClock(r);
+    return clockBadge?'<div class="wc26-ko-score-stack"><div class="wc26-ko-score-indicators">'+clockBadge+'</div><div class="wc26-ko-score-lines">'+lines+'</div></div>':lines;
+  }
+
+  let clockRow=(clock||isInt)?'<div class="mr-clock-row">'+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return hasReal&&(clock||isInt)?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+
+koMatchRow=function(m){
+  let p=koPred(m.id),
+      cls=p?'win':'',
+      state=matchLockState({id:m.id}),
+      sc=koTipScore(m),
+      base=sc.base||wc26KoBaseCat(sc.cat),
+      locked=state!=='open',
+      edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',
+      rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+        (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':''),
+      r2=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null,
+      badge=wc26KoBadge(sc,state,r2),
+      ks=koMatchSchedule(m),
+      timeStr=ks&&ks.t?ks.t:'--:--';
+
+  // Live-nál ne legyen külön bal oldali perc-pill: a score indikátor oldalán jelenik meg.
+  if(state==='live' && !(sc&&sc.cat)) badge='';
+
+  return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'">'
+    +'<div class="mr-date">'
+      +timeStr
+      +'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'
+      +(p?'<em class="mr-tip wc26-ko-core-tip">Tippelve</em>':'')
+      +badge
+    +'</div>'
+    +'<div class="mr-sep"></div>'
+    +'<div class="mr-teams">'
+      +'<div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div>'
+      +'<div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div>'
+    +'</div>'
+    +'<div class="mr-scores">'+scoreHtml(m)+'</div>'
+    +edit
+    +'</div>';
+};
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .match-row[data-ko-mid] .wc26-ko-left-clock{
+      display:none!important;
+    }
+    .wc26-ko-score-stack{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      justify-content:center!important;
+      gap:3px!important;
+      width:100%!important;
+    }
+    .wc26-ko-score-indicators{
+      display:flex!important;
+      align-items:center!important;
+      justify-content:flex-end!important;
+      gap:4px!important;
+      min-height:14px!important;
+      width:100%!important;
+    }
+    .wc26-ko-score-clock{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:4px!important;
+      padding:2px 8px!important;
+      border-radius:999px!important;
+      background:rgba(255,90,104,.16)!important;
+      border:1px solid rgba(255,90,104,.34)!important;
+      color:#ff7b87!important;
+      font-size:clamp(10px,.68vw,12px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+    .wc26-ko-score-clock span{
+      width:6px!important;
+      height:6px!important;
+      border-radius:999px!important;
+      background:#ff6470!important;
+      box-shadow:0 0 0 3px rgba(255,100,112,.12)!important;
+      flex:0 0 auto!important;
+    }
+    .wc26-ko-score-lines{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      gap:clamp(5px,1.2vw,8px)!important;
+      width:100%!important;
+    }
+    .wc26-ko-core-tip{
+      font-size:clamp(11px,.72vw,13px)!important;
+      line-height:1.02!important;
+      margin-top:2px!important;
+      letter-spacing:0!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
