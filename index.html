@@ -11533,4 +11533,184 @@ function wc26ApplyKoModalReactiveUI(overlay){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v33 modal opacity fix: don't tag the whole sheet ===== */
+function wc26ApplyKoModalReactiveUI(overlay){
+  if(!overlay) return;
+  const id=overlay.dataset?.tipId||'';
+  if(!id.startsWith('KO-')) return;
+
+  const base=wc26KoModalBaseCat(id);
+  overlay.classList.remove('wc26-ko-modal-exact','wc26-ko-modal-diff','wc26-ko-modal-outcome','wc26-ko-modal-miss');
+  if(base) overlay.classList.add('wc26-ko-modal-'+base);
+
+  // Cleanup from v31/v32: the old text-search could accidentally put these
+  // classes on .sheet / .tip-sheet, which made the whole modal look transparent.
+  overlay.querySelectorAll('.sheet.wc26-ko-tip-summary,.tip-sheet.wc26-ko-tip-summary,.sheet.wc26-ko-penalty-panel,.tip-sheet.wc26-ko-penalty-panel')
+    .forEach(el=>el.classList.remove('wc26-ko-tip-summary','wc26-ko-penalty-panel'));
+
+  const tipCard = overlay.querySelector('.tip-your-tip-banner');
+  if(tipCard) tipCard.classList.add('wc26-ko-tip-summary');
+
+  const penCard = overlay.querySelector('.penalty-box');
+  if(penCard) penCard.classList.add('wc26-ko-penalty-panel');
+
+  const saveBtn=[...overlay.querySelectorAll('button, .btn, [role="button"]')]
+    .find(el=>(el.textContent||'').trim().toLowerCase().includes('zárolva'));
+  if(saveBtn) saveBtn.classList.add('wc26-ko-lock-btn');
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .tip-overlay .sheet,
+    .tip-overlay .tip-sheet{
+      background:#1c2730!important;
+      opacity:1!important;
+      backdrop-filter:none!important;
+    }
+    .tip-overlay .sheet-top{
+      background:#1c2730!important;
+    }
+
+    /* Only these inner cards may be tinted. Never the full modal sheet. */
+    .tip-overlay .sheet.wc26-ko-tip-summary,
+    .tip-overlay .tip-sheet.wc26-ko-tip-summary,
+    .tip-overlay .sheet.wc26-ko-penalty-panel,
+    .tip-overlay .tip-sheet.wc26-ko-penalty-panel{
+      background:#1c2730!important;
+      border-color:inherit!important;
+      box-shadow:0 24px 80px rgba(0,0,0,.62)!important;
+    }
+
+    .wc26-ko-tip-summary.tip-your-tip-banner{
+      opacity:1!important;
+    }
+    .wc26-ko-penalty-panel.penalty-box{
+      opacity:1!important;
+    }
+  `;
+  document.head.appendChild(st);
+
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('.tip-overlay[data-tip-id]').forEach(ov=>wc26ApplyKoModalReactiveUI(ov));
+  });
+})();
+
+
+/* ===== WC26 v34 KO live clock back to left + 30s hard rerender ===== */
+function wc26KoLiveClockPill(r){
+  const clk=liveClockLabel(r);
+  if(!r||!r.started||r.finished||!clk) return '';
+  return '<em class="mr-live-state live wc26-ko-left-clock"><span></span>'+esc(clk)+'</em>';
+}
+
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),
+      r=actualFor(x),
+      hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),
+      clock=liveClockLabel(r),
+      rawSt=r&&r.status?String(r.status).toUpperCase():'',
+      isInt=rawSt.includes('INT'),
+      lines='',
+      isKo=x.id&&x.id.startsWith('KO-');
+
+  if(isKo&&p&&hasReal){
+    const tipPenOk=p.pen&&validScore(p.pH)&&validScore(p.pA);
+    lines = wc26KoScoreLine(r.h,p.h,validScore(r.pH)?r.pH:null,tipPenOk?p.pH:null)
+          + wc26KoScoreLine(r.a,p.a,validScore(r.pA)?r.pA:null,tipPenOk?p.pA:null);
+  }else if(p&&hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind">('+r.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+ph+scorePair(r.h,p.h,'win')+'</span>'
+         +'<span class="mr-pen-wrap">'+pa+scorePair(r.a,p.a,'win')+'</span>';
+  }else if(p){
+    let pph=p.pen&&validScore(p.pH)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pH+')</span>':'',
+        ppa=p.pen&&validScore(p.pA)?'<span class="mr-pen-ind mr-tip-pen-only">('+p.pA+')</span>':'';
+    lines='<span class="mr-pen-wrap">'+pph+'<div class="win">'+p.h+'</div></span>'
+         +'<span class="mr-pen-wrap">'+ppa+'<div class="win">'+p.a+'</div></span>';
+  }else if(hasReal){
+    let ph=validScore(r.pH)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pH+')</span>':'',
+        pa=validScore(r.pA)?'<span class="mr-pen-ind mr-real-pen-only">('+r.pA+')</span>':'';
+    lines='<div class="mr-actual">'+r.h+ph+'</div><div class="mr-actual">'+r.a+pa+'</div>';
+  }else{
+    lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  /* KO-nál a live perc nem a jobb oldali score oszlopba kerül, hanem balra, mint a klasszikus kártyáknál. */
+  if(isKo) return lines;
+
+  let clockRow=(clock||isInt)?'<div class="mr-clock-row">'+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return hasReal&&(clock||isInt)?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+
+koMatchRow=function(m){
+  let p=koPred(m.id),
+      cls=p?'win':'',
+      state=matchLockState({id:m.id}),
+      sc=koTipScore(m),
+      base=sc.base||wc26KoBaseCat(sc.cat),
+      locked=state!=='open',
+      edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',
+      rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+        (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':''),
+      r2=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null,
+      livePill=wc26KoLiveClockPill(r2),
+      badge=wc26KoBadge(sc,state,r2),
+      ks=koMatchSchedule(m),
+      timeStr=ks&&ks.t?ks.t:'--:--';
+
+  // Ha nincs még értékelés és live, akkor a livePill elég, ne duplázzuk ugyanazt.
+  if(livePill && !(sc&&sc.cat)) badge='';
+
+  return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+livePill+(p?'<em class="mr-tip">Tipp.</em>':'')+badge+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+};
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .mr-score-wrap .mr-clock-row{
+      display:none!important;
+    }
+    .wc26-ko-left-clock{
+      margin-top:2px!important;
+      color:#ff7b87!important;
+      background:rgba(255,90,104,.16)!important;
+      border-color:rgba(255,90,104,.32)!important;
+      max-width:clamp(42px,4.8vw,72px)!important;
+      white-space:nowrap!important;
+    }
+    .wc26-ko-left-clock span{
+      display:inline-block!important;
+      width:6px!important;
+      height:6px!important;
+      border-radius:999px!important;
+      margin-right:3px!important;
+      background:#ff6470!important;
+      box-shadow:0 0 0 3px rgba(255,100,112,.12)!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+/* 30 mp-enként teljes, biztonságos rerender: így a KO-bracket, meccslista, community és modal sem marad félállapotban. */
+(function(){
+  if(window.__WC26_HARD_RERENDER_30S__) clearInterval(window.__WC26_HARD_RERENDER_30S__);
+  window.__WC26_HARD_RERENDER_30S__=setInterval(()=>{
+    try{
+      const modalOpen=!!document.querySelector('.tip-overlay,.community-preview');
+      if(modalOpen){
+        if(typeof refreshOpenTipModal==='function') refreshOpenTipModal();
+        document.querySelectorAll('.tip-overlay[data-tip-id]').forEach(ov=>{
+          if(typeof wc26ApplyKoModalReactiveUI==='function') wc26ApplyKoModalReactiveUI(ov);
+        });
+        return;
+      }
+      if(typeof render==='function') render();
+    }catch(e){
+      console.warn('WC26 30s rerender failed',e);
+    }
+  },30000);
+})();
+
 </script></body></html>
