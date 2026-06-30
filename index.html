@@ -13874,4 +13874,86 @@ function communityPredScoreHtml(p,r,g){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v50 runtime exact parity: copy group-card left-bottom text metrics onto KO cards ===== */
+(function(){
+  const KO_ROW_SEL = '.matches-main .match-row[data-ko-mid]';
+  const GROUP_ROW_SEL = '.matches-main .match-row:not([data-ko-mid])';
+  const PROPS = [
+    'font-size','font-weight','font-style','line-height','letter-spacing','text-transform',
+    'margin-top','margin-bottom','display','padding-top','padding-right','padding-bottom','padding-left',
+    'text-align','white-space','overflow','text-overflow','min-width','max-width',
+    'background-color','border-top-width','border-right-width','border-bottom-width','border-left-width',
+    'border-top-style','border-right-style','border-bottom-style','border-left-style',
+    'border-top-color','border-right-color','border-bottom-color','border-left-color',
+    'border-radius','box-shadow'
+  ];
+
+  function copyComputed(source, target, copyColor){
+    if(!source || !target) return;
+    const cs = getComputedStyle(source);
+    PROPS.forEach(p=>{
+      target.style.setProperty(p, cs.getPropertyValue(p), 'important');
+    });
+    if(copyColor){
+      target.style.setProperty('color', cs.color, 'important');
+    }
+  }
+
+  function firstVisible(selector){
+    return Array.from(document.querySelectorAll(selector)).find(el => el && el.offsetParent !== null) || null;
+  }
+
+  function syncKoLeftBottomTexts(){
+    const refTip = firstVisible(GROUP_ROW_SEL + ' .mr-date .mr-tip');
+    const refStates = Array.from(document.querySelectorAll(GROUP_ROW_SEL + ' .mr-date .mr-live-state'))
+      .filter(el => el && el.offsetParent !== null);
+
+    document.querySelectorAll(KO_ROW_SEL).forEach(row=>{
+      const koTip = row.querySelector('.mr-date .mr-tip');
+      if(refTip && koTip){
+        copyComputed(refTip, koTip, true)
+      }
+
+      const koState = row.querySelector('.mr-date .mr-live-state');
+      if(koState && refStates.length){
+        const classes = ['ok','diff','outcome','bad','open','neutral'];
+        const cls = classes.find(c => koState.classList.contains(c));
+        let refState = null;
+        if(cls){
+          refState = refStates.find(el => el.classList.contains(cls));
+        }
+        if(!refState){
+          refState = refStates[0];
+        }
+        if(refState){
+          copyComputed(refState, koState, true);
+        }
+      }
+    });
+  }
+
+  let raf = 0;
+  function scheduleSync(){
+    if(raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(()=>{
+      raf = 0;
+      try{ syncKoLeftBottomTexts(); }catch(e){}
+    });
+  }
+
+  // run a couple of times after load because rows are often re-rendered later
+  scheduleSync();
+  setTimeout(scheduleSync, 80);
+  setTimeout(scheduleSync, 350);
+  setTimeout(scheduleSync, 900);
+  setInterval(scheduleSync, 1500);
+
+  const root = document.documentElement || document.body;
+  if(root){
+    const mo = new MutationObserver(scheduleSync);
+    mo.observe(root, {childList:true, subtree:true, attributes:true, attributeFilter:['class','style']});
+  }
+})();
+
 </script></body></html>
