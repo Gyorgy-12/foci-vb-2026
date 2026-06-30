@@ -8190,6 +8190,89 @@ body.modal-open{
   gap:5px;
   line-height:1;
 }
+
+
+/* ===== WC26 v9 penalty + HT/FT/PEN indicators ===== */
+.wc26-state-indicators{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  margin-left:4px;
+  vertical-align:middle;
+}
+.wc26-status-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:clamp(21px,5.3vw,30px);
+  padding:2px 5px;
+  border-radius:999px;
+  font-size:clamp(7.5px,1.9vw,9.5px);
+  font-weight:950;
+  line-height:1;
+  letter-spacing:.02em;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.07);
+  color:#dce6eb;
+}
+.wc26-status-pill.ht{background:rgba(110,198,255,.13);border-color:rgba(110,198,255,.34);color:#9bdcff;}
+.wc26-status-pill.ft{background:rgba(40,209,108,.13);border-color:rgba(40,209,108,.36);color:#7ef0aa;}
+.wc26-status-pill.pen{background:rgba(255,180,60,.15);border-color:rgba(255,180,60,.38);color:#ffc15a;}
+.wc26-status-pill.aet{background:rgba(160,130,255,.14);border-color:rgba(160,130,255,.34);color:#bfb2ff;}
+.wc26-inline-pen{
+  display:inline-block;
+  margin-left:3px;
+  color:#ffc15a;
+  font-weight:950;
+  font-size:.92em;
+  white-space:nowrap;
+}
+.wc26-mini-pen-label{
+  display:block;
+  font-size:clamp(7.2px,1.75vw,9px);
+  font-weight:950;
+  line-height:1;
+  color:#ffc15a;
+  opacity:.98;
+  margin-bottom:1px;
+}
+.mr-score-pair .wc26-mini-pen-label{font-size:.66em;margin-bottom:0;}
+.mr-scores .mr-actual,.mr-scores .win{display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.wc26-pen-summary{
+  margin:clamp(8px,2vw,11px) auto 0;
+  width:min(100%,540px);
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:7px;
+}
+.wc26-pen-summary-item{
+  background:#101a21;
+  border:1px solid rgba(255,193,90,.22);
+  border-radius:10px;
+  padding:8px 10px;
+  text-align:center;
+}
+.wc26-pen-summary-item span{
+  display:block;
+  color:#9eadb6;
+  font-size:clamp(9px,2.25vw,11px);
+  font-weight:850;
+  margin-bottom:3px;
+}
+.wc26-pen-summary-item b{
+  color:#ffc15a;
+  font-size:clamp(13px,3.25vw,17px);
+  font-weight:950;
+  letter-spacing:.02em;
+}
+.tip-real-cell .wc26-mini-pen-label{font-size:clamp(8px,2vw,10px);margin-bottom:3px;}
+.tip-your-tip-score .wc26-inline-pen{font-size:.55em;margin-left:6px;vertical-align:middle;}
+.tip-below-score .wc26-state-indicators{margin:0 2px 0 0;}
+.tip-below-score .wc26-status-pill{min-width:32px;font-size:10px;padding:4px 7px;}
+.ko-score .wc26-mini-pen-label{font-size:8px;margin-bottom:0;}
+.ko-tip-ind .wc26-inline-pen{font-size:.86em;margin-left:2px;}
+.community-result .wc26-inline-pen{font-size:.78em;}
 </style></head><body><div class="app"><div class="top" id="topBar"><div class="hdr"><div class="hdr-back">&lsaquo;</div><div class="li-box" id="liBox"><img id="liImg" alt="" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" loading="eager"><svg class="li-fb" viewBox="0 0 80 80" aria-hidden="true"><rect width="80" height="80" rx="12" fill="#0e1f27"/><circle cx="40" cy="40" r="25" fill="#e8edf0"/><path d="M40 14l8 14 16 3-11 12 2 16-15-7-15 7 2-16-11-12 16-3z" fill="#17232b"/></svg></div><div class="li-info"><div class="li-title">FIFA World Cup</div><div class="li-season">2026 <span class="chev">&#9662;</span></div></div><div class="hdr-acts"><div class="hdr-icon">&#8599;</div><div class="hdr-icon">&#9734;</div><div class="hdr-icon">&#9733;</div></div></div><nav class="tabs" id="tabs"><button class="tab active" data-tab="overview">&Aacute;ttekint&eacute;s</button><button class="tab" data-tab="table">Tabella</button><button class="tab" data-tab="matches">M&eacute;rk&#337;z&eacute;sek</button><button class="tab" data-tab="knockout">Egyenes kies&eacute;s</button><button class="tab" data-tab="stats">Statisztik&aacute;k</button><button class="tab" data-tab="community">K&ouml;z&ouml;ss&eacute;g</button></nav></div><div id="spacer"></div><div id="ctrlWrap"><div class="ctrl-bar" id="tblCtrl"><div class="ctrl-inner"><button class="pill active" data-f="all">&Ouml;sszes</button><button class="pill" data-f="home">Hazai</button><button class="pill" data-f="away">Idegen</button><div class="view-wrap" style="margin-left:0"><button class="sel-btn" id="tblRoundBtn" style="width:100%;min-width:0"><span class="sel-txt" id="tblRoundTxt">V&eacute;gleges</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="tblRoundDrop"></div></div><div class="view-wrap"><button class="view-btn" id="vBtn"><span class="hbars"><i></i><b></b></span></button><div class="drop" id="vDrop"><button data-v="short" class="active">R&ouml;vid</button><button data-v="full">Teljes</button><button data-v="form">Forma</button></div></div></div></div><div class="kc-bar hidden" id="koCtrl"><div class="kc-inner"><div class="sel-wrap"><button class="sel-btn" id="selBtn"><span class="sel-txt" id="selTxt">FIFA World Cup 2026 - egyenes kies&eacute;s</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="selDrop"><button data-b="format" class="active">FIFA World Cup 2026 - egyenes kies&eacute;s</button></div></div><button class="expand-btn">&#8599;</button></div></div><div class="ctrl-bar hidden" id="mCtrl"><div class="ctrl-inner"><button class="pill active" data-mf="date">D&aacute;tum szerint</button><button class="pill" data-mf="group">Csoport szerint</button><button class="pill" data-mf="round">K&ouml;r szerint</button><button class="pill" data-mf="team">Csapat szerint</button></div></div><div class="ctrl-bar hidden" id="mRoundBar"><div class="ctrl-inner"><div class="view-wrap" style="margin-left:0"><button class="sel-btn" id="roundSelBtn" style="min-width:clamp(86px,22vw,110px)"><span class="sel-txt" id="roundSelTxt">1. kör</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="roundSelDrop" style="min-width:clamp(100px,28vw,140px);max-height:50vh;overflow-y:auto"></div></div></div></div><div class="ctrl-bar hidden" id="mTeamBar"><div class="ctrl-inner" style="gap:clamp(7px,2vw,10px)"><div class="view-wrap" style="margin-left:0;flex:1"><button class="sel-btn" id="teamSelBtn" style="width:100%"><span class="sel-txt" id="teamSelTxt">Csapat kiv&aacute;laszt&aacute;sa</span><span class="sel-chev">&#9662;</span></button><div class="drop sel-drop" id="teamSelDrop" style="min-width:min(280px,calc(100vw - 36px));max-height:50vh;overflow-y:auto"></div></div></div></div></div><main id="main" class="main"></main></div><script>const D={"groups":[["A","Mexico","South Africa","South Korea","Czechia"],["B","Canada","Switzerland","Qatar","Bosnia and Herzegovina"],["C","Brazil","Morocco","Haiti","Scotland"],["D","USA","Paraguay","Australia","Turkiye"],["E","Germany","Curacao","Ivory Coast","Ecuador"],["F","Netherlands","Japan","Tunisia","Sweden"],["G","Belgium","Egypt","Iran","New Zealand"],["H","Spain","Cape Verde","Saudi Arabia","Uruguay"],["I","France","Senegal","Norway","Iraq"],["J","Argentina","Algeria","Austria","Jordan"],["K","Portugal","Uzbekistan","Colombia","DR Congo"],["L","England","Croatia","Ghana","Panama"]],"ids":{"Mexico":6710,"South Africa":6316,"South Korea":7804,"Czechia":8496,"Canada":5810,"Switzerland":6717,"Qatar":5902,"Bosnia and Herzegovina":10106,"Brazil":8256,"Morocco":6262,"Haiti":5934,"Scotland":8498,"USA":6713,"Paraguay":6724,"Australia":6716,"Turkiye":6595,"Germany":8570,"Curacao":287981,"Ivory Coast":6709,"Ecuador":6707,"Netherlands":6708,"Japan":6715,"Tunisia":6719,"Sweden":8520,"Belgium":8263,"Egypt":10255,"Iran":6711,"New Zealand":5820,"Spain":6720,"Cape Verde":5888,"Saudi Arabia":7795,"Uruguay":5796,"France":6723,"Senegal":6395,"Norway":8492,"Iraq":5819,"Argentina":6706,"Algeria":6317,"Austria":8255,"Jordan":5816,"Portugal":8361,"Uzbekistan":8700,"Colombia":8258,"DR Congo":6321,"England":8491,"Croatia":10155,"Ghana":6714,"Panama":5922}};
 const GROUPS=D.groups.map(g=>({key:g[0],teams:g.slice(1)})),TEAM_IDS=D.ids,ALL=GROUPS.flatMap(g=>g.teams);
 const VALID_TABS=new Set(['overview','table','matches','knockout','stats','community']);
@@ -8275,7 +8358,7 @@ function wc26FirebaseConfigured(){return !!(WC26_FIREBASE_CONFIG.apiKey&&WC26_FI
 function wc26LoadScript(src){return new Promise((res,rej)=>{let old=document.querySelector('script[src="'+src+'"]');if(old){res();return}let s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Nem sikerult betolteni: '+src));document.head.appendChild(s)})}
 async function loadWc26Firebase(){if(FROZEN_MODE||!wc26FirebaseConfigured())return;try{if(!window.firebase||!firebase.initializeApp){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js')}if(!firebase.auth){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js')}if(!firebase.firestore){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js')}initWc26Firebase()}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()}}
 async function loadOwnTipsFromFirebase(){if(!wc26Db||!wc26User)return false;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;try{let doc=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();wc26RemoteDocExists=doc.exists;if(doc.exists){let d=doc.data()||{},remotePred=wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']),remoteKo=wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']);PRED=wc26CleanTips(remotePred);KO_PRED=wc26CleanTips(remoteKo);wc26ClearLocalPreds();wc26OwnTipsLoaded=true;render();if(groupsComplete())syncKoPairsToWorker();return true}wc26OwnTipsLoaded=true;/* nincs remote doc: a helyi tippeket nem töröljük */render();return false}catch(e){wc26OwnTipsLoadFailed=true;wc26OwnTipsLoaded=false;wc26BackendError=e.message||String(e);return false}}
-function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();listenMatchResults();wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();render();await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
+function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();/* match results now come only from Worker memóriás/Firestore snapshot, not Firestore onSnapshot */wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();render();await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
 function communityGoalSum(obj){return Object.values(obj||{}).reduce((n,p)=>n+(validScore(p&&p.h)?+p.h:0)+(validScore(p&&p.a)?+p.a:0),0)}
 function gradeTip(p,r){if(!p||!r||!validScore(r.h)||!validScore(r.a))return{cat:'miss',pts:0,label:'Nincs tipp'};let ph=+p.h,pa=+p.a,rh=+r.h,ra=+r.a;if(ph===rh&&pa===ra)return{cat:'exact',pts:1,label:'Pontos'};if(ph-pa===rh-ra)return{cat:'diff',pts:.5,label:'Gólkülönbség'};if(Math.sign(ph-pa)===Math.sign(rh-ra))return{cat:'outcome',pts:.25,label:'Kimenetel'};return{cat:'miss',pts:0,label:'Téves'}}
 function communityWithTips(pred,ko,fn){let oldP=PRED,oldK=KO_PRED;try{PRED=pred||{};KO_PRED=ko||{};return fn()}finally{PRED=oldP;KO_PRED=oldK}}
@@ -8378,7 +8461,7 @@ async function applyFixtureOverrides(){if(FROZEN_MODE||!WC26_RESULTS_READ_URL)re
 const FX_BY_ID=Object.fromEntries(FX.map(m=>[m.id,m]));
 const WC26_RESULTS_SYNC_URL='';
 const WC26_RESULTS_READ_URL='https://wc26-results-sync.wc26-guesses.workers.dev/results';
-const WC26_SYNC_BEFORE_MS=5*60*1000,WC26_SYNC_AFTER_MS=140*60*1000,WC26_SYNC_LIVE_MS=30*1000,WC26_SYNC_IDLE_MS=30*60*1000,WC26_SYNC_LAST_KEY='wc26_worker_sync_last_at';
+const WC26_SYNC_BEFORE_MS=5*60*1000,WC26_SYNC_AFTER_MS=200*60*1000,WC26_SYNC_LIVE_MS=30*1000,WC26_SYNC_IDLE_MS=30*60*1000,WC26_SYNC_LAST_KEY='wc26_worker_sync_last_at';
 let wc26SyncTimer=null,wc26SyncInFlight=false;
 let LIVE_RESULTS=FROZEN_MODE&&window.__WC26_LIVE_RESULTS__?window.__WC26_LIVE_RESULTS__:{};
 function saveLiveResults(){}
@@ -8547,8 +8630,8 @@ async function loadMatchResultsFromBackendDb(bypassCache=false){if(FROZEN_MODE||
   if(koData?.pairs) window.__WC26_KO_PAIRS__=koData.pairs;
   return data&&data.results?mergeLiveResults(data.results):false;
 }catch(e){return false}}
-async function loadMatchResultsOnceFromSdk(){if(!wc26Db)return false;try{let snap=await wc26Db.collection(WC26_RESULTS_COLLECTION).get(),incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});return mergeLiveResults(incoming)}catch(e){return false}}
-function listenMatchResults(){if(!wc26Db||wc26ResultsUnsub)return;try{wc26ResultsUnsub=wc26Db.collection(WC26_RESULTS_COLLECTION).onSnapshot(snap=>{let incoming={};snap.docs.forEach(d=>{let data=d.data(),key=data.id||d.id,r=normalizeLiveResult(key,data);if(r)incoming[key]=r});mergeLiveResults(incoming)},async e=>{wc26BackendError=e.message||String(e);if(!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore();scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()});setTimeout(async()=>{if(!Object.keys(LIVE_RESULTS).length&&!await loadMatchResultsFromBackendDb()&&!await loadMatchResultsOnceFromSdk())loadMatchResultsOnceFromFirestore()},900)}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS)}}
+async function loadMatchResultsOnceFromSdk(){return false}
+function listenMatchResults(){return false}
 function fixtureKickoff(m){const isKo=!!(m.id&&m.id.startsWith('KO-'));if(isKo)return koMatchKickoff(m)||new Date(m.date+'T'+m.t+':00+00:00').getTime();return new Date(m.date+'T'+m.t+':00+03:00').getTime()}
 function localMatchTime(m,tz){
   try{
@@ -8626,29 +8709,11 @@ function lastWorkerSyncAt(){try{return +(localStorage.getItem(WC26_SYNC_LAST_KEY
 function markWorkerSyncAt(t=Date.now()){try{localStorage.setItem(WC26_SYNC_LAST_KEY,String(t))}catch(e){}}
 function nextLiveSyncDelay(){let now=Date.now(),info=liveSyncInfo(now);if(document.hidden)return info.active?60*1000:WC26_SYNC_IDLE_MS/3;if(info.active)return WC26_SYNC_LIVE_MS;if(isFinite(info.next)){let untilWindow=info.next-now-WC26_SYNC_BEFORE_MS;return Math.max(WC26_SYNC_LIVE_MS,Math.min(WC26_SYNC_IDLE_MS,untilWindow))}return WC26_SYNC_IDLE_MS}
 
-function syncKoPairsToWorker(){
-  if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return;
-  try{
-    const rounds=buildKO(),bronze=buildBronze(rounds);
-    const all=[...rounds.flatMap(r=>r.matches)];
-    if(bronze&&(bronze.h||bronze.a))all.push(bronze);
-    const pairs={};
-    for(const m of all){
-      if(!m.h||!m.a||m.h==='?'||m.a==='?')continue;
-      // Csak akkor küldjük ha a csapatok csoportja teljesen lejátszott
-      const hGrp=ALL.includes(m.h)?FX.filter(x=>(x.h===m.h||x.a===m.h)):[];
-      const aGrp=ALL.includes(m.a)?FX.filter(x=>(x.h===m.a||x.a===m.a)):[];
-      const hDone=hGrp.length>0&&hGrp.every(x=>{const r=LIVE_RESULTS[x.id];return r&&r.finished;});
-      const aDone=aGrp.length>0&&aGrp.every(x=>{const r=LIVE_RESULTS[x.id];return r&&r.finished;});
-      if(hDone&&aDone){
-        pairs[m.id]={home:m.h,away:m.a};
-      }
-    }
-    if(!Object.keys(pairs).length)return;
-    const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs');
-    fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pairs})})
-      .catch(()=>{});
-  }catch(e){}
+let wc26LastKoPairsPostAt=0;
+let wc26LastKoPairsHash='';
+function syncKoPairsToWorker(force=false){
+  // NO-KV mód: nem POSTolunk KO párokat a Workerbe. A worker Firestore/ESPN rekordból adja vissza őket.
+  return false;
 }
 function scheduleLiveSync(delay){
   if(FROZEN_MODE)return;
@@ -8656,33 +8721,26 @@ function scheduleLiveSync(delay){
   let d=delay??nextLiveSyncDelay();
   wc26SyncTimer=setTimeout(async()=>{
     await syncLiveResults();
-    if(groupsComplete())syncKoPairsToWorker();
     scheduleLiveSync();
   },d);
 }
-// Ha a tab újra láthatóvá válik, azonnal szinkronizálunk
+// Ha a tab újra láthatóvá válik, azonnal /results-t olvasunk
 async function syncLiveResults(opts={}){
   if(syncLiveResults._running)return false;
   syncLiveResults._running=true;
   try{
-    // Ha élő meccs van, triggereljük a worker szinkront is
     const {active}=liveSyncInfo();
-    if(active&&WC26_RESULTS_READ_URL){
-      const syncUrl=WC26_RESULTS_READ_URL.replace(/\/results$/,'/sync');
-      fetch(syncUrl,{method:'POST',keepalive:true}).catch(()=>{});
-      // Várunk 2mp-et hogy a worker befejezze a szinkront
-      await new Promise(r=>setTimeout(r,2000));
-    }
-    let ok=await loadMatchResultsFromBackendDb(active);
+    let ok=await loadMatchResultsFromBackendDb(active||opts.force);
     if(!ok&&!opts.skipRetry){
-      await new Promise(r=>setTimeout(r,3000));
-      ok=await loadMatchResultsFromBackendDb();
+      await new Promise(r=>setTimeout(r,1200));
+      ok=await loadMatchResultsFromBackendDb(true);
     }
     return ok;
   }finally{
     syncLiveResults._running=false;
   }
-}function liveClockMinute(r){let vals=[r?.minute,r?.matchMinute,r?.elapsed,r?.currentMinute,r?.liveMinute,r?.matchTime,r?.time,r?.statusMinute];for(let v of vals){if(v==null||typeof v==='object')continue;let m=String(v).match(/\d{1,3}/);if(m){let n=+m[0];if(Number.isFinite(n)&&n>0&&n<140)return n}}return null}function shortPlayerName(name){let parts=String(name||'').trim().split(/\s+/);if(parts.length<2)return name;let first=parts[0],last=parts[parts.length-1];return first.charAt(0)+'. '+last}function eventTeam(e){return e.team==='a'||e.team==='away'||e.side==='away'||e.teamSide==='away'?'a':'h'}function eventMinute(e){return e.minute??e.matchMinute??e.elapsed??e.time??''}function isPenaltyGoal(s){let t=String(s.type||s.detail||s.note||s.goalType||s.code||s.Cd||'').toLowerCase(),blob=JSON.stringify(s||{}).toLowerCase();return !!(s.penalty===true||s.pen===true||s.pk===true||s.fromPenalty===true||t==='p'||t==='pg'||t==='pen'||t==='penalty'||t.includes('spot kick')||/"(penalty|pen|pk|frompenalty)"\s*:\s*true/.test(blob)||/\b11m\b/.test(blob)||blob.includes('spot kick'))}function goalScorersHtml(r,x){let events=[];if(r&&Array.isArray(r.scorers))events=events.concat(r.scorers.map(s=>({...s,_kind:'goal'})));if(r&&Array.isArray(r.redCards))events=events.concat(r.redCards.map(s=>({...s,_kind:s.yellowRed?'yellowRed':'red'})));if(r&&Array.isArray(r.yellowCards))events=events.concat(r.yellowCards.map(s=>({...s,_kind:'yellow'})));if(!events.length)return'';let sorted=events.sort((a,b)=>(parseInt(eventMinute(a))||0)-(parseInt(eventMinute(b))||0)),infoCell=s=>{if(s._kind==='red')return'<span class="red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Piros lap')+'</span>';if(s._kind==='yellowRed')return'<span class="yellow-red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'2× Sárga')+'</span>';if(s._kind==='yellow')return'<span class="yellow-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Sárga lap')+'</span>';let name=s.player?esc(shortPlayerName(s.player)):'',og=s.og?'<span class="goal-scorer-og">(&ouml;ng.)</span>':'',pen=isPenaltyGoal(s)?'<span class="goal-scorer-pen">(11-es)</span>':'';return'<span class="goal-scorer-ball">&#9917;</span><span class="goal-scorer-name">'+name+'</span>'+og+pen},rows=sorted.map(s=>{let team=eventTeam(s),home=team!=='a'?infoCell(s):'',away=team==='a'?infoCell(s):'',min=eventMinute(s)?eventMinute(s)+'&#39;':'',red=s._kind==='red'?' red-card-row':s._kind==='yellowRed'?' red-card-row yellow-red-row':s._kind==='yellow'?' yellow-card-row':'';return'<div class="goal-scorer-row'+red+'"><div class="goal-scorers-col">'+home+'</div><span class="goal-scorer-min">'+min+'</span><div class="goal-scorers-col">'+away+'</div></div>'}).join('');return'<div class="goal-scorers">'+rows+'</div>'}function redCardsHtml(r,x){return''}function wc26ExtractClockLabelFromValue(v){
+}
+function liveClockMinute(r){let vals=[r?.minute,r?.matchMinute,r?.elapsed,r?.currentMinute,r?.liveMinute,r?.matchTime,r?.time,r?.statusMinute];for(let v of vals){if(v==null||typeof v==='object')continue;let m=String(v).match(/\d{1,3}/);if(m){let n=+m[0];if(Number.isFinite(n)&&n>0&&n<140)return n}}return null}function shortPlayerName(name){let parts=String(name||'').trim().split(/\s+/);if(parts.length<2)return name;let first=parts[0],last=parts[parts.length-1];return first.charAt(0)+'. '+last}function eventTeam(e){return e.team==='a'||e.team==='away'||e.side==='away'||e.teamSide==='away'?'a':'h'}function eventMinute(e){return e.minute??e.matchMinute??e.elapsed??e.time??''}function isPenaltyGoal(s){let t=String(s.type||s.detail||s.note||s.goalType||s.code||s.Cd||'').toLowerCase(),blob=JSON.stringify(s||{}).toLowerCase();return !!(s.penalty===true||s.pen===true||s.pk===true||s.fromPenalty===true||t==='p'||t==='pg'||t==='pen'||t==='penalty'||t.includes('spot kick')||/"(penalty|pen|pk|frompenalty)"\s*:\s*true/.test(blob)||/\b11m\b/.test(blob)||blob.includes('spot kick'))}function goalScorersHtml(r,x){let events=[];if(r&&Array.isArray(r.scorers))events=events.concat(r.scorers.map(s=>({...s,_kind:'goal'})));if(r&&Array.isArray(r.redCards))events=events.concat(r.redCards.map(s=>({...s,_kind:s.yellowRed?'yellowRed':'red'})));if(r&&Array.isArray(r.yellowCards))events=events.concat(r.yellowCards.map(s=>({...s,_kind:'yellow'})));if(!events.length)return'';let sorted=events.sort((a,b)=>(parseInt(eventMinute(a))||0)-(parseInt(eventMinute(b))||0)),infoCell=s=>{if(s._kind==='red')return'<span class="red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Piros lap')+'</span>';if(s._kind==='yellowRed')return'<span class="yellow-red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'2× Sárga')+'</span>';if(s._kind==='yellow')return'<span class="yellow-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Sárga lap')+'</span>';let name=s.player?esc(shortPlayerName(s.player)):'',og=s.og?'<span class="goal-scorer-og">(&ouml;ng.)</span>':'',pen=isPenaltyGoal(s)?'<span class="goal-scorer-pen">(11-es)</span>':'';return'<span class="goal-scorer-ball">&#9917;</span><span class="goal-scorer-name">'+name+'</span>'+og+pen},rows=sorted.map(s=>{let team=eventTeam(s),home=team!=='a'?infoCell(s):'',away=team==='a'?infoCell(s):'',min=eventMinute(s)?eventMinute(s)+'&#39;':'',red=s._kind==='red'?' red-card-row':s._kind==='yellowRed'?' red-card-row yellow-red-row':s._kind==='yellow'?' yellow-card-row':'';return'<div class="goal-scorer-row'+red+'"><div class="goal-scorers-col">'+home+'</div><span class="goal-scorer-min">'+min+'</span><div class="goal-scorers-col">'+away+'</div></div>'}).join('');return'<div class="goal-scorers">'+rows+'</div>'}function redCardsHtml(r,x){return''}function wc26ExtractClockLabelFromValue(v){
   if(v==null)return'';
   if(typeof v==='object'){
     let vals=[v.display,v.shortDetail,v.detail,v.description,v.m,v.min,v.minute,v.elapsed,v.value,v.clock,v.text];
@@ -9147,19 +9205,34 @@ function refreshOpenTipModal(){
   const sheet=ov.querySelector('.tip-sheet');
   if(sheet){sheet.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked');if(sc.cat)sheet.classList.add('result-'+sc.cat);else if(r.started&&!r.finished)sheet.classList.add('live-locked');}
 }
+let wc26KoPairsLoadedAt=0;
+let wc26KoPairsLoading=null;
+async function wc26LoadKoPairsFromWorker(force=false){
+  if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;
+  const now=Date.now();
+  if(!force&&window.__WC26_KO_PAIRS__&&now-wc26KoPairsLoadedAt<10*60*1000)return true;
+  if(wc26KoPairsLoading)return wc26KoPairsLoading;
+  wc26KoPairsLoading=(async()=>{
+    try{
+      const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs')+'?r='+Math.floor(Date.now()/300000);
+      const koData=await fetch(url,{cache:'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
+      if(koData?.schedule){for(const[id,sch]of Object.entries(koData.schedule)){if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date||KO_SCHEDULE[id].date;KO_SCHEDULE[id].t=sch.t||sch.time||KO_SCHEDULE[id].t;}}}
+      if(koData?.pairs)window.__WC26_KO_PAIRS__=koData.pairs;
+      wc26KoPairsLoadedAt=Date.now();
+      return !!koData;
+    }finally{wc26KoPairsLoading=null;}
+  })();
+  return wc26KoPairsLoading;
+}
 async function loadMatchResultsFromBackendDb(bypassCache=false){
   if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;
   try{
     const bust=(bypassCache?'t='+(Date.now()):'r='+(Math.floor(Date.now()/25000)));
     const sep=WC26_RESULTS_READ_URL.includes('?')?'&':'?';
     const resultsUrl=WC26_RESULTS_READ_URL+sep+bust;
-    const koUrl=WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs')+'?t='+Date.now();
-    const [data,koData]=await Promise.all([
-      fetch(resultsUrl,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
-      fetch(koUrl,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null),
-    ]);
-    if(koData?.schedule){for(const[id,sch]of Object.entries(koData.schedule)){if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date||KO_SCHEDULE[id].date;KO_SCHEDULE[id].t=sch.t||sch.time||KO_SCHEDULE[id].t;}}}
-    if(koData?.pairs)window.__WC26_KO_PAIRS__=koData.pairs;
+    const data=await fetch(resultsUrl,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+    // KO párok/schedule nem kell 30 mp-enként. Max 10 percenként vagy első betöltéskor.
+    wc26LoadKoPairsFromWorker(false).catch(()=>{});
     if(data?.results){
       Object.entries(data.results).forEach(([id,r])=>{if(id.startsWith('KO-')&&r&&r.date&&r.time&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=r.date;KO_SCHEDULE[id].t=r.time;}});
       return mergeLiveResults(data.results);
@@ -9172,7 +9245,7 @@ function scheduleLiveSync(delay){
   clearTimeout(wc26SyncTimer);
   let d=delay??nextLiveSyncDelay();
   wc26SyncTimer=setTimeout(async()=>{
-    try{await syncLiveResults({skipRetry:true});if(groupsComplete())syncKoPairsToWorker();}
+    try{await syncLiveResults({skipRetry:true});}
     finally{scheduleLiveSync();}
   },d);
 }
@@ -9181,11 +9254,8 @@ async function syncLiveResults(opts={}){
   syncLiveResults._running=true;
   try{
     const {active}=liveSyncInfo();
-    if(active&&WC26_RESULTS_READ_URL){
-      const syncUrl=WC26_RESULTS_READ_URL.replace(/\/results$/,'/sync')+'?t='+Date.now();
-      const syncData=await fetch(syncUrl,{method:'POST',cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
-      if(syncData?.results)mergeLiveResults(syncData.results);
-    }
+    // NINCS frontend /sync POST. A Durable Object syncel 30 mp-ként,
+    // a frontend csak /results-t olvas; nincs memóriás/Firestore snapshot és nincs frontend /sync POST.
     let ok=await loadMatchResultsFromBackendDb(active||opts.force);
     if(!ok&&!opts.skipRetry){await new Promise(r=>setTimeout(r,1200));ok=await loadMatchResultsFromBackendDb(true);}
     return ok;
@@ -9377,10 +9447,70 @@ let exportSnapshot=exportSnapshotNav;
 function statEffForMatches(matches,preds,isKo){let out={pts:0,max:0,pct:0,exact:0,diff:0,outcome:0,miss:0};matches.forEach(m=>{let r=actualFor({id:m.id});if(!r||!(r.started||r.finished)||!validScore(r.h)||!validScore(r.a))return;out.max++;let g=isKo?gradeKoTip((preds||{})[m.id],r):gradeTip((preds||{})[m.id],r);out.pts+=g.pts;out[g.cat]=(out[g.cat]||0)+1});out.pct=out.max?+(out.pts/out.max*100).toFixed(2):0;return out}
 function statRoundCard(label,e){let muted=e.max?'':' muted';return'<div class="stat-round-card'+muted+'"><div class="stat-round-label">'+label+'</div><div class="stat-round-pct">'+e.pct+'%</div><div class="stat-round-sub">'+fmtPts(e.pts)+' / '+e.max+' pont</div><div class="eff-mini-bar"><div class="eff-mini-bar-fill" style="width:'+Math.min(100,e.pct)+'%"></div></div><div class="eff-split-dots"><span class="eff-sdot exact">'+e.exact+' pontos</span><span class="eff-sdot diff">'+e.diff+' gólkül.</span><span class="eff-sdot outcome">'+e.outcome+' kimen.</span><span class="eff-sdot miss">'+e.miss+' téves</span></div></div>'}
 function statsRoundEfficiencyHtml(){let ko=communityKoMatches(PRED,KO_PRED),cards=[['1. kör',statEffForMatches(FX.filter(m=>m.r===1),PRED)],['2. kör',statEffForMatches(FX.filter(m=>m.r===2),PRED)],['3. kör',statEffForMatches(FX.filter(m=>m.r===3),PRED)],['Legjobb 32',statEffForMatches(ko.filter(m=>m.title==='Legjobb 32'),KO_PRED,true)],['Nyolcaddöntő',statEffForMatches(ko.filter(m=>m.title==='Nyolcaddöntő'),KO_PRED,true)],['Negyeddöntő',statEffForMatches(ko.filter(m=>m.title==='Negyeddöntő'),KO_PRED,true)],['Elődöntő',statEffForMatches(ko.filter(m=>m.title==='Elődöntő'),KO_PRED,true)],['Döntők',statEffForMatches(ko.filter(m=>m.title==='Döntő'||m.title==='Bronzmeccs'),KO_PRED,true)]];return'<section class="card"><h2 class="card-title">Hatékonyság fordulónként</h2><div class="stat-round-grid">'+cards.map(x=>statRoundCard(x[0],x[1])).join('')+'</div></section>'}function renderStats(){let m=document.getElementById('main');m.className='main stats-main';let eff=tipEfficiency(),totalPct=eff.totalPlayed?+(eff.totalPts/eff.totalMax*100).toFixed(2):0,effHtml='<section class="card"><h2 class="card-title">Tippel&eacute;si hat&eacute;konys&aacute;g</h2><div class="eff-total"><div class="eff-total-left"><div class="eff-total-label">&Ouml;sszhat&eacute;konys&aacute;g</div><div class="eff-total-pts">'+totalPct+'%<span>'+fmtPts(eff.totalPts)+' / '+eff.totalMax+' pt</span></div><div class="eff-total-bar"><div class="eff-total-bar-fill" style="width:'+Math.min(100,totalPct)+'%"></div></div></div><div class="eff-total-right"><div class="eff-total-pct">'+fmtPts(eff.totalPts)+' pt</div></div></div><div class="eff-split">'+effSplitCard('Csoportkör',eff.grpExact,eff.grpDiff,eff.grpOutcome,eff.grpMiss,eff.grpPts,eff.grpMax,eff.grpPlayed,'#28d16c')+effSplitCard('Kies&eacute;ses szakasz',eff.koExact,eff.koDiff,eff.koOutcome,eff.koMiss,eff.koPts,eff.koMax,eff.koPlayed2,'#6ec6ff')+'</div><div class="eff-legend"><span class="eff-legend-item exact">Pontos tipp: 1 pt</span><span class="eff-legend-item diff">G&oacute;lk&uuml;l&ouml;nbs&eacute;g: 0.5 pt</span><span class="eff-legend-item outcome">Kimenetel: 0.25 pt</span><span class="eff-legend-item miss">T&eacute;ves: 0 pt</span></div></section>';let groupTips=played(),koTips=koPlayed(),tipPlayedN=groupTips.length+koTips.length,ko=groupsComplete()?communityKoMatches(PRED,KO_PRED):[],phases=[statPhaseInfo('Csoportkör',72,FX,false),statPhaseInfo('Legjobb 32',16,ko.filter(m=>m.round==='R32'),true),statPhaseInfo('Nyolcaddöntő',8,ko.filter(m=>m.round==='R16'),true),statPhaseInfo('Negyeddöntő',4,ko.filter(m=>m.round==='QF'),true),statPhaseInfo('Elődöntő',2,ko.filter(m=>m.round==='SF'),true),statPhaseInfo('Bronzmeccs',1,ko.filter(m=>m.round==='BR'),true),statPhaseInfo('Döntő',1,ko.filter(m=>m.round==='F'),true)],res=phases.flatMap(p=>p.res),statN=res.length,goals=res.reduce((s,x)=>s+x.p.h+x.p.a,0),hw=res.filter(x=>x.p.h>x.p.a).length,dr=res.filter(x=>x.p.h===x.p.a).length,aw=res.filter(x=>x.p.a>x.p.h).length;m.innerHTML=effHtml+statsRoundEfficiencyHtml()+'<section class="card"><h2 class="card-title">&Ouml;sszes&iacute;tett statisztik&aacute;k</h2><div class="stat-kpi-row"><div class="stat-kpi"><div class="stat-kpi-val">'+tipPlayedN+'</div><div class="stat-kpi-lbl">Tippelt meccs</div></div><div class="stat-kpi"><div class="stat-kpi-val">'+goals+'</div><div class="stat-kpi-lbl">G&oacute;l</div></div><div class="stat-kpi"><div class="stat-kpi-val">'+(statN?goals/statN:0).toFixed(2)+'</div><div class="stat-kpi-lbl">G&oacute;l/meccs</div></div></div><div class="stat-section-title">Eredm&eacute;ny-megoszl&aacute;s</div><div class="stat-result-labels"><span>Els&#337; csapat gy&#337;zelme</span><span style="margin-left:auto">'+hw+' meccs</span></div>'+pctBar(hw,statN,'var(--green)')+'<div class="stat-result-labels"><span>D&ouml;ntetlen</span><span style="margin-left:auto">'+dr+' meccs</span></div>'+pctBar(dr,statN,'var(--muted)')+'<div class="stat-result-labels"><span>M&aacute;sodik csapat gy&#337;zelme</span><span style="margin-left:auto">'+aw+' meccs</span></div>'+pctBar(aw,statN,'var(--blue)')+'</section><section class="card"><h2 class="card-title">F&aacute;zis-bont&aacute;s</h2><div class="stat-phase-grid">'+phases.map(p=>'<div class="stat-phase-card"><div class="stat-phase-name">'+p.name+'</div><div class="stat-phase-row"><span>'+p.total+' tervezett meccs</span><span class="stat-phase-avg">'+p.avg.toFixed(2)+' g&oacute;l/meccs</span></div><div class="stat-mini-bars"><div class="stat-mini-bar" style="flex:'+(p.finished||0.01)+';background:var(--green)"></div><div class="stat-mini-bar" style="flex:'+(p.left||0.01)+';background:var(--muted)"></div></div><div class="stat-mini-legend"><span>Tippelve: '+p.tipped+' &middot; Lez&aacute;rva: '+p.finished+'</span><span>H&aacute;tra: '+p.left+'</span></div></div>').join('')+'</div></section>'+statsExportHtml();activateCrests();let ex=document.getElementById('exportBtn');if(ex)ex.onclick=exportSnapshotNav}
+
+
+/* ===== WC26 v9 penalty + HT/FT/PEN indicators JS overrides ===== */
+function wc26HasPenScore(obj){return obj&&validScore(obj.pH)&&validScore(obj.pA)}
+function wc26PenPair(obj){return wc26HasPenScore(obj)?(+obj.pH)+'-'+(+obj.pA):''}
+function wc26PenLabel(v){return validScore(v)?'<span class="wc26-mini-pen-label">('+v+')</span>':''}
+function wc26TipPenLabel(p,side){return p&&validScore(side==='h'?p.pH:p.pA)?'<span class="wc26-mini-pen-label">('+(side==='h'?p.pH:p.pA)+')</span>':''}
+function wc26ScoreWithPen(score,pen){return (validScore(pen)?'<span class="wc26-mini-pen-label">('+pen+')</span>':'')+esc(score)}
+function wc26TipScoreHtml(p){if(!p||!validScore(p.h)||!validScore(p.a))return'-';return p.h+' - '+p.a+(wc26HasPenScore(p)?'<span class="wc26-inline-pen">PEN '+wc26PenPair(p)+'</span>':'')}
+function wc26RealScoreHtml(r){if(!r||!validScore(r.h)||!validScore(r.a))return'-';return r.h+'-'+r.a+(wc26HasPenScore(r)?'<span class="wc26-inline-pen">PEN '+wc26PenPair(r)+'</span>':'')}
+function wc26StatusPills(r){
+  if(!r)return'';
+  let s=String((r.status||'')+' '+(r.minute||'')+' '+(r.period||'')+' '+(r.shortDetail||'')+' '+(r.displayClock||'')).toUpperCase();
+  let pills=[];
+  if(!r.finished&&(s==='HT'||s.includes('HALF')||/\bHT\b/.test(s)))pills.push(['ht','HT']);
+  if(r.finished||s==='FT'||s.includes('FULL TIME')||s.includes('FINAL')||s.includes('FINISHED'))pills.push(['ft','FT']);
+  if(wc26HasPenScore(r)||s.includes('PEN')||s.includes('AFTER PEN')||/\bAP\b/.test(s))pills.push(['pen','PEN']);
+  else if(s.includes('AET'))pills.push(['aet','AET']);
+  if(!pills.length)return'';
+  return '<span class="wc26-state-indicators">'+pills.map(([c,t])=>'<span class="wc26-status-pill '+c+'">'+t+'</span>').join('')+'</span>';
+}
+function wc26BadgeTextWithStatus(base,r){return base+wc26StatusPills(r)}
+function scorePairWithPen(real,tip,realPen,tipPen,cls){return '<div class="mr-score-pair"><span class="mr-actual">'+wc26ScoreWithPen(real,realPen)+'</span><span class="'+(cls||'win')+'">'+wc26ScoreWithPen(tip,tipPen)+'</span></div>'}
+function scoreHtml(x){
+  let p=x.id&&x.id.startsWith('KO-')?koPred(x.id):getPred(x.id),r=actualFor(x),hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),clock=liveClockLabel(r),rawSt=r&&r.status?String(r.status).toUpperCase():'',isInt=rawSt.includes('INT'),lines='';
+  if(p&&hasReal){
+    lines='<span class="mr-pen-wrap">'+scorePairWithPen(r.h,p.h,r.pH,p.pH,'win')+'</span>'+'<span class="mr-pen-wrap">'+scorePairWithPen(r.a,p.a,r.pA,p.pA,'win')+'</span>';
+  }else if(p){
+    lines='<span class="mr-pen-wrap"><div class="win">'+wc26ScoreWithPen(p.h,p.pH)+'</div></span>'+'<span class="mr-pen-wrap"><div class="win">'+wc26ScoreWithPen(p.a,p.pA)+'</div></span>';
+  }else if(hasReal){
+    lines='<div class="mr-actual">'+wc26ScoreWithPen(r.h,r.pH)+'</div><div class="mr-actual">'+wc26ScoreWithPen(r.a,r.pA)+'</div>';
+  }else lines='<div class="match-empty">-</div><div class="match-empty">-</div>';
+  let pills=wc26StatusPills(r),clockRow=(clock||isInt||pills)?'<div class="mr-clock-row">'+pills+(clock?'<span class="mr-clock">'+clock+'</span>':'')+(isInt?'<span class="mr-int-badge">INT.</span>':'')+'</div>':'';
+  return hasReal&&(clock||isInt||pills)?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
+}
+function matchStateBadge(m){let st=matchLockState(m),sc=tipScore(m),r=actualFor(m),rs=r&&validScore(r.h)&&validScore(r.a)?' '+wc26RealScoreHtml(r):'',clk=liveClockLabel(r);if(sc.cat==='exact')return'<em class="mr-live-state ok">'+wc26BadgeTextWithStatus('Pontos',r)+'</em>';if(sc.cat==='diff')return'<em class="mr-live-state diff">'+wc26BadgeTextWithStatus('G&oacute;lk&uuml;l.',r)+'</em>';if(sc.cat==='outcome')return'<em class="mr-live-state outcome">'+wc26BadgeTextWithStatus('Kimenetel',r)+'</em>';if(sc.cat==='miss')return'<em class="mr-live-state bad">'+wc26BadgeTextWithStatus('Hib&aacute;s',r)+'</em>';if(st==='finished')return'<em class="mr-live-state neutral">'+wc26BadgeTextWithStatus('Lez&aacute;rt'+rs,r)+'</em>';if(st==='live')return'<em class="mr-live-state live"><span></span>'+wc26BadgeTextWithStatus((clk||'&Eacute;l&#337;')+rs,r)+'</em>';return'<em class="mr-live-state open">Tippelhet&#337;</em>'}
+function wc26MatchStateBadgeAny(m){const id=m&&m.id,ko=id&&id.startsWith('KO-'),st=matchLockState({id}),sc=ko?koTipScore(m):tipScore(m),r=actualFor({id}),rs=r&&validScore(r.h)&&validScore(r.a)?' '+wc26RealScoreHtml(r):'',clk=liveClockLabel(r);if(sc.cat==='exact'||sc.cat==='exact-pen-exact')return'<em class="mr-live-state ok">'+wc26BadgeTextWithStatus('Pontos',r)+'</em>';if(sc.cat==='diff'||sc.cat==='exact-pen-diff'||sc.cat==='draw-pen-diff')return'<em class="mr-live-state diff">'+wc26BadgeTextWithStatus('G&oacute;lk&uuml;l.',r)+'</em>';if(sc.cat==='outcome'||sc.cat==='exact-pen-outcome'||sc.cat==='draw-pen-outcome'||sc.cat==='draw')return'<em class="mr-live-state outcome">'+wc26BadgeTextWithStatus('Kimenetel',r)+'</em>';if(sc.cat==='miss')return'<em class="mr-live-state bad">'+wc26BadgeTextWithStatus('Hib&aacute;s',r)+'</em>';if(st==='finished')return'<em class="mr-live-state neutral">'+wc26BadgeTextWithStatus('Lez&aacute;rt'+rs,r)+'</em>';if(st==='live')return'<em class="mr-live-state live"><span></span>'+wc26BadgeTextWithStatus((clk||'&Eacute;l&#337;')+rs,r)+'</em>';return'<em class="mr-live-state open">Tippelhet&#337;</em>'}
+function koTeamLine(team,seed,score,cls,pen,tip,tipPen){if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';let realPen=pen!=null?'<small class="ko-pen">('+pen+')</small>':'';let tipHtml=tip!=null?'<span class="ko-tip-ind">'+tip+(validScore(tipPen)?'<span class="wc26-inline-pen">('+tipPen+')</span>':'')+'</span>':'';return '<div class="ko-team '+(cls||'')+'">'+crest(team,'22px')+'<span class="ko-name">'+esc(team)+'</span><span class="ko-score">'+realPen+'<b class="'+(tip!=null?'has-tip':'')+'">'+(score==null?'-':score)+'</b>'+tipHtml+'</span></div>'}
+function koCard(m,row){var r=LIVE_RESULTS[m.id],hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),p=koPred(m.id);var dh=hasReal?+r.h:(p?p.h:null),da=hasReal?+r.a:(p?p.a:null);var dph=hasReal?(validScore(r.pH)?r.pH:null):(p&&validScore(p.pH)?p.pH:null),dpa=hasReal?(validScore(r.pA)?r.pA:null):(p&&validScore(p.pA)?p.pA:null);var tph=(hasReal&&p&&validScore(p.pH))?p.pH:null,tpa=(hasReal&&p&&validScore(p.pA))?p.pA:null;var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;if(dh!=null&&da!=null&&m.h&&m.a){if(dh!==da){w=dh>da?m.h:m.a;}else if(hasPen&&dph!==dpa){w=dph>dpa?m.h:m.a;}}var hw=w===m.h,aw=w===m.a;var rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';var sc=koTipScore(m),cls=[];if(hasReal)cls.push('live-result');else if(p){cls.push('predicted');}if(sc.cat==='exact'||sc.cat==='exact-pen-exact')cls.push('result-exact');else if(sc.cat==='diff'||sc.cat==='exact-pen-diff'||sc.cat==='draw-pen-diff')cls.push('result-diff');else if(sc.cat==='outcome'||sc.cat==='exact-pen-outcome'||sc.cat==='draw-pen-outcome'||sc.cat==='draw')cls.push('result-outcome');else if(sc.cat==='miss')cls.push('result-miss');if(m.locked)cls.push('locked');return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'+koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,(hasReal&&p)?p.h:null,tph)+koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,(hasReal&&p)?p.a:null,tpa)+'</div>';}
+function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),sc=koTipScore(m),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'||sc.cat==='exact-pen-exact'?' result-exact':sc.cat==='diff'||sc.cat==='exact-pen-diff'||sc.cat==='draw-pen-diff'?' result-diff':sc.cat==='outcome'||sc.cat==='exact-pen-outcome'||sc.cat==='draw-pen-outcome'||sc.cat==='draw'?' result-outcome':sc.cat==='miss'?' result-miss':''),lr=LIVE_RESULTS[m.id],md=lr&&lr.date?lr.date:m.date,mt=lr&&lr.time?lr.time:(KO_SCHEDULE[m.id]||{}).t||m.t||'',timeStr=md&&mt?(()=>{try{return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){return mt}})():'--:--';return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26MatchStateBadgeAny(m)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>'}
+function wc26PenaltySummaryHtml(r,p){let items=[];if(wc26HasPenScore(r))items.push('<div class="wc26-pen-summary-item"><span>Val&oacute;s tizenegyes</span><b>'+wc26PenPair(r)+'</b></div>');if(wc26HasPenScore(p))items.push('<div class="wc26-pen-summary-item"><span>Tippelt tizenegyes</span><b>'+wc26PenPair(p)+'</b></div>');return items.length?'<div class="wc26-pen-summary">'+items.join('')+'</div>':''}
+function wc26DecorateTipModal(id,kind){
+  const ov=document.querySelector('.tip-overlay[data-tip-id="'+id+'"]');if(!ov)return;
+  const r=LIVE_RESULTS[id]||null,p=kind==='ko'?(KO_PRED[id]||{}):(PRED[id]||{});
+  const banner=ov.querySelector('.tip-your-tip-score');if(banner&&validScore(p.h)&&validScore(p.a))banner.innerHTML=wc26TipScoreHtml(p);
+  const realH=ov.querySelector('.tip-real-h'),realA=ov.querySelector('.tip-real-a');
+  if(realH&&r&&validScore(r.h))realH.innerHTML=wc26ScoreWithPen(r.h,r.pH);
+  if(realA&&r&&validScore(r.a))realA.innerHTML=wc26ScoreWithPen(r.a,r.pA);
+  const scoreBox=ov.querySelector('.tip-score-real');if(scoreBox&&r){scoreBox.classList.toggle('has-pen',wc26HasPenScore(r));}
+  const match=ov.querySelector('.tip-match');if(match){let old=match.querySelector('.wc26-pen-summary');if(old)old.remove();let html=wc26PenaltySummaryHtml(r,p);if(html)match.insertAdjacentHTML('beforeend',html);}
+  const below=ov.querySelector('.tip-below-score');if(below&&r){below.querySelectorAll('.wc26-state-indicators').forEach(x=>x.remove());let pills=wc26StatusPills(r);if(pills)below.insertAdjacentHTML('afterbegin',pills);}
+}
+var __wc26BaseOpenTipV9=openTip;
+openTip=function(id){__wc26BaseOpenTipV9(id);wc26DecorateTipModal(id,'group')};
+var __wc26BaseOpenKoTipV9=openKoTip;
+openKoTip=function(id){__wc26BaseOpenKoTipV9(id);wc26DecorateTipModal(id,'ko')};
+var __wc26BaseRefreshOpenTipModalV9=refreshOpenTipModal;
+refreshOpenTipModal=function(){__wc26BaseRefreshOpenTipModalV9();const ov=document.querySelector('.tip-overlay[data-tip-id]');if(ov)wc26DecorateTipModal(ov.dataset.tipId,ov.dataset.tipKind||'group')};
+function communityPredScoreHtml(p,r,g){let tip=p&&validScore(p.h)&&validScore(p.a)?p.h+' - '+p.a+(wc26HasPenScore(p)?' (PEN '+wc26PenPair(p)+')':''):'-',real=r&&validScore(r.h)&&validScore(r.a)?r.h+' - '+r.a+(wc26HasPenScore(r)?' (PEN '+wc26PenPair(r)+')':''):'-',clock=liveClockLabel(r),isIntCom=r&&!r.finished&&String(r.status||'').toUpperCase().includes('INT'),clockPill=wc26StatusPills(r)+(clock?'<span class="tip-live-clock community-live-clock">'+clock+'</span>':'')+(isIntCom?'<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>':'');return'<div class="community-result"><div><span>Val&oacute;s</span><b class="community-real-score">'+clockPill+'<span class="community-real-value">'+real+'</span></b></div><div><span>Tipp</span><b>'+tip+'</b></div><small>'+esc(g?.label||'Várakozik')+'</small></div>'}
+
 function syncSpacer(){let t=document.getElementById('topBar'),s=document.getElementById('spacer'),h=Math.ceil(t.getBoundingClientRect().height||t.offsetHeight||148);s.style.height=h+'px';document.documentElement.style.setProperty('--top-h',h+'px');document.documentElement.style.setProperty('--control-top',(h+2)+'px');let cw=document.getElementById('ctrlWrap'),ch=cw?Math.ceil(cw.getBoundingClientRect().height||cw.offsetHeight||0):0;document.documentElement.style.setProperty('--ctrl-h',ch+'px')}
 function syncSoon(){syncSpacer();requestAnimationFrame(syncSpacer);setTimeout(syncSpacer,90);setTimeout(syncSpacer,220);setTimeout(syncSpacer,360)}
 function render(){
   const mainEl=document.getElementById('main');
   if(mainEl&&!mainEl._firstRender){mainEl._firstRender=true;if(!Object.keys(LIVE_RESULTS).length){mainEl.style.opacity='0';requestAnimationFrame(()=>{mainEl.style.transition='opacity .35s ease';mainEl.style.opacity='1'})};}
   if(S.tab!=='community')document.querySelectorAll('.community-preview').forEach(x=>x.remove());document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===S.tab));tblCtrl.classList.toggle('hidden',S.tab!=='table');koCtrl.classList.toggle('hidden',S.tab!=='knockout');mCtrl.classList.toggle('hidden',S.tab!=='matches');mRoundBar.classList.toggle('hidden',!(S.tab==='matches'&&MS.filt==='round'));mTeamBar.classList.toggle('hidden',!(S.tab==='matches'&&MS.filt==='team'));if(S.tab==='overview')renderOverview();else if(S.tab==='table')renderTables();else if(S.tab==='matches')renderMatches();else if(S.tab==='knockout')renderKO();else if(S.tab==='stats')renderStats();else if(S.tab==='community')renderCommunity();else renderStats();syncSpacer()}
-tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();loadMatchResultsFromBackendDb(true).finally(()=>{scheduleLiveSync();ensureLivePaintLoop();});syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();</script></body></html>
+tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();loadMatchResultsFromBackendDb(true).finally(()=>{wc26LoadKoPairsFromWorker(true).catch(()=>{});scheduleLiveSync();ensureLivePaintLoop();});syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();</script></body></html>
