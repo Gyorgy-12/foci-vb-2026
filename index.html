@@ -14646,4 +14646,145 @@ function communityPredScoreHtml(p,r,g){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v62 HT indicator fix: cards + match modal + scorer strip ===== */
+function wc26IsHalfTimeResult(r){
+  if(!r || r.finished) return false;
+  const blob = [
+    r.status, r.minute, r.period, r.shortDetail, r.detail, r.displayClock,
+    r.statusText, r.statusType, r.state, r.name, r.description
+  ].map(v=>String(v||'')).join(' ').toUpperCase();
+
+  return blob === 'HT' ||
+    /\bHT\b/.test(blob) ||
+    blob.includes('HALF TIME') ||
+    blob.includes('HALF-TIME') ||
+    blob.includes('HALFTIME') ||
+    blob.includes('STATUS_HALFTIME') ||
+    blob.includes('INTERVAL') ||
+    blob.includes('SZÜNET') ||
+    blob.includes('SZUNET');
+}
+function wc26IsAetResult(r){
+  const blob=[r?.status,r?.minute,r?.period,r?.shortDetail,r?.detail,r?.displayClock,r?.statusText,r?.name,r?.description].map(v=>String(v||'')).join(' ').toUpperCase();
+  return blob.includes('AET') || blob.includes('EXTRA TIME') || /\bET\b/.test(blob);
+}
+function wc26IsPenaltyResult(r){
+  const blob=[r?.status,r?.minute,r?.period,r?.shortDetail,r?.detail,r?.displayClock,r?.statusText,r?.name,r?.description].map(v=>String(v||'')).join(' ').toUpperCase();
+  return wc26HasPenScore(r) || blob.includes('PENAL') || /\bPEN\b/.test(blob) || /\bAP\b/.test(blob) || blob.includes('SHOOTOUT');
+}
+function wc26StatusPills(r,opts={}){
+  if(!r)return'';
+  const blob=[r.status,r.minute,r.period,r.shortDetail,r.detail,r.displayClock,r.statusText,r.name,r.description].map(v=>String(v||'')).join(' ').toUpperCase();
+  const finished=!!r.finished || blob==='FT' || /\bFT\b/.test(blob) || blob.includes('FULL TIME') || blob.includes('FINAL') || blob.includes('FINISHED');
+  const pills=[];
+
+  if(wc26IsHalfTimeResult(r)) pills.push(['ht','HT']);
+
+  if(opts.mode!=='card'){
+    if(finished && !wc26IsPenaltyResult(r) && !wc26IsAetResult(r)) pills.push(['ft','FT']);
+    if(wc26IsPenaltyResult(r)) pills.push(['pen','PEN']);
+    else if(wc26IsAetResult(r)) pills.push(['aet','AET']);
+  }
+
+  if(!pills.length)return'';
+  return '<span class="wc26-state-indicators">'+pills.map(([c,t])=>'<span class="wc26-status-pill '+c+'">'+t+'</span>').join('')+'</span>';
+}
+function wc26ModalStatusHtml(r){
+  const pills=wc26StatusPills(r,{mode:'modal'});
+  return pills?'<div class="wc26-modal-status">'+pills+'</div>':'';
+}
+function wc26HtClockPill(r){
+  return wc26IsHalfTimeResult(r) ? '<span class="tip-live-clock int-modal-badge wc26-ht-clock">HT</span>' : '';
+}
+function wc26EnsureHtIndicatorsInOpenModal(){
+  const ov=document.querySelector('.tip-overlay[data-tip-id]');
+  if(!ov)return;
+  const id=ov.dataset.tipId;
+  const r=LIVE_RESULTS?.[id]||actualFor({id});
+  if(!r)return;
+
+  const scoreBox=ov.querySelector('.tip-score-real');
+  if(scoreBox){
+    let old=scoreBox.parentElement?.querySelector('.wc26-modal-status');
+    if(old)old.remove();
+    const status=wc26ModalStatusHtml(r);
+    if(status)scoreBox.insertAdjacentHTML('afterend',status);
+  }
+
+  const below=ov.querySelector('.tip-below-score');
+  if(below && wc26IsHalfTimeResult(r)){
+    below.querySelectorAll('.tip-live-clock:not(.wc26-ht-clock), .wc26-state-indicators').forEach(el=>el.remove());
+    if(!below.querySelector('.wc26-ht-clock')) below.insertAdjacentHTML('afterbegin',wc26HtClockPill(r));
+  }
+}
+(function(){
+  const baseRefresh=typeof refreshOpenTipModal==='function'?refreshOpenTipModal:null;
+  if(baseRefresh && !window.__WC26_V62_REFRESH_WRAP__){
+    window.__WC26_V62_REFRESH_WRAP__=true;
+    refreshOpenTipModal=function(){
+      const out=baseRefresh.apply(this,arguments);
+      requestAnimationFrame(wc26EnsureHtIndicatorsInOpenModal);
+      return out;
+    };
+  }
+  const baseDecorate=typeof wc26DecorateTipModal==='function'?wc26DecorateTipModal:null;
+  if(baseDecorate && !window.__WC26_V62_DECORATE_WRAP__){
+    window.__WC26_V62_DECORATE_WRAP__=true;
+    wc26DecorateTipModal=function(){
+      const out=baseDecorate.apply(this,arguments);
+      requestAnimationFrame(wc26EnsureHtIndicatorsInOpenModal);
+      return out;
+    };
+  }
+
+  const st=document.createElement('style');
+  st.textContent=`
+    .tip-sheet .wc26-modal-status{
+      display:flex!important;
+      justify-content:center!important;
+      align-items:center!important;
+      flex-wrap:wrap!important;
+      gap:8px!important;
+      margin:12px auto 0!important;
+      width:100%!important;
+    }
+    .tip-sheet .wc26-modal-status .wc26-state-indicators{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:8px!important;
+    }
+    .tip-sheet .wc26-modal-status .wc26-status-pill,
+    .tip-below-score .wc26-ht-clock{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:42px!important;
+      height:28px!important;
+      padding:0 12px!important;
+      border-radius:999px!important;
+      font-size:13px!important;
+      font-weight:950!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      opacity:1!important;
+      box-shadow:none!important;
+    }
+    .tip-sheet .wc26-modal-status .wc26-status-pill.ht,
+    .tip-below-score .wc26-ht-clock{
+      background:rgba(74,198,255,.16)!important;
+      border:1px solid rgba(74,198,255,.38)!important;
+      color:#93ddff!important;
+    }
+    .tip-sheet .wc26-modal-status .wc26-status-pill.ft{background:rgba(42,220,123,.14)!important;border:1px solid rgba(42,220,123,.34)!important;color:#78f0aa!important;}
+    .tip-sheet .wc26-modal-status .wc26-status-pill.pen{background:rgba(255,184,64,.14)!important;border:1px solid rgba(255,184,64,.34)!important;color:#ffc96a!important;}
+    .tip-sheet .wc26-modal-status .wc26-status-pill.aet{background:rgba(196,168,255,.14)!important;border:1px solid rgba(196,168,255,.34)!important;color:#d8c4ff!important;}
+  `;
+  document.head.appendChild(st);
+
+  setTimeout(wc26EnsureHtIndicatorsInOpenModal,120);
+  setTimeout(wc26EnsureHtIndicatorsInOpenModal,700);
+})();
+
 </script></body></html>
