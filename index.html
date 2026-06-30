@@ -10384,4 +10384,287 @@ wc26DecorateTipModal = function(id,kind){
   }
 };
 
+
+/* ===== WC26 v20 top-tip reactive plain penalty ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .tip-your-tip-score{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:8px!important;
+      flex-wrap:wrap!important;
+    }
+    .tip-your-tip-score .wc26-inline-pen{
+      display:inline!important;
+      background:none!important;
+      border:none!important;
+      box-shadow:none!important;
+      padding:0!important;
+      margin:0!important;
+      border-radius:0!important;
+      color:inherit!important;
+      font-size:.88em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      letter-spacing:0!important;
+      transform:none!important;
+      vertical-align:baseline!important;
+    }
+    .tip-your-tip-banner.grade-exact .wc26-inline-pen,
+    .tip-your-tip-banner.grade-diff .wc26-inline-pen,
+    .tip-your-tip-banner.grade-outcome .wc26-inline-pen,
+    .tip-your-tip-banner.grade-miss .wc26-inline-pen{
+      color:inherit!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+function wc26TipScoreHtml(p){
+  if(!p||!validScore(p.h)||!validScore(p.a))return '-';
+  return p.h+' - '+p.a+(wc26HasPenScore(p)?'<span class="wc26-inline-pen">('+wc26PenPair(p)+')</span>':'');
+}
+
+
+/* ===== WC26 v21 community result cleanup ===== */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-result{
+      min-width:clamp(172px,16vw,250px)!important;
+      display:grid!important;
+      grid-template-columns:repeat(2,minmax(72px,auto))!important;
+      gap:8px 16px!important;
+      align-items:start!important;
+      justify-content:end!important;
+      text-align:right!important;
+    }
+    .community-result .community-score-col{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      gap:4px!important;
+      min-width:0!important;
+    }
+    .community-result .community-score-head{
+      font-size:11px!important;
+      font-weight:900!important;
+      text-transform:uppercase!important;
+      letter-spacing:.05em!important;
+      color:#7f8da0!important;
+      line-height:1!important;
+    }
+    .community-result .community-score-value{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:6px!important;
+      flex-wrap:wrap!important;
+      font-size:clamp(19px,1.7vw,25px)!important;
+      font-weight:950!important;
+      font-variant-numeric:tabular-nums!important;
+      line-height:1.05!important;
+      color:#fff!important;
+    }
+    .community-result .community-score-main{color:inherit!important;}
+    .community-result .community-score-pen{
+      font-size:.82em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      letter-spacing:0!important;
+      color:inherit!important;
+      opacity:.98!important;
+      white-space:nowrap!important;
+    }
+    .community-result .community-real-col .community-score-value,
+    .community-result .community-real-col .community-score-main,
+    .community-result .community-real-col .community-score-pen{
+      color:#ff6f84!important;
+    }
+    .community-result .community-real-score{
+      position:relative!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:flex-end!important;
+    }
+    .community-pred .community-result .community-live-clock{
+      position:static!important;
+      margin:0 0 4px 0!important;
+      align-self:flex-end!important;
+      order:-1!important;
+    }
+    .community-result .community-grade-note{
+      grid-column:1/-1!important;
+      justify-self:end!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      padding:4px 10px!important;
+      border-radius:999px!important;
+      font-size:11px!important;
+      font-weight:850!important;
+      line-height:1.15!important;
+      white-space:nowrap!important;
+      border:1px solid rgba(255,255,255,.08)!important;
+      background:rgba(255,255,255,.03)!important;
+      color:#c6d1dc!important;
+      margin-top:2px!important;
+    }
+    .community-result .community-grade-note.grade-exact{background:rgba(46,204,113,.12)!important;border-color:rgba(46,204,113,.25)!important;color:#70f0a6!important;}
+    .community-result .community-grade-note.grade-diff,
+    .community-result .community-grade-note.grade-draw,
+    .community-result .community-grade-note.grade-draw-pen-diff{background:rgba(255,214,102,.12)!important;border-color:rgba(255,214,102,.25)!important;color:#ffe27a!important;}
+    .community-result .community-grade-note.grade-outcome,
+    .community-result .community-grade-note.grade-draw-pen-outcome{background:rgba(255,169,64,.12)!important;border-color:rgba(255,169,64,.25)!important;color:#ffb35f!important;}
+    .community-result .community-grade-note.grade-miss{background:rgba(240,64,80,.12)!important;border-color:rgba(240,64,80,.25)!important;color:#ff8796!important;}
+    @media (max-width: 720px){
+      .community-result{
+        min-width:150px!important;
+        grid-template-columns:repeat(2,minmax(64px,auto))!important;
+        gap:6px 12px!important;
+      }
+      .community-result .community-score-value{font-size:18px!important;gap:4px!important;}
+      .community-result .community-score-head{font-size:10px!important;}
+      .community-result .community-grade-note{font-size:10px!important;padding:4px 8px!important;}
+    }
+  `;
+  document.head.appendChild(st);
+})();
+function wc26CommunityScoreHtml(obj){
+  if(!obj||!validScore(obj.h)||!validScore(obj.a)) return '<span class="community-score-main">-</span>';
+  const main = esc(obj.h+' - '+obj.a);
+  const pen = wc26HasPenScore(obj) ? '<span class="community-score-pen">('+esc(wc26PenPair(obj))+')</span>' : '';
+  return '<span class="community-score-main">'+main+'</span>'+pen;
+}
+function wc26CommunityGradeClass(cat){
+  if(!cat) return '';
+  if(String(cat).indexOf('exact')===0) return 'grade-exact';
+  if(String(cat).indexOf('diff')===0 || String(cat).indexOf('draw')===0) return 'grade-diff';
+  if(String(cat).indexOf('outcome')===0) return 'grade-outcome';
+  return 'grade-miss';
+}
+function communityPredScoreHtml(p,r,g){
+  const realHtml = wc26CommunityScoreHtml(r);
+  const tipHtml = wc26CommunityScoreHtml(p);
+  const clock=liveClockLabel(r), isIntCom=r&&!r.finished&&String(r.status||'').toUpperCase().includes('INT');
+  const stateHtml=(r&&!r.finished?wc26StatusPills(r,{mode:'modal'}):'')
+    +(clock?'<span class="tip-live-clock community-live-clock">'+clock+'</span>':'')
+    +(isIntCom?'<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>':'');
+  const gradeCls=wc26CommunityGradeClass(g?.cat||'');
+  const gradeLabel=esc(g?.label||'Várakozik');
+  return '<div class="community-result">'
+    +'<div class="community-score-col community-real-col"><span class="community-score-head">Valós</span><b class="community-real-score community-score-value">'+stateHtml+realHtml+'</b></div>'
+    +'<div class="community-score-col community-tip-col"><span class="community-score-head">Tipp</span><b class="community-score-value">'+tipHtml+'</b></div>'
+    +'<small class="community-grade-note '+gradeCls+'">'+gradeLabel+'</small>'
+    +'</div>';
+}
+
+
+/* ===== WC26 v22 KO display sanity: no scheduled 0-0, no duplicate KO rows ===== */
+function wc26IsStartedOrFinishedResult(r){
+  if(!r) return false;
+  const s = String((r.status||'')+' '+(r.minute||'')).toUpperCase();
+  if(r.finished || r.started) return true;
+  if(s.includes('SCHEDULED') || s.includes('STATUS_SCHEDULED') || s==='') return false;
+  return validScore(r.h) && validScore(r.a) && (
+    s.includes('FT') || s.includes('AET') || s.includes('PEN') ||
+    s.includes('LIVE') || s.includes('HT') || /(^|\D)\d{1,3}(\+?\d{0,2})?('?|\s|$)/.test(s)
+  );
+}
+function wc26DisplayActual(m){
+  const r = actualFor({id:m&&m.id});
+  return wc26IsStartedOrFinishedResult(r) ? r : null;
+}
+function wc26KoDisplayKey(m){
+  const h = String(m?.h||m?.hs||'').trim().toLowerCase();
+  const a = String(m?.a||m?.as||'').trim().toLowerCase();
+  const sch = (m?.id && KO_SCHEDULE[m.id]) || {};
+  const d = String(sch.date||m?.date||'');
+  const t = String(sch.t||m?.t||'');
+  const rd = String(m?.title||m?.round||'');
+  return [rd,d,t,h,a].join('|');
+}
+function wc26DedupeKoMatches(arr){
+  const seen = new Set(), out = [];
+  for(const m of arr||[]){
+    const key = wc26KoDisplayKey(m);
+    if(seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+}
+
+/* Community list: scheduled 0-0 must not be displayed as a real result. */
+function wc26CommunityScoreHtml(obj){
+  if(!obj || !validScore(obj.h) || !validScore(obj.a)) return '<span class="community-score-main">-</span>';
+  const main = esc(obj.h+' - '+obj.a);
+  const pen = wc26HasPenScore(obj) ? '<span class="community-score-pen">('+esc(wc26PenPair(obj))+')</span>' : '';
+  return '<span class="community-score-main">'+main+'</span>'+pen;
+}
+function communityPredScoreHtml(p,r,g){
+  const rr = wc26IsStartedOrFinishedResult(r) ? r : null;
+  const realHtml = wc26CommunityScoreHtml(rr);
+  const tipHtml = wc26CommunityScoreHtml(p);
+  const clock=liveClockLabel(rr), isIntCom=rr&&!rr.finished&&String(rr.status||'').toUpperCase().includes('INT');
+  const stateHtml=(rr&&!rr.finished?wc26StatusPills(rr,{mode:'modal'}):'')
+    +(clock?'<span class="tip-live-clock community-live-clock">'+clock+'</span>':'')
+    +(isIntCom?'<span class="tip-live-clock community-live-clock int-modal-badge">INT.</span>':'');
+  const gradeCls=wc26CommunityGradeClass(g?.cat||'');
+  const gradeLabel=esc((rr && g?.label) ? g.label : 'Várakozik');
+  return '<div class="community-result">'
+    +'<div class="community-score-col community-real-col"><span class="community-score-head">Valós</span><b class="community-real-score community-score-value">'+stateHtml+realHtml+'</b></div>'
+    +'<div class="community-score-col community-tip-col"><span class="community-score-head">Tipp</span><b class="community-score-value">'+tipHtml+'</b></div>'
+    +'<small class="community-grade-note '+gradeCls+'">'+gradeLabel+'</small>'
+    +'</div>';
+}
+function communityKoRows(item,rounds){
+  rounds=Array.isArray(rounds)?rounds:[rounds];
+  let ms=wc26DedupeKoMatches(
+    communityKoAll(item)
+      .filter(m=>!rounds[0]||rounds.includes(m.title)||rounds.includes(m.round))
+      .sort((a,b)=>(koMatchKickoff(a)||0)-(koMatchKickoff(b)||0))
+  );
+  let rows=ms.map(m=>{
+    let p=(item.ko||{})[m.id],r=wc26DisplayActual(m),
+        g=r&&validScore(r.h)&&validScore(r.a)?gradeKoTip(p,r):{cat:'pending',pts:0,label:'Várakozik'},
+        home=m.h||m.hs,away=m.a||m.as;
+    return'<div class="community-pred'+communityPredGradeClass(g)+'"><div class="community-teams"><div class="community-match-line"><div class="community-team">'+(m.h?crest(m.h,'24px'):'')+'<span>'+esc(home||'')+'</span></div><span class="community-vs">-</span><div class="community-team">'+(m.a?crest(m.a,'24px'):'')+'<span>'+esc(away||'')+'</span></div></div><small>'+esc(m.title||m.round||'Kieséses kör')+'</small></div>'+communityPredScoreHtml(p,r,g)+'</div>';
+  }).join('');
+  return rows||'<div class="community-empty">Még nincs ilyen körhöz megjeleníthető tipp.</div>';
+}
+
+/* Matches tab: remove duplicated KO fixtures caused by mixed KO sources. */
+var __wc26BaseKoMatchesForMatchesV22 = (typeof koMatchesForMatches === 'function') ? koMatchesForMatches : null;
+if(__wc26BaseKoMatchesForMatchesV22){
+  koMatchesForMatches = function(){
+    return wc26DedupeKoMatches(__wc26BaseKoMatchesForMatchesV22());
+  };
+}
+var __wc26BaseCommunityKoMatchesV22 = (typeof communityKoMatches === 'function') ? communityKoMatches : null;
+if(__wc26BaseCommunityKoMatchesV22){
+  communityKoMatches = function(pred,ko){
+    return wc26DedupeKoMatches(__wc26BaseCommunityKoMatchesV22(pred,ko));
+  };
+}
+var __wc26BaseCommunityKoAllV22 = (typeof communityKoAll === 'function') ? communityKoAll : null;
+if(__wc26BaseCommunityKoAllV22){
+  communityKoAll = function(item){
+    return wc26DedupeKoMatches(__wc26BaseCommunityKoAllV22(item));
+  };
+}
+
+/* Score cards: scheduled 0-0 should behave as no real score. */
+var __wc26ActualForV22 = actualFor;
+actualFor = function(m){
+  const r = __wc26ActualForV22(m);
+  if(!r) return r;
+  const raw = LIVE_RESULTS[m&&m.id] || {};
+  const rawStatus = String(raw.status||'').toUpperCase();
+  if(!raw.started && !raw.finished && rawStatus.includes('SCHEDULED')){
+    return {...r, h:null, a:null, pH:null, pA:null, started:false, finished:false, minute:null, status:'SCHEDULED'};
+  }
+  return r;
+};
+
 </script></body></html>
