@@ -16312,18 +16312,20 @@ function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
 })();
 
 
-/* ===== WC26 v78 from v71: conflict-aware live data + stats without aggressive backend read ===== */
+/* ===== WC26 v79 from v71: MINIMAL stats fix only, no reads, no wrappers, no timers ===== */
 
 /*
-  Irányváltás:
-  - nem hard-refresh /results
-  - nem modal DOM-ból olvasunk
-  - a konfliktust kezeljük: ha egy régi finished /results rekord ütközik egy frissebb live Firestore rekorddal,
-    akkor a score/FT marad, de a frissebb lapok/gólszerzők beolvadnak.
-  Ez pont azt fogja meg, amikor a modal már lát új lapot, de a stat egy finished/stale guard miatt nem.
+  Ez direkt minimál:
+  - NINCS backend read
+  - NINCS Firestore read
+  - NINCS mergeLiveResults override
+  - NINCS interval
+  - NINCS render wrapper
+  Csak a statisztikai számolófüggvényeket írja át úgy, hogy ugyanabból a LIVE_RESULTS memóriából dolgozzanak,
+  amiből a modal / gólszerző-lista is.
 */
 
-function wc26ArrV78(v){
+function wc26ArrV79(v){
   if(Array.isArray(v)) return v;
   if(typeof v === 'string'){
     try{
@@ -16334,71 +16336,13 @@ function wc26ArrV78(v){
   return [];
 }
 
-function wc26TeamNormV78(v){
+function wc26TeamV79(v){
   v = String(v || '').trim();
   if(!v || v === 'TBD' || v === 'null' || v === 'undefined') return '';
   try{ return normalizeTeamName(v) || v; }catch(e){ return v; }
 }
 
-function wc26EventSigV78(e, kind=''){
-  const team = String(e?.team || e?.side || e?.teamSide || '').toLowerCase();
-  const player = String(e?.player || e?.playerName || e?.name || e?.person || '').toLowerCase().trim();
-  const minute = String(e?.minute || e?.time || e?.displayMinute || e?.clock || e?.matchMinute || '').replace(/\s+/g,'').toLowerCase();
-  const type = String(e?.type || e?.card || e?.eventType || e?.kind || e?.name || kind || '').toLowerCase();
-  return [kind,type,team,player,minute].join('|');
-}
-
-function wc26MergeEventArrayV78(a,b,kind=''){
-  const out = [];
-  const seen = new Set();
-  wc26ArrV78(a).concat(wc26ArrV78(b)).forEach(e=>{
-    if(!e || typeof e !== 'object') return;
-    const sig = wc26EventSigV78(e,kind);
-    if(seen.has(sig)) return;
-    seen.add(sig);
-    out.push(e);
-  });
-  return out;
-}
-
-function wc26EventCountV78(r){
-  return wc26ArrV78(r?.redCards).length + wc26ArrV78(r?.yellowCards).length + wc26ArrV78(r?.scorers).length;
-}
-
-function wc26MergeConflictResultV78(oldR,newR){
-  if(!oldR) return newR;
-  if(!newR) return oldR;
-
-  const merged = {...oldR};
-
-  merged.scorers = wc26MergeEventArrayV78(oldR.scorers,newR.scorers,'goal');
-  merged.redCards = wc26MergeEventArrayV78(oldR.redCards,newR.redCards,'red');
-  merged.yellowCards = wc26MergeEventArrayV78(oldR.yellowCards,newR.yellowCards,'yellow');
-
-  /* Keep stable/final score state from old if old is finished and incoming is not. */
-  if(!(oldR.finished && !newR.finished)){
-    if(validScore(newR.h)) merged.h = newR.h;
-    if(validScore(newR.a)) merged.a = newR.a;
-    if(validScore(newR.pH)) merged.pH = newR.pH;
-    if(validScore(newR.pA)) merged.pA = newR.pA;
-    merged.started = !!newR.started;
-    merged.finished = !!newR.finished;
-    merged.status = newR.status ?? merged.status;
-    merged.minute = newR.minute ?? merged.minute;
-  }
-
-  merged.homeTeam = newR.homeTeam || merged.homeTeam;
-  merged.awayTeam = newR.awayTeam || merged.awayTeam;
-  merged.date = newR.date || merged.date;
-  merged.time = newR.time || merged.time;
-  merged.kickoff = newR.kickoff || merged.kickoff;
-  merged.source = (merged.source || '') + (newR.source ? '+merge:'+newR.source : '+merge');
-  merged.updatedAt = newR.updatedAt || merged.updatedAt || new Date().toISOString();
-
-  return merged;
-}
-
-function wc26KoMetaV78(id){
+function wc26KoMetaV79(id){
   id = String(id || '');
   const idx = +(id.match(/-(\d+)$/)?.[1] || 0);
   if(id.includes('R32')) return {title:'Legjobb 32', index:idx};
@@ -16410,11 +16354,19 @@ function wc26KoMetaV78(id){
   return {title:'Kieséses kör', index:idx};
 }
 
-function wc26AllMatchMapV78(){
+function wc26MatchMapV79(){
   const map = new Map();
 
   (FX || []).forEach(m=>{
-    if(m && m.id) map.set(m.id,{id:m.id,h:m.h,a:m.a,g:m.g||'',d:m.d||m.date||'',title:m.title||'',index:m.index||''});
+    if(m && m.id) map.set(m.id, {
+      id:m.id,
+      h:m.h,
+      a:m.a,
+      g:m.g || '',
+      d:m.d || m.date || '',
+      title:m.title || '',
+      index:m.index || ''
+    });
   });
 
   try{
@@ -16422,11 +16374,11 @@ function wc26AllMatchMapV78(){
     const bronze = buildBronze(rounds);
     rounds.flatMap(r=>r.matches).concat([bronze]).forEach(m=>{
       if(!m || !m.id) return;
-      const meta = wc26KoMetaV78(m.id);
-      map.set(m.id,{
+      const meta = wc26KoMetaV79(m.id);
+      map.set(m.id, {
         id:m.id,
-        h:wc26TeamNormV78(m.h || m.homeTeam || ''),
-        a:wc26TeamNormV78(m.a || m.awayTeam || ''),
+        h:wc26TeamV79(m.h || m.homeTeam || ''),
+        a:wc26TeamV79(m.a || m.awayTeam || ''),
         g:'',
         d:m.date || '',
         title:m.title || meta.title,
@@ -16437,12 +16389,12 @@ function wc26AllMatchMapV78(){
 
   Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
     const old = map.get(id) || {};
-    const meta = wc26KoMetaV78(id);
-    map.set(id,{
+    const meta = wc26KoMetaV79(id);
+    map.set(id, {
       ...old,
       id,
-      h:wc26TeamNormV78(r?.homeTeam || r?.home || old.h || ''),
-      a:wc26TeamNormV78(r?.awayTeam || r?.away || old.a || ''),
+      h:wc26TeamV79(r?.homeTeam || r?.home || old.h || ''),
+      a:wc26TeamV79(r?.awayTeam || r?.away || old.a || ''),
       g:old.g || '',
       d:old.d || r?.date || '',
       title:old.title || meta.title,
@@ -16453,108 +16405,33 @@ function wc26AllMatchMapV78(){
   return map;
 }
 
-function wc26CardTeamV78(card, match){
-  const raw = String(card?.team || card?.side || card?.teamSide || '').trim();
+function wc26SideTeamV79(ev, match){
+  const raw = String(ev?.team || ev?.side || ev?.teamSide || '').trim();
   const low = raw.toLowerCase();
 
-  if(low === 'a' || low === 'away') return wc26TeamNormV78(match.a);
-  if(low === 'h' || low === 'home') return wc26TeamNormV78(match.h);
+  if(low === 'a' || low === 'away') return wc26TeamV79(match.a);
+  if(low === 'h' || low === 'home') return wc26TeamV79(match.h);
 
   if(raw && raw.length > 1){
-    const n = wc26TeamNormV78(raw);
-    if(n) return n;
+    const named = wc26TeamV79(raw);
+    if(named) return named;
   }
 
-  return wc26TeamNormV78(match.h);
+  return wc26TeamV79(match.h);
 }
 
-/* Override final merge path: do not throw away card/scorer updates just because result-state looks older. */
-function mergeLiveResults(next){
-  let changed=false, pruneNeeded=false, changedMap={};
-
-  Object.entries(next || {}).forEach(([id,obj])=>{
-    let r = normalizeLiveResult(id,obj);
-    if(!r) return;
-
-    let old = LIVE_RESULTS[id];
-    let incomingLooksBlocked = false;
-
-    try{
-      incomingLooksBlocked =
-        (typeof wc26IncomingIsStale === 'function' && wc26IncomingIsStale(id,r,old)) ||
-        (old && old.finished && !r.finished);
-    }catch(e){
-      incomingLooksBlocked = !!(old && old.finished && !r.finished);
-    }
-
-    let nextResult = r;
-
-    if(old && incomingLooksBlocked){
-      nextResult = wc26MergeConflictResultV78(old,r);
-    }else if(old){
-      nextResult = wc26MergeConflictResultV78(old,r);
-      /* If this is a normal newer result, allow incoming score/state to win. */
-      if(!(old.finished && !r.finished)){
-        nextResult = {
-          ...nextResult,
-          h:r.h, a:r.a, pH:r.pH, pA:r.pA,
-          started:r.started, finished:r.finished,
-          status:r.status, minute:r.minute,
-          odds:r.odds || nextResult.odds,
-          oddsUpdatedAt:r.oddsUpdatedAt || nextResult.oddsUpdatedAt,
-          kickoff:r.kickoff || nextResult.kickoff
-        };
-      }
-    }
-
-    if(JSON.stringify(old) !== JSON.stringify(nextResult)){
-      LIVE_RESULTS[id]=nextResult;
-      changedMap[id]=nextResult;
-      changed=true;
-
-      if(nextResult.finished && (!old || !old.finished || old.h!==nextResult.h || old.a!==nextResult.a || old.pH!==nextResult.pH || old.pA!==nextResult.pA)){
-        pruneNeeded=true;
-      }
-    }
-  });
-
-  if(changed){
-    if(pruneNeeded && typeof pruneStaleKoPred === 'function') pruneStaleKoPred(true);
-
-    const modalOpen=!!document.querySelector('.tip-overlay');
-    if(!modalOpen){
-      if(S.tab==='matches'||S.tab==='overview'){
-        let patched=false;
-        try{ patched=patchLiveRows(changedMap); }catch(e){}
-        /* Overview stat cards need full rerender when events/cards changed. */
-        if(S.tab==='overview' || !patched || pruneNeeded) render();
-      }else if(S.tab==='knockout'){
-        try{ patchKoCards(); }catch(e){}
-        if(pruneNeeded) render();
-      }else if(['table','stats','community'].includes(S.tab)){
-        render();
-      }
-    }
-
-    refreshOpenTipModal();
-    refreshCommunityPreviews();
-  }
-
-  return changed;
-}
-
-/* Fair play from the same LIVE_RESULTS memory as the modal, including KO/live/final. */
+/* Fair play: group + KO + live/final, whatever is already in LIVE_RESULTS. */
 function calcFairPlay(){
   const fp = {};
   const ensure = n => {
-    n = wc26TeamNormV78(n);
+    n = wc26TeamV79(n);
     if(!n) return '';
-    if(!fp[n]) fp[n] = {yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0};
+    if(!fp[n]) fp[n] = {yellow:0, yellowRed:0, red:0, yellowPlusRed:0, score:0};
     return n;
   };
 
   (ALL || []).forEach(ensure);
-  const matches = wc26AllMatchMapV78();
+  const matches = wc26MatchMapV79();
 
   Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
     if(!r || !(r.started || r.finished)) return;
@@ -16562,15 +16439,16 @@ function calcFairPlay(){
     const m = matches.get(id) || {};
     const h = ensure(r.homeTeam || r.home || m.h);
     const a = ensure(r.awayTeam || r.away || m.a);
+
     if(!h && !a) return;
 
-    wc26ArrV78(r.yellowCards).forEach(c=>{
-      const team = wc26CardTeamV78(c,{h,a});
+    wc26ArrV79(r.yellowCards).forEach(c=>{
+      const team = wc26SideTeamV79(c, {h,a});
       if(team && fp[team]) fp[team].yellow++;
     });
 
-    wc26ArrV78(r.redCards).forEach(c=>{
-      const team = wc26CardTeamV78(c,{h,a});
+    wc26ArrV79(r.redCards).forEach(c=>{
+      const team = wc26SideTeamV79(c, {h,a});
       if(!team || !fp[team]) return;
 
       const blob = JSON.stringify(c || {}).toLowerCase();
@@ -16604,6 +16482,7 @@ function calcFairPlay(){
 function topCardsHtml(){
   const fp=calcFairPlay();
   const teams=Object.keys(fp);
+
   const YC='<span style="display:inline-block;width:.5em;height:.72em;background:#f5c842;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const RC='<span style="display:inline-block;width:.5em;height:.72em;background:#e03040;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const YRC='<span style="display:inline-block;width:.8em;height:.72em;background:linear-gradient(90deg,#f5c842 50%,#e03040 50%);border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
@@ -16628,6 +16507,7 @@ function topCardsHtml(){
   }
 
   let out='';
+
   if(byYellow.length){
     out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 10</h2>'
       +'<div class="wc-stat-list stat-match-list">'
@@ -16656,17 +16536,18 @@ function topCardsHtml(){
   return out;
 }
 
+/* Top scorers from LIVE_RESULTS too, but still no reads. */
 function topScorersList(){
   const counts={};
-  const matches=wc26AllMatchMapV78();
+  const matches=wc26MatchMapV79();
 
   Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
-    const m=matches.get(id) || {};
-    wc26ArrV78(r?.scorers).forEach(s=>{
+    const m = matches.get(id) || {};
+    wc26ArrV79(r?.scorers).forEach(s=>{
       const player=String(s?.player || s?.playerName || s?.name || '').trim();
       if(!player || s?.og) return;
 
-      const team=wc26CardTeamV78(s,{
+      const team=wc26SideTeamV79(s, {
         h:r?.homeTeam || r?.home || m.h,
         a:r?.awayTeam || r?.away || m.a
       });
@@ -16682,136 +16563,29 @@ function topScorersList(){
     .slice(0,20);
 }
 
-function wc26RealStatRowsV78(){
-  const matches=wc26AllMatchMapV78();
-  const out=[];
-
-  Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
-    if(!r || !(r.started || r.finished) || !validScore(r.h) || !validScore(r.a)) return;
-
-    const m=matches.get(id) || {};
-    const h=wc26TeamNormV78(r.homeTeam || r.home || m.h);
-    const a=wc26TeamNormV78(r.awayTeam || r.away || m.a);
-    if(!h || !a) return;
-
-    out.push({
-      m:{id,h,a,g:m.g||'',d:m.d||r.date||'',title:m.title||wc26KoMetaV78(id).title,index:m.index||wc26KoMetaV78(id).index},
-      p:{h:+r.h,a:+r.a},
-      source:'Valós'
-    });
-  });
-
-  return out;
-}
-
-function topMatchesHtml(){
-  const realIds = new Set(Object.keys(LIVE_RESULTS || {}).filter(id=>{
-    const r=LIVE_RESULTS[id];
-    return r && (r.started || r.finished) && validScore(r.h) && validScore(r.a);
-  }));
-
-  const realRes=wc26RealStatRowsV78();
-
-  const tipRes=(FX||[])
-    .filter(x=>!realIds.has(x.id))
-    .map(x=>({m:x,p:PRED[x.id],source:'Tipp'}))
-    .filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a));
-
-  let koTipRes=[];
-  try{
-    const rounds=buildKO();
-    koTipRes=rounds.flatMap(r=>r.matches).concat([buildBronze(rounds)])
-      .filter(m=>m&&m.h&&m.a&&!realIds.has(m.id))
-      .map(m=>({m:{id:m.id,h:m.h,a:m.a,g:'',d:m.date||'',title:m.title,index:m.index},p:KO_PRED[m.id],source:'Tipp'}))
-      .filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a));
-  }catch(e){}
-
-  const res=realRes.concat(tipRes,koTipRes);
-  const goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
-  const diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
-
-  return '<section class="card"><h2 class="card-title">Leggólosabb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
-    +(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs adat','A valós eredmények után frissül','0')).join(''))
-    +'</div></section><section class="card"><h2 class="card-title">Legegyoldalúbb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
-    +(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs lejátszott mérkőzés','Gólkülönbség: 0','0')).join(''))
-    +'</div></section>';
-}
-
-/* Soft read: only the tiny active live collection, throttled.
-   This is the alternate read path, not aggressive /results no-store. */
-async function wc26SoftReadActiveLiveDocsV78(reason='soft'){
-  if(FROZEN_MODE || !wc26Db || !WC26_LIVE_COLLECTION) return false;
-  const now=Date.now();
-  if(window.__WC26_V78_SOFT_READ_RUNNING__) return false;
-  if(window.__WC26_V78_LAST_SOFT_READ__ && now-window.__WC26_V78_LAST_SOFT_READ__<45000) return false;
-
-  window.__WC26_V78_SOFT_READ_RUNNING__=true;
-  window.__WC26_V78_LAST_SOFT_READ__=now;
-
-  try{
-    const snap = await Promise.race([
-      wc26Db.collection(WC26_LIVE_COLLECTION).where('liveActive','==',true).get(),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('active-live-docs-timeout')),5500))
-    ]);
-
-    const incoming={};
-    snap.forEach(doc=>{ incoming[doc.id]=wc26PlainFirestoreData(doc); });
-
-    if(Object.keys(incoming).length){
-      const changed=mergeLiveResults(incoming);
-      if(changed && (S?.tab==='overview'||S?.tab==='stats')) render();
-      return changed;
-    }
-    return false;
-  }catch(e){
-    console.warn('WC26 v78 soft active-doc read failed:', reason, e);
-    return false;
-  }finally{
-    window.__WC26_V78_SOFT_READ_RUNNING__=false;
-  }
-}
-
-(function(){
-  if(window.__WC26_V78_SOFT_STATS_INSTALLED__) return;
-  window.__WC26_V78_SOFT_STATS_INSTALLED__=true;
-
-  const run=(reason,delay=120)=>setTimeout(()=>{
-    if(!document.hidden && (S?.tab==='overview'||S?.tab==='stats')){
-      wc26SoftReadActiveLiveDocsV78(reason).then(()=>{try{render();}catch(e){}});
-    }
-  },delay);
-
-  document.addEventListener('click',e=>{
-    const t=e.target.closest?.('.tab[data-tab], [data-tab]');
-    if(!t) return;
-    const tab=t.dataset?.tab;
-    if(tab==='overview'||tab==='stats') run('tab-'+tab,200);
-  },true);
-
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible') run('visible',200);
-  });
-
-  window.addEventListener('focus',()=>run('focus',200));
-
-  if(window.__WC26_V78_STATS_REFRESH__) clearInterval(window.__WC26_V78_STATS_REFRESH__);
-  window.__WC26_V78_STATS_REFRESH__=setInterval(()=>{
-    if(!document.hidden && !document.querySelector('.tip-overlay') && (S?.tab==='overview'||S?.tab==='stats')){
-      wc26SoftReadActiveLiveDocsV78('timer').finally(()=>{try{render();}catch(e){}});
-    }
-  },30000);
-})();
-
-window.WC26_CARD_DEBUG = function(team='Mexico'){
+window.WC26_STAT_MEMORY_DEBUG = function(team='Mexico'){
   const fp=calcFairPlay();
-  const matches=wc26AllMatchMapV78();
+  const matches=wc26MatchMapV79();
   return {
     team,
     fairPlay: fp[team] || null,
-    liveResults: Object.entries(LIVE_RESULTS||{}).filter(([id,r])=>{
+    docs:Object.entries(LIVE_RESULTS||{}).filter(([id,r])=>{
       const m=matches.get(id)||{};
       return String(r?.homeTeam||m.h||'').includes(team) || String(r?.awayTeam||m.a||'').includes(team);
-    }).map(([id,r])=>({id,homeTeam:r.homeTeam,awayTeam:r.awayTeam,h:r.h,a:r.a,finished:r.finished,status:r.status,redCards:r.redCards,yellowCards:r.yellowCards,updatedAt:r.updatedAt,source:r.source}))
+    }).map(([id,r])=>({
+      id,
+      homeTeam:r.homeTeam,
+      awayTeam:r.awayTeam,
+      h:r.h,
+      a:r.a,
+      started:r.started,
+      finished:r.finished,
+      redCards:r.redCards,
+      yellowCards:r.yellowCards,
+      scorers:r.scorers,
+      source:r.source,
+      updatedAt:r.updatedAt
+    }))
   };
 };
 
