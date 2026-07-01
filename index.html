@@ -16312,177 +16312,244 @@ function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
 })();
 
 
-/* ===== WC26 v79 from v71: MINIMAL stats fix only, no reads, no wrappers, no timers ===== */
+/* ===== WC26 v80 from v71: stats derived from the SAME modal HTML logic ===== */
 
 /*
-  Ez direkt minimál:
-  - NINCS backend read
-  - NINCS Firestore read
-  - NINCS mergeLiveResults override
-  - NINCS interval
-  - NINCS render wrapper
-  Csak a statisztikai számolófüggvényeket írja át úgy, hogy ugyanabból a LIVE_RESULTS memóriából dolgozzanak,
-  amiből a modal / gólszerző-lista is.
+  Na ez már tényleg más irány:
+  - nem backendből húz újra agresszíven
+  - nem Firestore-t darál
+  - nem merge-logikát borít
+  - hanem a statisztikák ugyanazt a modal-render logikát használják:
+      goalScorersHtml(r, teams) + redCardsHtml(r, teams)
+    tehát ami a meccsmodalban látszik gól/sárga/piros eseményként,
+    az ebből a generált HTML-ből számolódik vissza a statokba.
 */
 
-function wc26ArrV79(v){
-  if(Array.isArray(v)) return v;
-  if(typeof v === 'string'){
-    try{
-      const x = JSON.parse(v);
-      return Array.isArray(x) ? x : [];
-    }catch(e){ return []; }
-  }
-  return [];
+function wc26KoMetaV80(id){
+  id=String(id||'');
+  const idx=+(id.match(/-(\d+)$/)?.[1]||0);
+  if(id.includes('R32'))return{title:'Legjobb 32',index:idx};
+  if(id.includes('R16'))return{title:'Nyolcaddöntő',index:idx};
+  if(id.includes('QF'))return{title:'Negyeddöntő',index:idx};
+  if(id.includes('SF'))return{title:'Elődöntő',index:idx};
+  if(id.includes('BR'))return{title:'Bronzmeccs',index:idx||1};
+  if(id.includes('F-'))return{title:'Döntő',index:idx||1};
+  return{title:'Kieséses kör',index:idx};
 }
 
-function wc26TeamV79(v){
-  v = String(v || '').trim();
-  if(!v || v === 'TBD' || v === 'null' || v === 'undefined') return '';
-  try{ return normalizeTeamName(v) || v; }catch(e){ return v; }
+function wc26NormTeamV80(v){
+  v=String(v||'').trim();
+  if(!v||v==='TBD'||v==='null'||v==='undefined')return'';
+  try{return normalizeTeamName(v)||v;}catch(e){return v;}
 }
 
-function wc26KoMetaV79(id){
-  id = String(id || '');
-  const idx = +(id.match(/-(\d+)$/)?.[1] || 0);
-  if(id.includes('R32')) return {title:'Legjobb 32', index:idx};
-  if(id.includes('R16')) return {title:'Nyolcaddöntő', index:idx};
-  if(id.includes('QF')) return {title:'Negyeddöntő', index:idx};
-  if(id.includes('SF')) return {title:'Elődöntő', index:idx};
-  if(id.includes('BR')) return {title:'Bronzmeccs', index:idx || 1};
-  if(id.includes('F-')) return {title:'Döntő', index:idx || 1};
-  return {title:'Kieséses kör', index:idx};
-}
+function wc26AllModalStatMatchesV80(){
+  const out=[];
+  const seen=new Set();
 
-function wc26MatchMapV79(){
-  const map = new Map();
-
-  (FX || []).forEach(m=>{
-    if(m && m.id) map.set(m.id, {
+  (FX||[]).forEach(m=>{
+    if(!m||!m.id||seen.has(m.id))return;
+    seen.add(m.id);
+    out.push({
       id:m.id,
+      kind:'group',
       h:m.h,
       a:m.a,
-      g:m.g || '',
-      d:m.d || m.date || '',
-      title:m.title || '',
-      index:m.index || ''
+      g:m.g||'',
+      d:m.d||m.date||'',
+      title:m.title||'',
+      index:m.index||'',
+      raw:m
     });
   });
 
   try{
-    const rounds = buildKO();
-    const bronze = buildBronze(rounds);
+    const rounds=buildKO();
+    const bronze=buildBronze(rounds);
     rounds.flatMap(r=>r.matches).concat([bronze]).forEach(m=>{
-      if(!m || !m.id) return;
-      const meta = wc26KoMetaV79(m.id);
-      map.set(m.id, {
+      if(!m||!m.id||seen.has(m.id))return;
+      seen.add(m.id);
+      const meta=wc26KoMetaV80(m.id);
+      out.push({
         id:m.id,
-        h:wc26TeamV79(m.h || m.homeTeam || ''),
-        a:wc26TeamV79(m.a || m.awayTeam || ''),
+        kind:'ko',
+        h:wc26NormTeamV80(m.h||m.homeTeam||''),
+        a:wc26NormTeamV80(m.a||m.awayTeam||''),
         g:'',
-        d:m.date || '',
-        title:m.title || meta.title,
-        index:m.index || meta.index
+        d:m.date||'',
+        title:m.title||meta.title,
+        index:m.index||meta.index,
+        raw:m
       });
     });
   }catch(e){}
 
-  Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
-    const old = map.get(id) || {};
-    const meta = wc26KoMetaV79(id);
-    map.set(id, {
-      ...old,
+  Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{
+    if(seen.has(id))return;
+    const meta=wc26KoMetaV80(id);
+    const h=wc26NormTeamV80(r?.homeTeam||r?.home||'');
+    const a=wc26NormTeamV80(r?.awayTeam||r?.away||'');
+    if(!h&&!a)return;
+    seen.add(id);
+    out.push({
       id,
-      h:wc26TeamV79(r?.homeTeam || r?.home || old.h || ''),
-      a:wc26TeamV79(r?.awayTeam || r?.away || old.a || ''),
-      g:old.g || '',
-      d:old.d || r?.date || '',
-      title:old.title || meta.title,
-      index:old.index || meta.index
+      kind:String(id).startsWith('KO-')?'ko':'live',
+      h,
+      a,
+      g:'',
+      d:r?.date||'',
+      title:meta.title,
+      index:meta.index,
+      raw:{id,h,a,title:meta.title,index:meta.index,date:r?.date||'',t:r?.time||''}
     });
   });
 
-  return map;
+  return out;
 }
 
-function wc26SideTeamV79(ev, match){
-  const raw = String(ev?.team || ev?.side || ev?.teamSide || '').trim();
-  const low = raw.toLowerCase();
+function wc26ModalActualV80(m){
+  try{
+    const r=actualFor({id:m.id});
+    if(r)return r;
+  }catch(e){}
+  return LIVE_RESULTS?.[m.id]||null;
+}
 
-  if(low === 'a' || low === 'away') return wc26TeamV79(match.a);
-  if(low === 'h' || low === 'home') return wc26TeamV79(match.h);
+function wc26ModalTeamsV80(m){
+  return {h:wc26NormTeamV80(m.h), a:wc26NormTeamV80(m.a)};
+}
 
-  if(raw && raw.length > 1){
-    const named = wc26TeamV79(raw);
-    if(named) return named;
+function wc26ModalEventHtmlV80(m,r){
+  if(!r||!(r.started||r.finished))return'';
+  const teams=wc26ModalTeamsV80(m);
+  try{
+    return (goalScorersHtml(r,teams)||'') + (typeof redCardsHtml==='function'?(redCardsHtml(r,teams)||''):'');
+  }catch(e){
+    return'';
   }
-
-  return wc26TeamV79(match.h);
 }
 
-/* Fair play: group + KO + live/final, whatever is already in LIVE_RESULTS. */
-function calcFairPlay(){
-  const fp = {};
-  const ensure = n => {
-    n = wc26TeamV79(n);
-    if(!n) return '';
-    if(!fp[n]) fp[n] = {yellow:0, yellowRed:0, red:0, yellowPlusRed:0, score:0};
+function wc26HtmlToNodeV80(html){
+  const box=document.createElement('div');
+  box.innerHTML=html||'';
+  return box;
+}
+
+function wc26SideFromRowV80(row,teams){
+  const cols=row.querySelectorAll('.goal-scorers-col');
+  const left=cols[0], right=cols[1];
+  if(left && left.textContent.trim())return teams.h;
+  if(right && right.textContent.trim())return teams.a;
+  if(left && left.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return teams.h;
+  if(right && right.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return teams.a;
+  return teams.h;
+}
+
+/* Egyetlen közös modal-derived source: lapok + gólszerzők + valós/tipp meccs-statok. */
+function wc26ModalDerivedStatsV80(){
+  const fp={};
+  const scorers={};
+  const realRows=[];
+  const tipRows=[];
+
+  const ensureTeam=n=>{
+    n=wc26NormTeamV80(n);
+    if(!n)return'';
+    if(!fp[n])fp[n]={yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0};
     return n;
   };
 
-  (ALL || []).forEach(ensure);
-  const matches = wc26MatchMapV79();
+  (ALL||[]).forEach(ensureTeam);
 
-  Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
-    if(!r || !(r.started || r.finished)) return;
+  wc26AllModalStatMatchesV80().forEach(m=>{
+    const teams=wc26ModalTeamsV80(m);
+    ensureTeam(teams.h);
+    ensureTeam(teams.a);
 
-    const m = matches.get(id) || {};
-    const h = ensure(r.homeTeam || r.home || m.h);
-    const a = ensure(r.awayTeam || r.away || m.a);
+    const r=wc26ModalActualV80(m);
+    const hasReal=!!(r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a));
 
-    if(!h && !a) return;
+    if(hasReal){
+      realRows.push({
+        m:{id:m.id,h:teams.h,a:teams.a,g:m.g,d:m.d,title:m.title,index:m.index},
+        p:{h:+r.h,a:+r.a},
+        source:'Valós'
+      });
+    }else{
+      let p=null;
+      if(m.kind==='group')p=getPred(m.id)||PRED[m.id]||null;
+      else p=KO_PRED[m.id]||null;
 
-    wc26ArrV79(r.yellowCards).forEach(c=>{
-      const team = wc26SideTeamV79(c, {h,a});
-      if(team && fp[team]) fp[team].yellow++;
-    });
+      if(p&&validScore(p.h)&&validScore(p.a)){
+        tipRows.push({
+          m:{id:m.id,h:teams.h,a:teams.a,g:m.g,d:m.d,title:m.title,index:m.index},
+          p:{h:+p.h,a:+p.a,pH:p.pH,pA:p.pA},
+          source:'Tipp'
+        });
+      }
+    }
 
-    wc26ArrV79(r.redCards).forEach(c=>{
-      const team = wc26SideTeamV79(c, {h,a});
-      if(!team || !fp[team]) return;
+    const html=wc26ModalEventHtmlV80(m,r);
+    if(!html)return;
 
-      const blob = JSON.stringify(c || {}).toLowerCase();
-      const typ = String(c.type || c.card || c.eventType || c.kind || c.name || '').toLowerCase();
+    const box=wc26HtmlToNodeV80(html);
+    box.querySelectorAll('.goal-scorer-row').forEach(row=>{
+      const team=ensureTeam(wc26SideFromRowV80(row,teams));
+      if(!team||!fp[team])return;
 
-      const yellowRed =
-        !!(c.yellowRed || c.secondYellow) ||
-        typ.includes('second yellow') ||
-        typ.includes('yellow-red') ||
-        typ.includes('second_yellow') ||
-        blob.includes('second yellow');
+      const isYellowRed=row.classList.contains('yellow-red-row') || !!row.querySelector('.yellow-red-card-mark');
+      const isYellow=row.classList.contains('yellow-card-row') || !!row.querySelector('.yellow-card-mark');
+      const isRed=row.classList.contains('red-card-row') || !!row.querySelector('.red-card-mark');
 
-      const yellowPlusRed =
-        !!(c.yellowPlusRed || c.yellowAndRed) ||
-        typ.includes('yellow+red') ||
-        blob.includes('yellowplusred');
+      if(isYellowRed){
+        fp[team].yellowRed++;
+        return;
+      }
+      if(isRed){
+        fp[team].red++;
+        return;
+      }
+      if(isYellow){
+        fp[team].yellow++;
+        return;
+      }
 
-      if(yellowRed) fp[team].yellowRed++;
-      else if(yellowPlusRed) fp[team].yellowPlusRed++;
-      else fp[team].red++;
+      const hasGoal=row.querySelector('.goal-scorer-ball');
+      if(hasGoal){
+        /* Öngólt ne számoljunk top scorerbe. */
+        if(row.querySelector('.goal-scorer-og'))return;
+        const name=(row.querySelector('.goal-scorer-name')?.textContent||'').trim();
+        if(!name)return;
+        const key=name+'|'+team;
+        if(!scorers[key])scorers[key]={player:name,team,goals:0};
+        scorers[key].goals++;
+      }
     });
   });
 
   Object.values(fp).forEach(t=>{
-    t.score = -(t.yellow*1 + t.yellowRed*3 + t.red*4 + t.yellowPlusRed*5);
+    t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5);
   });
 
-  return fp;
+  return {
+    fp,
+    scorers:Object.values(scorers).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player,'hu')).slice(0,20),
+    realRows,
+    tipRows
+  };
+}
+
+function calcFairPlay(){
+  return wc26ModalDerivedStatsV80().fp;
+}
+
+function topScorersList(){
+  return wc26ModalDerivedStatsV80().scorers;
 }
 
 function topCardsHtml(){
   const fp=calcFairPlay();
   const teams=Object.keys(fp);
-
   const YC='<span style="display:inline-block;width:.5em;height:.72em;background:#f5c842;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const RC='<span style="display:inline-block;width:.5em;height:.72em;background:#e03040;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const YRC='<span style="display:inline-block;width:.8em;height:.72em;background:linear-gradient(90deg,#f5c842 50%,#e03040 50%);border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
@@ -16507,7 +16574,6 @@ function topCardsHtml(){
   }
 
   let out='';
-
   if(byYellow.length){
     out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 10</h2>'
       +'<div class="wc-stat-list stat-match-list">'
@@ -16532,60 +16598,47 @@ function topCardsHtml(){
       }).join('')
       +'</div></section>';
   }
-
   return out;
 }
 
-/* Top scorers from LIVE_RESULTS too, but still no reads. */
-function topScorersList(){
-  const counts={};
-  const matches=wc26MatchMapV79();
+function topMatchesHtml(){
+  const s=wc26ModalDerivedStatsV80();
+  const res=s.realRows.concat(s.tipRows);
+  const goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
+  const diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
 
-  Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
-    const m = matches.get(id) || {};
-    wc26ArrV79(r?.scorers).forEach(s=>{
-      const player=String(s?.player || s?.playerName || s?.name || '').trim();
-      if(!player || s?.og) return;
-
-      const team=wc26SideTeamV79(s, {
-        h:r?.homeTeam || r?.home || m.h,
-        a:r?.awayTeam || r?.away || m.a
-      });
-
-      const key=player+'|'+team;
-      if(!counts[key]) counts[key]={player,team,goals:0};
-      counts[key].goals++;
-    });
-  });
-
-  return Object.values(counts)
-    .sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player,'hu'))
-    .slice(0,20);
+  return '<section class="card"><h2 class="card-title">Leggólosabb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
+    +(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs adat','A valós eredmények után frissül','0')).join(''))
+    +'</div></section><section class="card"><h2 class="card-title">Legegyoldalúbb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
+    +(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs lejátszott mérkőzés','Gólkülönbség: 0','0')).join(''))
+    +'</div></section>';
 }
 
-window.WC26_STAT_MEMORY_DEBUG = function(team='Mexico'){
-  const fp=calcFairPlay();
-  const matches=wc26MatchMapV79();
+/* Ha overviewben live update jön és a régi patch csak a meccssort frissíti, kérünk egy teljes overview/stat rerendert.
+   Ez nem readel semmit, csak újraszámol ugyanabból a memóriából. */
+(function(){
+  if(window.__WC26_V80_PATCH_REFRESH__)return;
+  window.__WC26_V80_PATCH_REFRESH__=true;
+  const basePatch=typeof patchLiveRows==='function'?patchLiveRows:null;
+  if(basePatch){
+    patchLiveRows=function(){
+      const out=basePatch.apply(this,arguments);
+      if(!document.querySelector('.tip-overlay')&&(S?.tab==='overview'||S?.tab==='stats')){
+        requestAnimationFrame(()=>{try{render();}catch(e){}});
+      }
+      return out;
+    };
+  }
+})();
+
+window.WC26_MODAL_STATS_DEBUG=function(team='Mexico'){
+  const s=wc26ModalDerivedStatsV80();
   return {
     team,
-    fairPlay: fp[team] || null,
-    docs:Object.entries(LIVE_RESULTS||{}).filter(([id,r])=>{
-      const m=matches.get(id)||{};
-      return String(r?.homeTeam||m.h||'').includes(team) || String(r?.awayTeam||m.a||'').includes(team);
-    }).map(([id,r])=>({
-      id,
-      homeTeam:r.homeTeam,
-      awayTeam:r.awayTeam,
-      h:r.h,
-      a:r.a,
-      started:r.started,
-      finished:r.finished,
-      redCards:r.redCards,
-      yellowCards:r.yellowCards,
-      scorers:r.scorers,
-      source:r.source,
-      updatedAt:r.updatedAt
-    }))
+    fairPlay:s.fp[team]||null,
+    scorers:s.scorers.filter(x=>x.team===team),
+    realRows:s.realRows.filter(x=>x.m.h===team||x.m.a===team),
+    tipRows:s.tipRows.filter(x=>x.m.h===team||x.m.a===team)
   };
 };
 
