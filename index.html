@@ -10072,4 +10072,246 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 })();
 
+
+/* ===== WC26 v115: current bracket + KO match cards parity ===== */
+(function(){
+  if(window.__WC26_V115_BRACKET_MATCH_PARITY__) return;
+  window.__WC26_V115_BRACKET_MATCH_PARITY__ = true;
+
+  function v115HasPen(o){return !!(o&&validScore(o.pH)&&validScore(o.pA))}
+  function v115TeamName(x){return typeof x==='object'?String(x?.team||x?.name||'').trim():String(x||'').trim()}
+  function v115FindKo(id){try{return findKoMatch(id)||null}catch(e){return null}}
+  function v115Actual(id){return LIVE_RESULTS[id] || actualFor({id}) || null}
+  function v115Pred(x){return String(x?.id||'').startsWith('KO-') ? koPred(x.id) : getPred(x.id)}
+
+  function v115CardScore(score,pen){
+    return '<span class="wc26-card-score"><span>'+esc(score)+'</span>'+(validScore(pen)?'<span class="wc26-card-pen">('+esc(pen)+')</span>':'')+'</span>';
+  }
+
+  /* One shared score renderer for group rows and KO rows in the Matches tab. */
+  scoreHtml=function(x){
+    const id=x?.id||'';
+    const p=v115Pred(x);
+    const r=v115Actual(id);
+    const hasReal=!!(r&&(r.started||r.finished||matchLockState({id})!=='open')&&validScore(r.h)&&validScore(r.a));
+    const pPen=v115HasPen(p), rPen=v115HasPen(r);
+    let lines='';
+
+    if(p&&hasReal){
+      lines='<div class="mr-score-compare '+(pPen||rPen?'has-pen':'no-pen')+'">'
+        +'<div class="mr-score-row"><span class="mr-score-real">'+v115CardScore(r.h,rPen?r.pH:null)+'</span><span class="mr-score-tip">'+v115CardScore(p.h,pPen?p.pH:null)+'</span></div>'
+        +'<div class="mr-score-row"><span class="mr-score-real">'+v115CardScore(r.a,rPen?r.pA:null)+'</span><span class="mr-score-tip">'+v115CardScore(p.a,pPen?p.pA:null)+'</span></div>'
+        +'</div>';
+    }else if(p){
+      lines='<div class="mr-score-tip-only '+(pPen?'has-pen':'no-pen')+'">'
+        +'<div class="mr-score-row single"><span class="mr-score-single">'+v115CardScore(p.h,pPen?p.pH:null)+'</span></div>'
+        +'<div class="mr-score-row single"><span class="mr-score-single">'+v115CardScore(p.a,pPen?p.pA:null)+'</span></div>'
+        +'</div>';
+    }else if(hasReal){
+      lines='<div class="mr-score-actual-only '+(rPen?'has-pen':'no-pen')+'">'
+        +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+v115CardScore(r.h,rPen?r.pH:null)+'</span></div>'
+        +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+v115CardScore(r.a,rPen?r.pA:null)+'</span></div>'
+        +'</div>';
+    }else{
+      return '<div class="match-empty">-</div><div class="match-empty">-</div>';
+    }
+
+    const clk=(hasReal&&r&&!r.finished)?liveClockLabel(r):'';
+    const badge=clk?'<em class="mr-live-state live"><span></span>'+esc(clk)+'</em>':'';
+    return badge
+      ? '<div class="mr-score-wrap '+(p?'':'no-tip')+'"><div class="mr-clock-row">'+badge+'</div><div class="mr-score-lines">'+lines+'</div></div>'
+      : lines;
+  };
+
+  function v115BaseCat(cat){
+    cat=String(cat||'');
+    if(!cat)return'';
+    if(cat==='miss')return'miss';
+    if(cat.indexOf('exact')===0)return'exact';
+    if(cat==='draw-pen-outcome')return'outcome';
+    if(cat.indexOf('draw')===0)return'diff';
+    if(cat.indexOf('diff')>=0)return'diff';
+    if(cat.indexOf('outcome')>=0)return'outcome';
+    return cat;
+  }
+
+  function v115KoStateBadge(m){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m);
+    const base=sc.base||v115BaseCat(sc.cat);
+    const r=v115Actual(m.id);
+    const clk=r&&!r.finished?liveClockLabel(r):'';
+
+    if(base==='exact')return'<em class="mr-live-state ok">'+esc(sc.label||'Pontos')+'</em>';
+    if(base==='diff')return'<em class="mr-live-state diff">'+esc(sc.label||'Gólkül.')+'</em>';
+    if(base==='outcome')return'<em class="mr-live-state outcome">'+esc(sc.label||'Kimenetel')+'</em>';
+    if(base==='miss')return'<em class="mr-live-state bad">'+esc(sc.label||'Téves')+'</em>';
+    if(state==='finished')return'';
+    if(state==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'Élő')+'</em>';
+    if(state==='open')return'<em class="mr-live-state open">Tippelhető</em>';
+    return'<em class="mr-live-state neutral">Zárolva</em>';
+  }
+
+  function v115KoTime(m){
+    const lr=LIVE_RESULTS[m.id]||null;
+    const md=lr&&lr.date?lr.date:m.date;
+    const mt=lr&&lr.time?lr.time:(KO_SCHEDULE[m.id]||{}).t||m.t||'';
+    if(md&&mt){
+      try{return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}
+      catch(e){return mt;}
+    }
+    return '--:--';
+  }
+
+  /*
+    KO row in Matches tab: same skeleton as mrow().
+    No extra wc26-ko-core-tip, no left-side duplicate live pill, no special score renderer.
+  */
+  koMatchRow=function(m){
+    const p=koPred(m.id), state=matchLockState({id:m.id}), sc=koTipScore(m), base=sc.base||v115BaseCat(sc.cat), locked=state!=='open';
+    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
+    const rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
+    return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'">'
+      +'<div class="mr-date">'+v115KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v115KoStateBadge(m)+'</div>'
+      +'<div class="mr-sep"></div>'
+      +'<div class="mr-teams"><div class="mr-team '+(p?'win':'')+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+(p?'win':'')+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div>'
+      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+  };
+
+  /* Current bracket score renderer: real score + user's tip indicator only after real result exists. */
+  function v115KoTipInline(score,pen){
+    if(!validScore(score))return'';
+    return '<span class="ko-tip-ind"><span class="ko-tip-main">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
+  }
+
+  koTeamLine=function(team,seed,score,cls,pen,tipScore,tipPen){
+    if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+esc(seed||'')+'</span></div>';
+    const hasTip=validScore(tipScore), realPen=validScore(pen), tipPenOk=validScore(tipPen), crowded=realPen&&tipPenOk;
+    return '<div class="ko-team '+(cls||'')+' '+(crowded?'crowded':'')+'">'
+      +crest(team,'22px')
+      +'<span class="ko-name">'+esc(team)+'</span>'
+      +'<span class="ko-score clean-inline '+(hasTip?'has-tip ':'')+(realPen?'has-real-pen ':'')+(tipPenOk?'has-tip-pen ':'')+(crowded?'has-double-pen ':'')+'">'
+        +'<span class="ko-real-pack"><b>'+(score==null?'–':esc(score))+'</b>'+(realPen?'<small class="ko-pen">('+esc(pen)+')</small>':'')+'</span>'
+        +(hasTip?v115KoTipInline(tipScore,tipPen):'')
+      +'</span>'
+    +'</div>';
+  };
+
+  koCard=function(m,row){
+    const r=v115Actual(m.id), hasReal=!!(r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a)), p=koPred(m.id);
+    const dh=hasReal?+r.h:(p?p.h:null), da=hasReal?+r.a:(p?p.a:null);
+    const realPen=hasReal&&validScore(r.pH)&&validScore(r.pA)&&+r.h===+r.a;
+    const tipPen=p&&validScore(p.h)&&validScore(p.a)&&+p.h===+p.a&&validScore(p.pH)&&validScore(p.pA);
+    const dph=realPen?+r.pH:(p&&p.pen?p.pH:null), dpa=realPen?+r.pA:(p&&p.pen?p.pA:null);
+    let w=null;
+    if(dh!=null&&da!=null&&m.h&&m.a){
+      if(dh!==da)w=dh>da?m.h:m.a;
+      else if(dph!=null&&dpa!=null&&dph!==dpa)w=dph>dpa?m.h:m.a;
+    }
+    const hw=w===m.h, aw=w===m.a, rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';
+    const sc=wc26KoCardGrade(m), base=sc.cat||'';
+    const cls=[];
+    if(hasReal)cls.push('live-result');else if(p)cls.push('predicted pending-tip no-real-result');
+    if(hasReal&&base==='exact')cls.push('result-exact');
+    else if(hasReal&&base==='diff')cls.push('result-diff');
+    else if(hasReal&&base==='outcome')cls.push('result-outcome');
+    else if(hasReal&&base==='miss')cls.push('result-miss');
+    if(hasReal&&p)cls.push('has-score-compare');
+    if(hasReal&&p&&realPen&&tipPen)cls.push('has-double-pen');
+    if(m.locked)cls.push('locked');
+    return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+esc(m.label||'')+'</div>'
+      +koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',realPen?dph:null,hasReal&&p?p.h:null,hasReal&&tipPen?p.pH:null)
+      +koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',realPen?dpa:null,hasReal&&p?p.a:null,hasReal&&tipPen?p.pA:null)
+      +'</div>';
+  };
+
+  function v115KoCol(title,matches,depth){
+    const base=[1,2,4,8][depth]||1, step=Math.pow(2,depth+1);
+    return '<div class="ko-col depth-'+(depth||0)+'"><h3>'+title+'</h3>'+matches.map((m,i)=>koCard(m,base+i*step)).join('')+'</div>';
+  }
+
+  function v115BindKoBracket(br){
+    if(!br||br.__v115Bound)return;
+    br.__v115Bound=true;
+    br.addEventListener('scroll',()=>{window.__WC26_KO_SCROLL=br.scrollLeft;KO_SCROLL=br.scrollLeft},{passive:true});
+    br.addEventListener('touchmove',()=>{window.__WC26_KO_SCROLL=br.scrollLeft;KO_SCROLL=br.scrollLeft},{passive:true});
+    br.addEventListener('wheel',()=>{window.__WC26_KO_SCROLL=br.scrollLeft;KO_SCROLL=br.scrollLeft},{passive:true});
+  }
+
+  /*
+    Standalone current renderKO.
+    Does NOT call the retained old renderKO, so the old scrollLeft reset cannot fight this.
+  */
+  renderKO=function(){
+    const main=document.getElementById('main');
+    if(!main)return;
+    const oldBr=document.querySelector('.ko-bracket');
+    const before=oldBr?oldBr.scrollLeft:(window.__WC26_KO_SCROLL||KO_SCROLL||0);
+    const rounds=buildKO(), bronze=buildBronze(rounds);
+    const r32=rounds[0].matches, r16=rounds[1].matches, qf=rounds[2].matches, sf=rounds[3].matches, fin=rounds[4].matches;
+    const ready=groupsComplete();
+    main.className='main';
+    const left=v115KoCol('Legjobb 32',r32.slice(0,8),0)+v115KoCol('Nyolcaddöntő',r16.slice(0,4),1)+v115KoCol('Negyeddöntő',qf.slice(0,2),2)+v115KoCol('Elődöntő',sf.slice(0,1),3);
+    const right=v115KoCol('Elődöntő',sf.slice(1,2),3)+v115KoCol('Negyeddöntő',qf.slice(2,4),2)+v115KoCol('Nyolcaddöntő',r16.slice(4,8),1)+v115KoCol('Legjobb 32',r32.slice(8,16),0);
+    const lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';
+    main.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik hely&eacute;rt</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';
+    activateCrests();
+    const br=main.querySelector('.ko-bracket');
+    if(br){
+      v115BindKoBracket(br);
+      const target=Math.max(0,Math.round(before||window.__WC26_KO_SCROLL||KO_SCROLL||0));
+      br.scrollLeft=target;
+      requestAnimationFrame(()=>{br.scrollLeft=target});
+      setTimeout(()=>{br.scrollLeft=target},80);
+    }
+    if(!FROZEN_MODE){
+      main.querySelectorAll('[data-koid]').forEach(el=>el.onclick=e=>{
+        e.stopPropagation();
+        const b=document.querySelector('.ko-bracket');
+        if(b){KO_SCROLL=b.scrollLeft;window.__WC26_KO_SCROLL=b.scrollLeft;}
+        openKoTip(el.dataset.koid);
+      });
+    }
+  };
+
+  patchKoCards=function(){
+    if(S.tab!=='knockout')return false;
+    if(document.querySelector('.tip-overlay[data-tip-kind="ko"]'))return false;
+    renderKO();
+    return true;
+  };
+
+  const st=document.createElement('style');
+  st.textContent=`
+    /* KO rows in Matches tab must use the same score geometry as group rows. No .matches-main dependency. */
+    .match-row[data-ko-mid] .mr-score-wrap{width:100%!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important}
+    .match-row[data-ko-mid] .mr-score-lines{width:100%!important;min-width:0!important;display:flex!important;flex-direction:column!important;gap:clamp(6px,1.7vw,9px)!important}
+    .match-row[data-ko-mid] .mr-score-compare,.match-row[data-ko-mid] .mr-score-actual-only,.match-row[data-ko-mid] .mr-score-tip-only{width:100%!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important;gap:clamp(6px,1.7vw,9px)!important}
+    .match-row[data-ko-mid] .mr-score-row{min-height:1.05em!important;width:100%!important;min-width:0!important;display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;align-items:end!important;justify-items:center!important;justify-content:stretch!important;column-gap:4px!important;line-height:1!important;white-space:nowrap!important}
+    .match-row[data-ko-mid] .mr-score-row.single{grid-template-columns:minmax(0,1fr)!important}
+    .match-row[data-ko-mid] .mr-score-real,.match-row[data-ko-mid] .mr-score-tip,.match-row[data-ko-mid] .mr-score-single{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;min-width:0!important;white-space:nowrap!important;font-size:inherit!important;font-weight:950!important;line-height:.95!important}
+    .match-row[data-ko-mid] .wc26-ko-core-tip,.match-row[data-ko-mid] .wc26-ko-left-clock{display:none!important}
+
+    .ko-bracket{overflow-x:auto!important;overflow-y:visible!important;overscroll-behavior-x:contain!important;scroll-behavior:auto!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-x pan-y!important}
+    .ko-card.has-score-compare{--ko-card-score-col:76px!important}
+    .ko-card.has-double-pen{--ko-card-score-col:80px!important}
+    .ko-card .ko-team{grid-template-columns:var(--ko-card-crest) minmax(0,1fr) var(--ko-card-score-col)!important;gap:5px!important;overflow:hidden!important;padding-right:6px!important}
+    .ko-card .ko-score.clean-inline{width:var(--ko-card-score-col)!important;min-width:var(--ko-card-score-col)!important;max-width:var(--ko-card-score-col)!important;display:inline-flex!important;flex-direction:row!important;align-items:baseline!important;justify-content:flex-end!important;white-space:nowrap!important;line-height:1!important;overflow:visible!important;transition:none!important;animation:none!important}
+    .ko-card .ko-real-pack,.ko-card .ko-tip-ind{display:inline-flex!important;align-items:baseline!important;white-space:nowrap!important;line-height:1!important;flex:0 0 auto!important}
+    .ko-card .ko-tip-ind{margin-left:4px!important;color:#f4f7fb!important;font-weight:950!important}
+    .ko-card.has-double-pen .ko-score.clean-inline{transform:translateX(-5px)!important;letter-spacing:-.03em!important}
+    @media(max-width:720px){
+      .ko-card.has-score-compare{--ko-card-score-col:72px!important}
+      .ko-card.has-double-pen{--ko-card-score-col:76px!important}
+      .ko-card.has-double-pen .ko-score.clean-inline{transform:translateX(-6px)!important}
+    }
+  `;
+  document.head.appendChild(st);
+
+  if(['matches','overview','knockout'].includes(S.tab)){
+    try{render();}catch(e){console.warn('v115 current render failed',e);}
+  }
+})();
+
 </script></body></html>
