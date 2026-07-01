@@ -8369,8 +8369,7 @@ function communityDate(v){try{if(v&&v.toDate)v=v.toDate();if(!v)return '';return
 function queueCommunityAutosave(){if(!wc26Db||!wc26User)return;clearTimeout(wc26AutosaveTimer);wc26AutosaveTimer=setTimeout(()=>publishCommunityTips(true,{allowEmpty:true}),900)}
 async function publishCommunityTips(silent,opts={}){if(!wc26Db||!wc26User)return false;if(wc26OwnTipsLoadFailed&&!opts.force){wc26BackendError='Nem sikerült betölteni a Firebase-ben lévő saját tippeket, ezért az üres/helyi állapot nem írhatja felül az adatbázist.';if(S.tab==='community')renderCommunity();return false}if(!wc26OwnTipsLoaded&&!opts.force){let loaded=await loadOwnTipsFromFirebase();if(!loaded&&wc26OwnTipsLoadFailed)return false}if(opts.allowEmpty===false&&!wc26HasTips(PRED)&&!wc26HasTips(KO_PRED))return false;let data={uid:wc26User.uid,displayName:wc26User.displayName||wc26User.email||'Játékos',photoURL:wc26User.photoURL||'',pred:wc26CleanTips(PRED),ko:wc26CleanTips(KO_PRED),summary:communitySummary(),updatedAt:firebase.firestore.FieldValue.serverTimestamp(),version:3,storage:'firebase'};await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).set(data);wc26RemoteDocExists=true;if(!silent){await loadCommunityTips();if(S.tab==='community')renderCommunity()}return true}
 async function loadCommunityTips(){if(!wc26Db){wc26CommunityItems=[];return}try{let snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).orderBy('updatedAt','desc').limit(40).get();wc26CommunityItems=snap.docs.map(d=>({id:d.id,...d.data()}))}catch(e){wc26BackendError=e.message||String(e)}}
-function listenCommunityTips(){if(!wc26Db||wc26CommunityUnsub)return;try{wc26CommunityUnsub=wc26Db.collection(WC26_COMMUNITY_COLLECTION).orderBy('updatedAt','desc').limit(80).onSnapshot(snap=>{wc26CommunityItems=snap.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==='community')renderCommunity();refreshCommunityPreviews()},e=>{wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e)}}
-async function wc26SignIn(){if(!wc26Auth){wc26BackendError='A külön VB Firebase backend még nincs beállítva.';renderCommunity();return}await wc26Auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())}
+function listenCommunityTips(){try{if(wc26CommunityUnsub){wc26CommunityUnsub();wc26CommunityUnsub=null}}catch(e){}return false} async function wc26SignIn(){if(!wc26Auth){wc26BackendError='A külön VB Firebase backend még nincs beállítva.';renderCommunity();return}await wc26Auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())}
 async function wc26SignOut(){if(wc26Auth)await wc26Auth.signOut()}
 async function wc26RenameProfile(){if(!wc26User||!wc26Db)return;let current=wc26User.displayName||wc26User.email||'Játékos',name=prompt('Új közösségi név',current);if(!name)return;name=name.trim().slice(0,42);if(!name)return;try{if(wc26User.updateProfile)await wc26User.updateProfile({displayName:name});await wc26Db.collection(WC26_USER_COLLECTION).doc(wc26User.uid).set({displayName:name,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await publishCommunityTips(false)}catch(e){wc26BackendError=e.message||String(e);renderCommunity()}}
 function communityPredGradeClass(g){return g&&g.cat?' grade-'+g.cat:''}
@@ -9788,10 +9787,10 @@ function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({i
 function koWinner(match){if(!match.h||!match.a)return null;let r=actualFor({id:match.id});if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pen==='h'?match.h:p.pen==='a'?match.a:null;if(validScore(p.h)&&validScore(p.a)){if(+p.h>+p.a)return match.h;if(+p.a>+p.h)return match.a;if(validScore(p.pH)&&validScore(p.pA)&&+p.pH!==+p.pA)return +p.pH>+p.pA?match.h:match.a;}return null}
 tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();loadMatchResultsFromBackendDb(true).finally(()=>{wc26LoadKoPairsFromWorker(true).catch(()=>{});scheduleLiveSync();ensureLivePaintLoop();});syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();
 
-/* ===== WC26 v112 CLEAN REBASE: final authority layer ===== */
+/* ===== WC26 v113 CLEAN REBASE: audited final authority layer ===== */
 (function(){
-  if(window.__WC26_V112_CLEAN_REBASE__) return;
-  window.__WC26_V112_CLEAN_REBASE__ = true;
+  if(window.__WC26_V113_CLEAN_REBASE__) return;
+  window.__WC26_V113_CLEAN_REBASE__ = true;
 
   function obj(o){return o&&typeof o==='object'&&!Array.isArray(o)?o:{}}
   function n(v){return validScore(v)?+v:null}
@@ -9874,6 +9873,64 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   const baseDelKo=wc26DeleteKoTip;wc26DeleteKoTip=async function(id){markDel(id);try{return await baseDelKo.apply(this,arguments)}finally{markDel(id);if(S.tab==='knockout')renderKO()}};
   const basePersist=wc26PersistTipsNow;wc26PersistTipsNow=async function(){Object.keys(KO_PRED||{}).forEach(clearDel);return await basePersist.apply(this,arguments)};
   const baseSavePred=savePred;savePred=function(){Object.entries(KO_PRED||{}).forEach(([id,p])=>{const c=cleanKo(p);if(c)LAST_KO[id]=c});return baseSavePred.apply(this,arguments)};
+
+
+  /* KO grading base mapping: this was missing after the strip. */
+  function wc26KoBaseCat(cat){
+    cat=String(cat||'');
+    if(!cat) return '';
+    if(cat==='miss') return 'miss';
+    if(cat.indexOf('exact')===0) return 'exact';
+    if(cat==='draw-pen-outcome') return 'outcome';
+    if(cat.indexOf('draw')===0) return 'diff';
+    if(cat.indexOf('diff')>=0) return 'diff';
+    if(cat.indexOf('outcome')>=0) return 'outcome';
+    if(cat==='exact') return 'exact';
+    return cat;
+  }
+  function wc26KoShortLabel(g){
+    const cat=String(g?.cat||'');
+    const map={
+      'exact':'Pontos',
+      'exact-pen-exact':'Pontos + tizi pontos',
+      'exact-pen-diff':'Pontos + tizi gólkül.',
+      'exact-pen-outcome':'Pontos + tizi kimenetel',
+      'draw':'Döntetlen',
+      'draw-pen-exact':'Döntetlen + tizi pontos',
+      'draw-pen-diff':'Döntetlen + tizi gólkül.',
+      'draw-pen-outcome':'Döntetlen + tizi kimenetel',
+      'diff':'Gólkülönbség',
+      'outcome':'Kimenetel',
+      'miss':'Téves'
+    };
+    return map[cat] || g?.label || '';
+  }
+  function wc26KoGrade(m){
+    const id=m?.id || '';
+    const p=koPred(id);
+    const r=actualFor({id});
+    if(!p||!r||!validScore(p.h)||!validScore(p.a)||!validScore(r.h)||!validScore(r.a)){
+      return {cat:'',base:'',pts:0,label:''};
+    }
+    const g=gradeKoTip(p,r);
+    const base=wc26KoBaseCat(g.cat);
+    return {...g,base,label:wc26KoShortLabel(g)};
+  }
+  koTipScore=function(x){
+    const g=wc26KoGrade(x||{});
+    return {cat:g.base||'',rawCat:g.cat||'',base:g.base||'',pts:g.pts||0,label:g.label||''};
+  };
+  function wc26KoCardGrade(m){
+    const g=wc26KoGrade(m||{});
+    return {cat:g.base||'',rawCat:g.cat||'',label:g.label||'',pts:g.pts||0};
+  }
+  window.wc26KoCardGrade=wc26KoCardGrade;
+  window.wc26KoBaseCat=wc26KoBaseCat;
+
+  communityPredGradeClass=function(g){
+    if(!g||!g.cat) return '';
+    return ' grade-'+wc26KoBaseCat(g.cat);
+  };
 
   /* bracket */
   function koTipInline(score,pen){if(!validScore(score))return'';return'<span class="ko-tip-ind"><span class="ko-tip-main">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>'}
