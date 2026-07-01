@@ -17383,4 +17383,368 @@ function scoreHtml(x){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v85 corrective patch: screenshot-based fixes =====
+   Látott hibák a screenshotokon:
+   1) meccslista: túl nagyra nőtt a tipp szövegméret / gap -> visszavéve
+   2) bracket: jó hely, de kifut a kártyából -> kompaktabb rail + score előtt pen helyett score után pen
+   3) KO tippek: még mindig el tudnak tűnni -> többkulcsos local backup + koPred mély fallback
+   4) mobile modal: penalty panel túl nagy -> locked-real penalty panel drasztikusan kisebb
+*/
+
+/* --- KO tip backup: több helyről olvas, és logged-in usernél is ír local backupot --- */
+(function(){
+  function safeObj(o){ return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; }
+  function nonEmpty(o){ return !!(o && typeof o === 'object' && Object.keys(o).length); }
+  function parse(raw){ try{ const x=JSON.parse(raw||'{}'); return safeObj(x); }catch(e){ return {}; } }
+
+  function keys(){
+    const uid = (typeof wc26User !== 'undefined' && wc26User && wc26User.uid) ? wc26User.uid : 'anon';
+    return [
+      'wc26_knockout_predictions_v1',
+      'wc26_ko_pred_backup_v82_anon',
+      'wc26_ko_pred_backup_v82_'+uid,
+      'wc26_ko_pred_backup_v85_global',
+      'wc26_ko_pred_backup_v85_'+uid
+    ];
+  }
+
+  function readAll(){
+    let out={};
+    try{
+      keys().forEach(k=>{ out={...out, ...parse(localStorage.getItem(k))}; });
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i)||'';
+        if(/wc26.*(ko|knockout).*pred/i.test(k)){
+          out={...out, ...parse(localStorage.getItem(k))};
+        }
+      }
+    }catch(e){}
+    out={...out, ...(window.__WC26_V71_LAST_GOOD_KO__||{}), ...(window.__WC26_V82_LAST_GOOD_KO__||{})};
+    return out;
+  }
+
+  function writeAll(obj){
+    obj=safeObj(obj);
+    if(!nonEmpty(obj)) return;
+    try{
+      keys().forEach(k=>localStorage.setItem(k,JSON.stringify(obj)));
+    }catch(e){}
+    window.__WC26_V85_LAST_GOOD_KO__={...(window.__WC26_V85_LAST_GOOD_KO__||{}), ...obj};
+    window.__WC26_V82_LAST_GOOD_KO__={...(window.__WC26_V82_LAST_GOOD_KO__||{}), ...obj};
+    window.__WC26_V71_LAST_GOOD_KO__={...(window.__WC26_V71_LAST_GOOD_KO__||{}), ...obj};
+  }
+
+  function removeOne(id){
+    try{
+      keys().forEach(k=>{
+        const obj=parse(localStorage.getItem(k));
+        if(obj[id]){ delete obj[id]; localStorage.setItem(k,JSON.stringify(obj)); }
+      });
+    }catch(e){}
+    if(window.__WC26_V85_LAST_GOOD_KO__) delete window.__WC26_V85_LAST_GOOD_KO__[id];
+    if(window.__WC26_V82_LAST_GOOD_KO__) delete window.__WC26_V82_LAST_GOOD_KO__[id];
+    if(window.__WC26_V71_LAST_GOOD_KO__) delete window.__WC26_V71_LAST_GOOD_KO__[id];
+  }
+
+  window.wc26ReadKoTipBackupsV85=readAll;
+  window.wc26WriteKoTipBackupsV85=writeAll;
+
+  function remember(){
+    if(nonEmpty(KO_PRED)) writeAll(KO_PRED);
+  }
+
+  function restoreMerge(){
+    const b=readAll();
+    if(nonEmpty(b)){
+      KO_PRED={...b, ...(KO_PRED||{})};
+      writeAll(KO_PRED);
+      return true;
+    }
+    return false;
+  }
+
+  if(typeof savePred === 'function' && !savePred.__v85Wrapped){
+    const base=savePred;
+    savePred=function(){
+      remember();                      // logged-in usernél is local backup
+      const out=base.apply(this,arguments);
+      remember();
+      return out;
+    };
+    savePred.__v85Wrapped=true;
+  }
+
+  if(typeof wc26ClearLocalPreds === 'function' && !wc26ClearLocalPreds.__v85Wrapped){
+    const baseClear=wc26ClearLocalPreds;
+    wc26ClearLocalPreds=function(){
+      const b=readAll();
+      try{ baseClear.apply(this,arguments); }catch(e){}
+      if(nonEmpty(b)) writeAll(b);       // auth change ne törölje ki a KO backupot
+    };
+    wc26ClearLocalPreds.__v85Wrapped=true;
+  }
+
+  if(typeof wc26DeleteKoTip === 'function' && !wc26DeleteKoTip.__v85Wrapped){
+    const baseDel=wc26DeleteKoTip;
+    wc26DeleteKoTip=async function(id){
+      window.__WC26_V85_USER_DELETING_KO__=Date.now();
+      removeOne(id);
+      const out=await baseDel.apply(this,arguments);
+      removeOne(id);
+      return out;
+    };
+    wc26DeleteKoTip.__v85Wrapped=true;
+  }
+
+  if(typeof loadOwnTipsFromFirebase === 'function' && !loadOwnTipsFromFirebase.__v85Wrapped){
+    const baseLoad=loadOwnTipsFromFirebase;
+    loadOwnTipsFromFirebase=async function(){
+      const before=readAll();
+      const out=await baseLoad.apply(this,arguments);
+      if(Date.now()-(window.__WC26_V85_USER_DELETING_KO__||0)>8000){
+        KO_PRED={...before, ...(KO_PRED||{})};
+        remember();
+      }
+      return out;
+    };
+    loadOwnTipsFromFirebase.__v85Wrapped=true;
+  }
+
+  if(typeof render === 'function' && !render.__v85Wrapped){
+    const baseRender=render;
+    render=function(){
+      if(Date.now()-(window.__WC26_V85_USER_DELETING_KO__||0)>8000) restoreMerge();
+      const out=baseRender.apply(this,arguments);
+      remember();
+      return out;
+    };
+    render.__v85Wrapped=true;
+  }
+
+  koPred=function(id){
+    const b=readAll();
+    let p=(KO_PRED||{})[id] || b[id] || (window.__WC26_V85_LAST_GOOD_KO__||{})[id];
+    if(!p || !validScore(p.h) || !validScore(p.a)) return null;
+    let h=+p.h,a=+p.a,ph=validScore(p.pH)?+p.pH:null,pa=validScore(p.pA)?+p.pA:null;
+    if(h===a && (ph==null || pa==null || ph===pa)) return null;
+    if(!(KO_PRED||{})[id]){
+      KO_PRED={...(KO_PRED||{}), [id]:p};
+      writeAll(KO_PRED);
+    }
+    return {h,a,pH:ph,pA:pa,pen:h===a};
+  };
+
+  remember();
+})();
+
+/* --- Bracket score rail: compact + never outside card --- */
+function wc26KoTipInline(score,pen){
+  if(!validScore(score)) return '';
+  return '<span class="ko-tip-ind v85-tip">'
+    +'<span class="ko-tip-main">'+esc(score)+'</span>'
+    +(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')
+  +'</span>';
+}
+
+function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
+  if(!team) return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
+  const hasTip=validScore(tipScore), hasRealPen=pen!=null, hasTipPen=validScore(tipPen);
+  return '<div class="ko-team '+(cls||'')+'">'
+    +crest(team,'22px')
+    +'<span class="ko-name">'+esc(team)+'</span>'
+    +'<span class="ko-score v85-rail '+(hasTip?'has-tip ':'')+(hasRealPen?'has-real-pen ':'')+(hasTipPen?'has-tip-pen ':'')+(hasRealPen&&hasTipPen?'has-double-pen ':'')+'">'
+      +'<span class="ko-real-pack"><b>'+(score==null?'-':score)+'</b>'+(hasRealPen?'<small class="ko-pen">('+pen+')</small>':'')+'</span>'
+      +wc26KoTipInline(tipScore,tipPen)
+    +'</span>'
+  +'</div>';
+}
+
+function koCard(m,row){
+  var r=LIVE_RESULTS[m.id],hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),p=koPred(m.id);
+  var dh=hasReal?+r.h:(p?p.h:null),da=hasReal?+r.a:(p?p.a:null);
+  var dph=hasReal?(validScore(r.pH)?+r.pH:null):(p&&p.pen?p.pH:null),dpa=hasReal?(validScore(r.pA)?+r.pA:null):(p&&p.pen?p.pA:null);
+  var realHasPen=hasReal&&validScore(r.pH)&&validScore(r.pA)&&+r.h===+r.a;
+  var tipHasPen=p&&validScore(p.h)&&validScore(p.a)&&+p.h===+p.a&&validScore(p.pH)&&validScore(p.pA);
+  var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;
+  if(dh!=null&&da!=null&&m.h&&m.a){if(dh!==da)w=dh>da?m.h:m.a;else if(hasPen&&dph!==dpa)w=dph>dpa?m.h:m.a;}
+  var hw=w===m.h,aw=w===m.a,rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';
+  var sc=wc26KoCardGrade(m),cls=[];
+  if(hasReal)cls.push('live-result');else if(p)cls.push('predicted pending-tip no-real-result');
+  if(hasReal&&sc.cat==='exact')cls.push('result-exact');
+  else if(hasReal&&sc.cat==='diff')cls.push('result-diff');
+  else if(hasReal&&sc.cat==='outcome')cls.push('result-outcome');
+  else if(hasReal&&sc.cat==='miss')cls.push('result-miss');
+  if(hasReal&&p)cls.push('has-score-compare');
+  if(hasReal&&p&&realHasPen&&tipHasPen)cls.push('has-double-pen');
+  if(m.locked)cls.push('locked');
+  const tipHome=(hasReal&&p)?p.h:null,tipAway=(hasReal&&p)?p.a:null;
+  const tipPenHome=(hasReal&&tipHasPen)?p.pH:null,tipPenAway=(hasReal&&tipHasPen)?p.pA:null;
+  return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'
+    +koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,tipHome,tipPenHome)
+    +koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,tipAway,tipPenAway)
+    +'</div>';
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Meccslista: VISSZA normális méretre. Nem nagyítjuk a tippeket itt. */
+    .matches-main .mr-score-compare .mr-score-row{
+      column-gap:5px!important;
+    }
+    .matches-main .mr-score-compare.has-double-pen .mr-score-row{
+      column-gap:9px!important; /* csak kicsit több, nem szétszedve */
+    }
+    .matches-main .mr-score-compare .mr-score-tip,
+    .matches-main .mr-score-compare.has-double-pen .mr-score-tip,
+    .matches-main .mr-score-compare .mr-score-real,
+    .matches-main .mr-score-compare.has-double-pen .mr-score-real{
+      font-size:inherit!important;
+      line-height:1!important;
+      font-weight:950!important;
+    }
+    @media(max-width:720px){
+      .matches-main .mr-score-compare .mr-score-row{column-gap:4px!important;}
+      .matches-main .mr-score-compare.has-double-pen .mr-score-row{column-gap:8px!important;}
+      .matches-main .mr-score-compare.has-double-pen .mr-score-tip,
+      .matches-main .mr-score-compare.has-double-pen .mr-score-real{font-size:inherit!important;}
+    }
+
+    /* Bracket neutral pending állapot */
+    .ko-card.no-real-result,
+    .ko-card.predicted:not(.live-result),
+    .ko-card.pending-tip:not(.live-result){
+      background:rgba(16,25,30,.96)!important;
+      border-color:rgba(255,255,255,.13)!important;
+      box-shadow:inset 4px 0 0 rgba(154,173,182,.45),0 0 0 1px rgba(255,255,255,.035)!important;
+    }
+
+    /* Bracket score rail: nagyobb oszlop a kártyán BELÜL, kisebb pen fonttal. */
+    .ko-card{
+      --ko-card-score-col:72px!important;
+      overflow:hidden!important;
+    }
+    .ko-card .ko-team{
+      grid-template-columns:var(--ko-card-crest) minmax(0,1fr) var(--ko-card-score-col)!important;
+    }
+    .ko-card .ko-name{
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+    }
+    .ko-card .ko-score.v85-rail{
+      width:var(--ko-card-score-col)!important;
+      min-width:var(--ko-card-score-col)!important;
+      max-width:var(--ko-card-score-col)!important;
+      display:flex!important;
+      justify-content:flex-end!important;
+      align-items:baseline!important;
+      gap:0!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+      transform:none!important;
+      letter-spacing:-.03em!important;
+    }
+    .ko-card .ko-real-pack{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:1px!important;
+      min-width:0!important;
+      flex:0 1 auto!important;
+    }
+    .ko-card .ko-real-pack b{
+      font-size:.98em!important;
+      font-weight:950!important;
+      line-height:1!important;
+    }
+    .ko-card.live-result .ko-real-pack b,
+    .ko-card.live-result .ko-real-pack .ko-pen{
+      color:#ff6f84!important;
+    }
+    .ko-card .ko-real-pack .ko-pen{
+      font-size:.58em!important;
+      line-height:1!important;
+      margin-left:1px!important;
+      font-weight:950!important;
+    }
+    .ko-card .ko-tip-ind.v85-tip{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:1px!important;
+      margin-left:4px!important;
+      flex:0 1 auto!important;
+      min-width:0!important;
+      color:#f4f7fb!important;
+      font-size:1.02em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+    }
+    .ko-card.has-double-pen .ko-tip-ind.v85-tip{
+      margin-left:5px!important;
+      font-size:1.04em!important;
+    }
+    .ko-card .ko-tip-ind .ko-tip-pen{
+      color:#ffc15a!important;
+      font-size:.58em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      margin-left:1px!important;
+    }
+
+    @media(max-width:720px){
+      .ko-card{--ko-card-score-col:70px!important;}
+      .ko-card .ko-real-pack b{font-size:.96em!important;}
+      .ko-card .ko-real-pack .ko-pen{font-size:.54em!important;}
+      .ko-card .ko-tip-ind.v85-tip{font-size:1em!important;margin-left:3px!important;}
+      .ko-card.has-double-pen .ko-tip-ind.v85-tip{font-size:1.02em!important;margin-left:4px!important;}
+      .ko-card .ko-tip-ind .ko-tip-pen{font-size:.54em!important;}
+    }
+
+    /* Mobile KO penalty modal: locked-real panel legyen kicsi és beleillő. */
+    @media(max-width:720px){
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen{
+        padding:8px 10px!important;
+        margin-top:8px!important;
+        border-radius:14px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen .penalty-title{
+        font-size:13px!important;
+        line-height:1.05!important;
+        margin-bottom:6px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen .penalty-title span:last-child{
+        display:none!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen .pen-inputs{
+        grid-template-columns:minmax(72px,1fr) 34px 8px 34px minmax(72px,1fr)!important;
+        gap:4px!important;
+        align-items:center!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen .pen-inputs input{
+        width:34px!important;
+        height:34px!important;
+        font-size:21px!important;
+        border-radius:10px!important;
+        padding:0!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen .pen-team{
+        font-size:10.5px!important;
+        line-height:1.05!important;
+        white-space:nowrap!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen .pen-note{
+        display:none!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
