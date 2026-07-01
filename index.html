@@ -21153,4 +21153,325 @@ wc26EnsureStableModalStatusV92 = wc26EnsureOneModalStatusPillV98;
   document.head.appendChild(st);
 })();
 
+
+
+/* ===== WC26 v101 modal status pill restore + reactive tip banner ===== */
+(function(){
+  if(window.__WC26_V101_MODAL_PILL__) return;
+  window.__WC26_V101_MODAL_PILL__ = true;
+
+  function wc26ModalStateMeta(r){
+    if(!r || !r.started) return null;
+    const raw = String(r.status||'').toUpperCase();
+    const minute = liveClockLabel(r) || '';
+    if(r.finished || raw==='FT' || raw.includes('FULL TIME') || raw.includes('FINISHED')){
+      return { text:'FT', cls:'ft' };
+    }
+    if(raw.includes('PEN')) return { text:'PEN', cls:'pen' };
+    if(raw==='HT' || raw.includes('HALF') || raw.includes('INT')) return { text:'HT', cls:'ht' };
+    if(raw.includes('AET') || raw.includes('EXTRA')) return { text:'AET', cls:'aet' };
+    if(minute) return { text: minute, cls:'live' };
+    return { text:'LIVE', cls:'live' };
+  }
+
+  function wc26StripInlineStatusBadges(root){
+    if(!root) return;
+    root.querySelectorAll('.tip-live-clock, .int-modal-badge').forEach(el=>el.remove());
+  }
+
+  function wc26EnsureModalStatePill(ov, r){
+    if(!ov) return;
+    const matchBox = ov.querySelector('.tip-match');
+    if(!matchBox) return;
+    let slot = matchBox.querySelector('.wc26-modal-state-slot');
+    const meta = wc26ModalStateMeta(r);
+    if(!meta){ if(slot) slot.remove(); return; }
+    if(!slot){
+      slot = document.createElement('div');
+      slot.className = 'wc26-modal-state-slot';
+      const below = matchBox.querySelector('.tip-below-score');
+      if(below) matchBox.insertBefore(slot, below);
+      else matchBox.appendChild(slot);
+    }
+    slot.innerHTML = '<span class="wc26-status-pill wc26-modal-state-pill '+meta.cls+'">'+meta.text+'</span>';
+    wc26StripInlineStatusBadges(matchBox.querySelector('.tip-below-score'));
+  }
+
+  function wc26RenderModalBelowOnly(ov, r, teams){
+    if(!ov || !r) return;
+    const hasReal = (r.started || r.finished) && validScore(r.h) && validScore(r.a);
+    let box = ov.querySelector('.tip-below-score');
+    if(!hasReal){ if(box) box.remove(); return; }
+    const html = goalScorersHtml(r, teams) + redCardsHtml(r, teams);
+    if(box){
+      if(box.innerHTML !== html){
+        box.innerHTML = html;
+        activateCrests();
+      }
+    }else{
+      const tm = ov.querySelector('.tip-match');
+      if(tm){
+        tm.insertAdjacentHTML('beforeend','<div class="tip-below-score">'+html+'</div>');
+        box = tm.querySelector('.tip-below-score:last-child');
+      }
+    }
+    wc26StripInlineStatusBadges(box);
+  }
+
+  function wc26ApplyModalEnhancements(ov){
+    if(!ov) return;
+    const id = ov.dataset.tipId || '';
+    const kind = ov.dataset.tipKind || (id.startsWith('KO-') ? 'ko' : 'group');
+    const x = kind === 'ko' ? (findKoMatch(id) || wc26FindAnyMatch(id)) : FX_BY_ID[id];
+    if(!x) return;
+    const r = LIVE_RESULTS[id] || actualFor(kind==='ko' ? {id:x.id} : x);
+    if(!r) return;
+    wc26EnsureModalStatePill(ov, r);
+    wc26RenderModalBelowOnly(ov, r, kind==='ko' ? {h:x.h,a:x.a} : x);
+    const banner = ov.querySelector('.tip-your-tip-banner');
+    if(banner){
+      const sc = kind==='ko' ? koTipScore(x) : tipScore(x);
+      banner.classList.remove('grade-exact','grade-diff','grade-outcome','grade-miss');
+      if(sc && sc.cat) banner.classList.add('grade-'+sc.cat);
+    }
+  }
+
+  const _openTip = window.openTip;
+  if(typeof _openTip === 'function' && !_openTip.__v101wrapped){
+    window.openTip = function(){
+      const res = _openTip.apply(this, arguments);
+      wc26ApplyModalEnhancements(document.querySelector('.tip-overlay[data-tip-kind="group"]'));
+      return res;
+    };
+    window.openTip.__v101wrapped = true;
+  }
+
+  const _openKoTip = window.openKoTip;
+  if(typeof _openKoTip === 'function' && !_openKoTip.__v101wrapped){
+    window.openKoTip = function(){
+      const res = _openKoTip.apply(this, arguments);
+      wc26ApplyModalEnhancements(document.querySelector('.tip-overlay[data-tip-kind="ko"]'));
+      return res;
+    };
+    window.openKoTip.__v101wrapped = true;
+  }
+
+  window.refreshOpenTipModal = function(){
+    const ov=document.querySelector('.tip-overlay[data-tip-id]');if(!ov)return;
+    const id=ov.dataset.tipId,kind=ov.dataset.tipKind||'group';
+    const x=kind==='ko'?(findKoMatch(id)||wc26FindAnyMatch(id)):FX_BY_ID[id];if(!x)return;
+    const r=LIVE_RESULTS[id];if(!r)return;
+    const hasReal=(r.started||r.finished)&&validScore(r.h)&&validScore(r.a);
+    const realH=ov.querySelector('.tip-real-h'),realA=ov.querySelector('.tip-real-a');
+    if(hasReal&&(!realH||!realA)){kind==='ko'?openKoTip(id):openTip(id);return;}
+    if(realH&&validScore(r.h))realH.textContent=r.h;
+    if(realA&&validScore(r.a))realA.textContent=r.a;
+    wc26EnsureModalStatePill(ov, r);
+    wc26RenderModalBelowOnly(ov, r, kind==='ko'?{h:x.h,a:x.a}:x);
+    const sc=kind==='ko'?koTipScore(x):tipScore(x);
+    const banner=ov.querySelector('.tip-your-tip-banner');
+    if(banner){
+      banner.classList.remove('grade-exact','grade-diff','grade-outcome','grade-miss');
+      if(sc&&sc.cat) banner.classList.add('grade-'+sc.cat);
+    }
+    const sheet=ov.querySelector('.tip-sheet');
+    if(sheet){sheet.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked');if(sc&&sc.cat)sheet.classList.add('result-'+sc.cat);else if(r.started&&!r.finished)sheet.classList.add('live-locked');}
+  };
+
+  const st=document.createElement('style');
+  st.textContent = `
+    .wc26-modal-state-slot{
+      display:flex!important;
+      justify-content:center!important;
+      align-items:center!important;
+      margin:14px 0 10px!important;
+      min-height:32px!important;
+    }
+    .wc26-modal-state-pill{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:56px!important;
+      padding:6px 14px!important;
+      border-radius:999px!important;
+      font-size:clamp(13px,1.1vw,16px)!important;
+      font-weight:900!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      opacity:1!important;
+      transition:none!important;
+      animation:none!important;
+      visibility:visible!important;
+    }
+    .wc26-modal-state-pill.live,
+    .wc26-modal-state-pill.ht{background:rgba(255,120,145,.13)!important;border:1px solid rgba(255,120,145,.42)!important;color:#ff96ab!important;}
+    .wc26-modal-state-pill.ft{background:rgba(255,120,145,.13)!important;border:1px solid rgba(255,120,145,.42)!important;color:#ff96ab!important;}
+    .wc26-modal-state-pill.pen{background:rgba(255,120,145,.13)!important;border:1px solid rgba(255,120,145,.42)!important;color:#ff96ab!important;}
+    .wc26-modal-state-pill.aet{background:rgba(255,120,145,.13)!important;border:1px solid rgba(255,120,145,.42)!important;color:#ff96ab!important;}
+
+    .tip-below-score .tip-live-clock,
+    .tip-below-score .int-modal-badge{display:none!important;}
+
+    .tip-your-tip-banner.grade-exact .tip-your-tip-label,
+    .tip-your-tip-banner.grade-exact .tip-your-tip-score,
+    .tip-your-tip-banner.grade-exact .wc26-inline-pen{color:#49f0a2!important;}
+    .tip-your-tip-banner.grade-diff .tip-your-tip-label,
+    .tip-your-tip-banner.grade-diff .tip-your-tip-score,
+    .tip-your-tip-banner.grade-diff .wc26-inline-pen{color:#ffd56d!important;}
+    .tip-your-tip-banner.grade-outcome .tip-your-tip-label,
+    .tip-your-tip-banner.grade-outcome .tip-your-tip-score,
+    .tip-your-tip-banner.grade-outcome .wc26-inline-pen{color:#ffb35c!important;}
+    .tip-your-tip-banner.grade-miss .tip-your-tip-label,
+    .tip-your-tip-banner.grade-miss .tip-your-tip-score,
+    .tip-your-tip-banner.grade-miss .wc26-inline-pen{color:#ff8294!important;}
+  `;
+  document.head.appendChild(st);
+})();
+
+
+
+/* ===== WC26 v102: unify sync/render flow + soften bracket left shift =====
+   Fixek:
+   1) A crowded KO bracket score ne legyen túltolva a kártya közepe felé.
+   2) Egy központi, kíméletes UI sync fusson; a zajos időzítők ne villogtassák az elemeket.
+   3) A modal PEN/HT/FT/perc pirula ne tűnjön el a penalty cleanup miatt.
+*/
+(function(){
+  if(window.__WC26_V102_UNIFIED_SYNC__) return;
+  window.__WC26_V102_UNIFIED_SYNC__ = true;
+
+  /* 1) Kill the noisiest legacy repaint loops that caused blink/flicker. */
+  try{ if(window.__WC26_HARD_RERENDER_30S__){ clearInterval(window.__WC26_HARD_RERENDER_30S__); window.__WC26_HARD_RERENDER_30S__=null; } }catch(e){}
+  try{ if(window.__WC26_V96_KO_PEN_GAP_TIMER__){ clearInterval(window.__WC26_V96_KO_PEN_GAP_TIMER__); window.__WC26_V96_KO_PEN_GAP_TIMER__=null; } }catch(e){}
+
+  /* 2) Keep exactly one modal state pill.
+        Older cleanup removed every .wc26-status-pill.pen indiscriminately, including the real modal pill. */
+  window.wc26CleanupPenaltyDuplicatesV98 = function(ov){
+    if(!ov) return null;
+
+    ov.querySelectorAll('.penalty-box.locked-real-pen').forEach(el=>{
+      el.classList.add('v98-old-pen-hidden');
+      el.style.display='none';
+    });
+
+    let keep=null;
+    Array.from(ov.querySelectorAll('.pen-v91-card,.pen-v94-card,.pen-v98-card')).forEach(card=>{
+      if(card.classList.contains('pen-v98-card') && !keep){ keep=card; }
+      else card.remove();
+    });
+
+    ov.querySelectorAll('.pen-compact-v86,.pen-compact-v87,.pen-v90').forEach(el=>el.remove());
+    ov.querySelectorAll('.pen-v91-live-dot,.pen-v91-penonly').forEach(el=>el.remove());
+
+    ov.querySelectorAll('.wc26-status-pill.pen').forEach(el=>{
+      if(!el.closest('.wc26-modal-state-slot')) el.remove();
+    });
+
+    return keep;
+  };
+
+  /* 3) One gentle UI sync queue everywhere. No hard full rerender loop. */
+  let rafId = 0;
+  function runUnifiedUiSync(){
+    rafId = 0;
+    try{
+      if(typeof markPenaltyRowsV96 === 'function' && document.querySelector('.matches-main .match-row[data-ko-mid]')){
+        markPenaltyRowsV96();
+      }
+    }catch(e){}
+
+    try{
+      if(typeof patchLiveRows === 'function' && document.querySelector('.match-row[data-mid], .match-row[data-ko-mid]')){
+        patchLiveRows();
+      }
+    }catch(e){}
+
+    try{
+      if(typeof refreshOpenTipModal === 'function' && document.querySelector('.tip-overlay[data-tip-id]')){
+        refreshOpenTipModal();
+      }
+    }catch(e){}
+  }
+
+  window.wc26UnifiedUiSync = function(reason){
+    if(rafId) return;
+    rafId = requestAnimationFrame(runUnifiedUiSync);
+  };
+
+  const wrap = (name, afterAsync=false) => {
+    const base = window[name];
+    if(typeof base !== 'function' || base.__v102Wrapped) return;
+    if(afterAsync){
+      const wrapped = async function(){
+        const out = await base.apply(this, arguments);
+        window.wc26UnifiedUiSync(name);
+        return out;
+      };
+      wrapped.__v102Wrapped = true;
+      window[name] = wrapped;
+    }else{
+      const wrapped = function(){
+        const out = base.apply(this, arguments);
+        window.wc26UnifiedUiSync(name);
+        return out;
+      };
+      wrapped.__v102Wrapped = true;
+      window[name] = wrapped;
+    }
+  };
+
+  wrap('render');
+  wrap('renderMatches');
+  wrap('patchLiveRows');
+  wrap('syncLiveResults', true);
+
+  window.addEventListener('focus', ()=>window.wc26UnifiedUiSync('focus'), {passive:true});
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible') window.wc26UnifiedUiSync('visible');
+  });
+
+  /* 4) Bracket crowded double-pen cards: keep inward shift, but much softer than v100. */
+  const st = document.createElement('style');
+  st.textContent = `
+    .ko-card.has-double-pen{--ko-card-score-col:80px!important;}
+    .ko-card.has-double-pen .ko-team{padding-right:7px!important;}
+    .ko-card.has-double-pen .ko-name{padding-right:1px!important;}
+
+    .ko-card.has-double-pen .ko-score.v100-inline,
+    .ko-card.has-double-pen .ko-score.v90-inline,
+    .ko-card.has-double-pen .ko-score.v87-inline,
+    .ko-card.has-double-pen .ko-score.v86-stack,
+    .ko-card.has-double-pen .ko-score.v85-rail,
+    .ko-card.has-double-pen .ko-score.v84-rail{
+      justify-content:flex-end!important;
+      transform:translateX(-3px)!important;
+      letter-spacing:-.03em!important;
+    }
+
+    .ko-card.has-double-pen .ko-tip-ind.v100-tip{margin-left:2px!important;}
+    .ko-card.has-double-pen .ko-real-pack b{font-size:.95em!important;}
+    .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-main{font-size:.89em!important;}
+    .ko-card.has-double-pen .ko-real-pack .ko-pen,
+    .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-pen{font-size:.51em!important;}
+
+    @media(max-width:720px){
+      .ko-card.has-double-pen{--ko-card-score-col:76px!important;}
+      .ko-card.has-double-pen .ko-team{padding-right:6px!important;}
+      .ko-card.has-double-pen .ko-score.v100-inline,
+      .ko-card.has-double-pen .ko-score.v90-inline,
+      .ko-card.has-double-pen .ko-score.v87-inline,
+      .ko-card.has-double-pen .ko-score.v86-stack,
+      .ko-card.has-double-pen .ko-score.v85-rail,
+      .ko-card.has-double-pen .ko-score.v84-rail{transform:translateX(-4px)!important;}
+      .ko-card.has-double-pen .ko-real-pack b{font-size:.93em!important;}
+      .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-main{font-size:.85em!important;}
+      .ko-card.has-double-pen .ko-real-pack .ko-pen,
+      .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-pen{font-size:.49em!important;}
+    }
+  `;
+  document.head.appendChild(st);
+
+  window.wc26UnifiedUiSync('boot');
+})();
+
 </script></body></html>
