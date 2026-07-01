@@ -16010,4 +16010,375 @@ function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v69 safe own tips + chronological cards + mobile UI cleanup ===== */
+
+/* 1) Own KO tips must NOT disappear when opening / returning to KO tab.
+   Remote empty ko payload no longer overwrites visible KO_PRED. */
+function wc26NonEmptyObj(o){ return !!(o && typeof o==='object' && Object.keys(o).length); }
+async function wc26LoadOwnTipsSafelyV69(){
+  if(!wc26Db || !wc26User) return false;
+
+  const keepPred = {...(PRED||{})};
+  const keepKo = {...(KO_PRED||{})};
+
+  try{
+    const doc = await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();
+    wc26RemoteDocExists = doc.exists;
+
+    if(doc.exists){
+      const d = doc.data() || {};
+      const remotePred = wc26CleanTips(wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']));
+      const remoteKo = wc26CleanTips(wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']));
+
+      PRED = wc26NonEmptyObj(remotePred) ? {...keepPred, ...remotePred} : keepPred;
+      KO_PRED = wc26NonEmptyObj(remoteKo) ? {...keepKo, ...remoteKo} : keepKo;
+
+      wc26OwnTipsLoaded = true;
+      wc26OwnTipsLoadFailed = false;
+      savePred();
+      render();
+      if(groupsComplete() && wc26NonEmptyObj(KO_PRED) && typeof syncKoPairsToWorker==='function') syncKoPairsToWorker();
+      return true;
+    }
+
+    PRED = keepPred;
+    KO_PRED = keepKo;
+    wc26OwnTipsLoaded = true;
+    wc26OwnTipsLoadFailed = false;
+    render();
+    return false;
+  }catch(e){
+    PRED = keepPred;
+    KO_PRED = keepKo;
+    wc26OwnTipsLoadFailed = true;
+    wc26OwnTipsLoaded = false;
+    wc26BackendError = e.message || String(e);
+    return false;
+  }
+}
+loadOwnTipsFromFirebase = wc26LoadOwnTipsSafelyV69;
+
+/* Safe auto sync override: includes own tips, results, KO pairs, but preserves current tips on empty/failed remote. */
+async function wc26AutoFullBackendSyncV68(reason='auto'){
+  if(window.__WC26_V69_SYNC_RUNNING__) return false;
+  window.__WC26_V69_SYNC_RUNNING__ = true;
+
+  const keepKo = {...(KO_PRED||{})};
+  const keepPred = {...(PRED||{})};
+
+  try{
+    const tasks=[];
+
+    if(wc26Db && wc26User){
+      tasks.push(Promise.race([
+        wc26LoadOwnTipsSafelyV69(),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('own-tips-timeout')),9000))
+      ]));
+    }
+
+    if(typeof loadMatchResultsFromBackendDb==='function'){
+      tasks.push(Promise.race([
+        loadMatchResultsFromBackendDb(true),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('results-timeout')),9000))
+      ]));
+    }else if(typeof syncLiveResults==='function'){
+      tasks.push(Promise.race([
+        syncLiveResults({force:true,skipRetry:true}),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('sync-timeout')),9000))
+      ]));
+    }
+
+    if(typeof wc26LoadKoPairsFromWorker==='function'){
+      tasks.push(Promise.race([
+        wc26LoadKoPairsFromWorker(true),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('ko-pairs-timeout')),9000))
+      ]));
+    }
+
+    await Promise.allSettled(tasks);
+
+    if(wc26NonEmptyObj(keepKo) && !wc26NonEmptyObj(KO_PRED)) KO_PRED = keepKo;
+    if(wc26NonEmptyObj(keepPred) && !wc26NonEmptyObj(PRED)) PRED = keepPred;
+
+    try{
+      if(typeof render==='function') render();
+      if(typeof patchKoCards==='function') patchKoCards();
+      if(typeof refreshOpenTipModal==='function') refreshOpenTipModal();
+      if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews();
+      if(typeof activateCrests==='function') activateCrests();
+    }catch(e){}
+    return true;
+  }catch(e){
+    if(wc26NonEmptyObj(keepKo) && !wc26NonEmptyObj(KO_PRED)) KO_PRED = keepKo;
+    if(wc26NonEmptyObj(keepPred) && !wc26NonEmptyObj(PRED)) PRED = keepPred;
+    console.warn('WC26 v69 full backend sync failed:', reason, e);
+    return false;
+  }finally{
+    window.__WC26_V69_SYNC_RUNNING__ = false;
+  }
+}
+
+/* 2) Cards / goal + yellow + red events in the modal: chronological order, including 45+1 / 90+9. */
+function wc26MinuteValue(v){
+  const s = String(v ?? '').trim();
+  const m = s.match(/(\d+)(?:\s*\+\s*(\d+))?/);
+  if(!m) return 9999;
+  return (+m[1]) + ((+m[2] || 0) / 100);
+}
+function eventMinute(e){return e?.minute ?? e?.time ?? e?.displayMinute ?? e?.clock ?? e?.matchMinute ?? '';}
+function wc26EventSort(a,b){
+  const av = wc26MinuteValue(eventMinute(a));
+  const bv = wc26MinuteValue(eventMinute(b));
+  if(av !== bv) return av-bv;
+  const order = {goal:0,yellow:1,yellowRed:2,red:3};
+  return (order[a._kind] ?? 9) - (order[b._kind] ?? 9);
+}
+function goalScorersHtml(r,x){
+  let events=[];
+  if(r&&Array.isArray(r.scorers))events=events.concat(r.scorers.map(s=>({...s,_kind:'goal'})));
+  if(r&&Array.isArray(r.yellowCards))events=events.concat(r.yellowCards.map(s=>({...s,_kind:'yellow'})));
+  if(r&&Array.isArray(r.redCards))events=events.concat(r.redCards.map(s=>({...s,_kind:s.yellowRed?'yellowRed':'red'})));
+  if(!events.length)return'';
+
+  let sorted=events.sort(wc26EventSort);
+  const infoCell=s=>{
+    if(s._kind==='red')return'<span class="red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Piros lap')+'</span>';
+    if(s._kind==='yellowRed')return'<span class="yellow-red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'2× Sárga')+'</span>';
+    if(s._kind==='yellow')return'<span class="yellow-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Sárga lap')+'</span>';
+    let name=s.player?esc(shortPlayerName(s.player)):'',
+        og=s.og?'<span class="goal-scorer-og">(&ouml;ng.)</span>':'',
+        pen=isPenaltyGoal(s)?'<span class="goal-scorer-pen">(11-es)</span>':'';
+    return'<span class="goal-scorer-name">'+name+'</span>'+og+pen+'<span class="goal-scorer-ball">&#9917;</span>';
+  };
+
+  return '<div class="goal-scorers">'+sorted.map(s=>{
+    const side = (s.team==='a'||s.team==='away'||s.side==='away') ? 'a' : 'h';
+    const left = side==='h' ? infoCell(s) : '';
+    const right = side==='a' ? infoCell(s) : '';
+    return '<div class="goal-scorer-row">'
+      +'<div class="goal-scorers-col">'+left+'</div>'
+      +'<div class="goal-scorer-min">'+esc(eventMinute(s))+'&prime;</div>'
+      +'<div class="goal-scorers-col">'+right+'</div>'
+      +'</div>';
+  }).join('')+'</div>';
+}
+
+/* 3) Bracket score renderer: real line and tip line are cleanly separated.
+   More readable than squeezing 1(2)2(4) into one pile. */
+function wc26KoTipInline(score,pen){
+  if(!validScore(score)) return '';
+  return '<span class="ko-tip-ind"><span class="ko-tip-score-num">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
+}
+function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
+  if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
+  const hasTip = validScore(tipScore);
+  const hasRealPen = validScore(pen);
+  const hasTipPen = validScore(tipPen);
+  return '<div class="ko-team '+(cls||'')+' ko-team-v69">'
+    +crest(team,'22px')
+    +'<span class="ko-name">'+esc(team)+'</span>'
+    +'<span class="ko-score ko-score-v69 '+(hasTip?'has-tip-v69':'')+'">'
+      +'<span class="ko-score-real-line"><b>'+(score==null?'-':esc(score))+'</b>'+(hasRealPen?'<small class="ko-pen">('+esc(pen)+')</small>':'')+'</span>'
+      +(hasTip?'<span class="ko-score-tip-line">'+wc26KoTipInline(tipScore,hasTipPen?tipPen:null)+'</span>':'')
+    +'</span>'
+  +'</div>';
+}
+
+/* 4) Mobile community profile rows: VALÓS / TIPP block goes to the LEFT, not cut on the right. */
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Bracket mobile layout: a little wider card and a fixed tidy score column. */
+    @media(max-width:720px){
+      .ko-card{
+        max-width:220px!important;
+        width:220px!important;
+        min-width:220px!important;
+      }
+      .ko-card .ko-team-v69,
+      .ko-card .ko-team{
+        grid-template-columns:22px minmax(0,1fr) 42px!important;
+        column-gap:5px!important;
+        padding-left:7px!important;
+        padding-right:6px!important;
+      }
+      .ko-card .ko-name{
+        min-width:0!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+        white-space:nowrap!important;
+        max-width:100%!important;
+      }
+      .ko-card .ko-score-v69,
+      .ko-card .ko-score{
+        width:42px!important;
+        min-width:42px!important;
+        max-width:42px!important;
+        display:flex!important;
+        flex-direction:column!important;
+        align-items:flex-end!important;
+        justify-content:center!important;
+        gap:1px!important;
+        overflow:visible!important;
+        white-space:nowrap!important;
+        text-align:right!important;
+        line-height:1!important;
+        transform:none!important;
+      }
+      .ko-card .ko-score-real-line,
+      .ko-card .ko-score-tip-line{
+        display:inline-flex!important;
+        align-items:baseline!important;
+        justify-content:flex-end!important;
+        gap:2px!important;
+        max-width:100%!important;
+        white-space:nowrap!important;
+        line-height:1!important;
+      }
+      .ko-card .ko-score-real-line b{
+        font-size:16px!important;
+        line-height:1!important;
+        font-weight:950!important;
+      }
+      .ko-card .ko-pen{
+        color:#ff6f84!important;
+        font-size:9px!important;
+        line-height:1!important;
+        letter-spacing:-.05em!important;
+        margin-left:1px!important;
+        font-weight:950!important;
+      }
+      .ko-card .ko-tip-ind{
+        display:inline-flex!important;
+        align-items:baseline!important;
+        justify-content:flex-end!important;
+        gap:1px!important;
+        margin:0!important;
+        color:#d7e0e6!important;
+        font-size:10px!important;
+        line-height:1!important;
+        font-weight:900!important;
+        letter-spacing:-.02em!important;
+        white-space:nowrap!important;
+        opacity:.9!important;
+      }
+      .ko-card .ko-tip-ind .ko-tip-pen{
+        color:#f0b85c!important;
+        font-size:8px!important;
+        letter-spacing:-.05em!important;
+      }
+    }
+
+    /* Community profile modal/mobile: put the indicators on the left side. */
+    @media(max-width:720px){
+      .community-preview .community-pred{
+        grid-template-columns:1fr!important;
+        gap:8px!important;
+      }
+      .community-preview .community-pred .community-result{
+        justify-self:start!important;
+        align-self:start!important;
+        text-align:left!important;
+        min-width:0!important;
+        width:auto!important;
+        max-width:100%!important;
+        grid-template-columns:auto auto!important;
+        column-gap:14px!important;
+        order:2!important;
+      }
+      .community-preview .community-pred .community-score-col{
+        align-items:flex-start!important;
+        text-align:left!important;
+      }
+      .community-preview .community-pred .community-score-value,
+      .community-preview .community-pred .community-real-score,
+      .community-preview .community-pred .community-value-line,
+      .community-preview .community-pred .community-score-main{
+        justify-content:flex-start!important;
+        text-align:left!important;
+      }
+      .community-preview .community-pred .community-grade-note{
+        justify-self:start!important;
+        text-align:left!important;
+      }
+    }
+
+    /* Penalty box on match modal: remove duplicate "valós eredmény" and make it proportional on phone. */
+    .penalty-box.locked-real-pen .penalty-title span:first-child::after{
+      content:''!important;
+    }
+    @media(max-width:720px){
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen,
+      .tip-overlay[data-tip-kind="ko"] .penalty-box{
+        margin-top:12px!important;
+        padding:12px!important;
+        border-radius:16px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title{
+        display:grid!important;
+        grid-template-columns:1fr auto!important;
+        gap:8px!important;
+        align-items:start!important;
+        font-size:clamp(15px,4vw,18px)!important;
+        line-height:1.08!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title span:last-child{
+        font-size:clamp(10px,2.7vw,12px)!important;
+        line-height:1.1!important;
+        text-align:right!important;
+        opacity:.82!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr)!important;
+        align-items:center!important;
+        gap:6px!important;
+        margin-top:12px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-team{
+        font-size:clamp(12px,3.1vw,14px)!important;
+        min-width:0!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+        white-space:nowrap!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs input{
+        width:clamp(42px,10.8vw,52px)!important;
+        height:clamp(42px,10.8vw,52px)!important;
+        font-size:clamp(24px,6.3vw,30px)!important;
+        border-radius:12px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-sep{
+        font-size:clamp(18px,4.8vw,23px)!important;
+        opacity:.65!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-note{
+        margin-top:9px!important;
+        font-size:clamp(11px,2.85vw,13px)!important;
+        line-height:1.3!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+/* Trigger safe reload when KO tab is opened, but after current render so tips do not flicker empty. */
+(function(){
+  if(window.__WC26_V69_TAB_SYNC_INSTALLED__) return;
+  window.__WC26_V69_TAB_SYNC_INSTALLED__=true;
+  document.addEventListener('click',e=>{
+    const t=e.target.closest?.('.tab[data-tab="knockout"], [data-tab="knockout"]');
+    if(t){
+      const keepKo={...(KO_PRED||{})}, keepPred={...(PRED||{})};
+      setTimeout(async()=>{
+        await wc26AutoFullBackendSyncV68('knockout-tab');
+        if(wc26NonEmptyObj(keepKo) && !wc26NonEmptyObj(KO_PRED)) KO_PRED=keepKo;
+        if(wc26NonEmptyObj(keepPred) && !wc26NonEmptyObj(PRED)) PRED=keepPred;
+        render();
+      },120);
+    }
+  },true);
+})();
+
 </script></body></html>
