@@ -16312,256 +16312,372 @@ function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
 })();
 
 
-/* ===== WC26 v81 from v71: safe modal-derived stat cards only ===== */
+/* ===== WC26 v82 from v71: KO tip persistence + real/tip spacing + neutral pending cards ===== */
 
 /*
-  v80 azért tudott beakadni, mert globálisan felülírta a calcFairPlay()-t.
-  A calcFairPlay() a tabellák rendezésénél rengetegszer fut, ezért ha abban DOM/HTML-parsolás van, megöli a betöltést.
-
-  v81:
-  - calcFairPlay() NEM módosul, a tabellák maradnak gyorsak.
-  - csak a stat-card függvények használják a modal-render logikát:
-      topCardsHtml()
-      topScorersList()
-      topMatchesHtml()
-  - nincs backend read
-  - nincs Firestore read
-  - nincs interval
-  - nincs render/merge/patch wrapper
+  A képen látható hiba:
+  - az eredmény-indikátor / outcome színezés ráülhet olyan kártyára is, ahol nincs valós eredmény
+  - a KO tippek pár másodperc után eltűnhetnek, ha egy sync üres KO_PRED state-et hoz
+  - penaltys összehasonlításnál túl kicsi a real/tipp közti tér és túl kicsi a tipp
 */
 
-function wc26KoMetaV81(id){
-  id=String(id||'');
-  const idx=+(id.match(/-(\d+)$/)?.[1]||0);
-  if(id.includes('R32'))return{title:'Legjobb 32',index:idx};
-  if(id.includes('R16'))return{title:'Nyolcaddöntő',index:idx};
-  if(id.includes('QF'))return{title:'Negyeddöntő',index:idx};
-  if(id.includes('SF'))return{title:'Elődöntő',index:idx};
-  if(id.includes('BR'))return{title:'Bronzmeccs',index:idx||1};
-  if(id.includes('F-'))return{title:'Döntő',index:idx||1};
-  return{title:'Kieséses kör',index:idx};
-}
+(function(){
+  const LS_KEY = () => 'wc26_ko_pred_backup_v82_' + ((window.wc26User && wc26User.uid) || 'anon');
+  window.__WC26_V82_LAST_GOOD_KO__ = window.__WC26_V82_LAST_GOOD_KO__ || {};
 
-function wc26NormTeamV81(v){
-  v=String(v||'').trim();
-  if(!v||v==='TBD'||v==='null'||v==='undefined')return'';
-  try{return normalizeTeamName(v)||v;}catch(e){return v;}
-}
+  function nonEmpty(o){ return !!(o && typeof o === 'object' && Object.keys(o).length); }
 
-function wc26AllStatMatchesV81(){
-  const out=[],seen=new Set();
-
-  (FX||[]).forEach(m=>{
-    if(!m||!m.id||seen.has(m.id))return;
-    seen.add(m.id);
-    out.push({id:m.id,kind:'group',h:m.h,a:m.a,g:m.g||'',d:m.d||m.date||'',title:m.title||'',index:m.index||'',raw:m});
-  });
-
-  try{
-    const rounds=buildKO();
-    const bronze=buildBronze(rounds);
-    rounds.flatMap(r=>r.matches).concat([bronze]).forEach(m=>{
-      if(!m||!m.id||seen.has(m.id))return;
-      seen.add(m.id);
-      const meta=wc26KoMetaV81(m.id);
-      out.push({
-        id:m.id,
-        kind:'ko',
-        h:wc26NormTeamV81(m.h||m.homeTeam||''),
-        a:wc26NormTeamV81(m.a||m.awayTeam||''),
-        g:'',
-        d:m.date||'',
-        title:m.title||meta.title,
-        index:m.index||meta.index,
-        raw:m
-      });
-    });
-  }catch(e){}
-
-  Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{
-    if(seen.has(id))return;
-    const meta=wc26KoMetaV81(id);
-    const h=wc26NormTeamV81(r?.homeTeam||r?.home||'');
-    const a=wc26NormTeamV81(r?.awayTeam||r?.away||'');
-    if(!h&&!a)return;
-    seen.add(id);
-    out.push({id,kind:String(id).startsWith('KO-')?'ko':'live',h,a,g:'',d:r?.date||'',title:meta.title,index:meta.index,raw:{id,h,a,title:meta.title,index:meta.index,date:r?.date||'',t:r?.time||''}});
-  });
-
-  return out;
-}
-
-function wc26ActualV81(m){
-  try{
-    const r=actualFor({id:m.id});
-    if(r)return r;
-  }catch(e){}
-  return LIVE_RESULTS?.[m.id]||null;
-}
-
-function wc26EventHtmlV81(m,r){
-  if(!r||!(r.started||r.finished))return'';
-  try{
-    return (goalScorersHtml(r,{h:m.h,a:m.a})||'') + (typeof redCardsHtml==='function'?(redCardsHtml(r,{h:m.h,a:m.a})||''):'');
-  }catch(e){return'';}
-}
-
-function wc26SideFromRowV81(row,m){
-  const cols=row.querySelectorAll('.goal-scorers-col');
-  const left=cols[0],right=cols[1];
-  if(left&&left.textContent.trim())return m.h;
-  if(right&&right.textContent.trim())return m.a;
-  if(left&&left.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return m.h;
-  if(right&&right.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return m.a;
-  return m.h;
-}
-
-function wc26ModalDerivedStatsV81(){
-  const sig=JSON.stringify({
-    ids:Object.keys(LIVE_RESULTS||{}).sort().map(id=>{
-      const r=LIVE_RESULTS[id]||{};
-      return [id,r.h,r.a,r.pH,r.pA,r.started,r.finished,r.status,r.updatedAt,
-        Array.isArray(r.scorers)?r.scorers.length:String(r.scorers||'').length,
-        Array.isArray(r.redCards)?r.redCards.length:String(r.redCards||'').length,
-        Array.isArray(r.yellowCards)?r.yellowCards.length:String(r.yellowCards||'').length
-      ].join(':');
-    }),
-    pred:Object.keys(PRED||{}).length,
-    ko:Object.keys(KO_PRED||{}).length
-  });
-
-  if(window.__WC26_V81_STATS_CACHE__&&window.__WC26_V81_STATS_CACHE__.sig===sig){
-    return window.__WC26_V81_STATS_CACHE__.data;
+  function readBackup(){
+    try{
+      const raw = localStorage.getItem(LS_KEY());
+      const obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === 'object' ? obj : {};
+    }catch(e){ return {}; }
   }
 
-  const fp={},scorers={},realRows=[],tipRows=[];
+  function writeBackup(obj){
+    try{
+      if(nonEmpty(obj)) localStorage.setItem(LS_KEY(), JSON.stringify(obj));
+    }catch(e){}
+  }
 
-  const ensure=n=>{
-    n=wc26NormTeamV81(n);
-    if(!n)return'';
-    if(!fp[n])fp[n]={yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0};
-    return n;
+  function mergeBackups(){
+    const b = readBackup();
+    const merged = {...b, ...(window.__WC26_V82_LAST_GOOD_KO__ || {}), ...(KO_PRED || {})};
+    if(nonEmpty(merged)){
+      window.__WC26_V82_LAST_GOOD_KO__ = {...merged};
+      writeBackup(merged);
+    }
+    return merged;
+  }
+
+  window.wc26RememberKoTipsV82 = function(){
+    if(nonEmpty(KO_PRED)){
+      window.__WC26_V82_LAST_GOOD_KO__ = {...window.__WC26_V82_LAST_GOOD_KO__, ...KO_PRED};
+      writeBackup(window.__WC26_V82_LAST_GOOD_KO__);
+    }
   };
 
-  (ALL||[]).forEach(ensure);
+  window.wc26RestoreKoTipsV82 = function(){
+    const merged = mergeBackups();
+    if(nonEmpty(merged) && !nonEmpty(KO_PRED)){
+      KO_PRED = {...merged};
+      try{ savePred(); }catch(e){}
+      return true;
+    }
+    return false;
+  };
 
-  const parser=document.createElement('div');
+  /* Save/restore wrappers: do not let backend/user-load/render cycles blank KO tips. */
+  if(typeof savePred === 'function' && !savePred.__v82Wrapped){
+    const baseSavePred = savePred;
+    savePred = function(){
+      wc26RememberKoTipsV82();
+      return baseSavePred.apply(this, arguments);
+    };
+    savePred.__v82Wrapped = true;
+  }
 
-  wc26AllStatMatchesV81().forEach(m=>{
-    m.h=ensure(m.h);
-    m.a=ensure(m.a);
-    if(!m.h&&!m.a)return;
+  if(typeof loadOwnTipsFromFirebase === 'function' && !loadOwnTipsFromFirebase.__v82Wrapped){
+    const baseLoadOwn = loadOwnTipsFromFirebase;
+    loadOwnTipsFromFirebase = async function(){
+      const before = mergeBackups();
+      const out = await baseLoadOwn.apply(this, arguments);
+      if(!nonEmpty(KO_PRED) && nonEmpty(before)){
+        KO_PRED = {...before};
+        try{ savePred(); }catch(e){}
+      }else{
+        wc26RememberKoTipsV82();
+      }
+      return out;
+    };
+    loadOwnTipsFromFirebase.__v82Wrapped = true;
+  }
 
-    const r=wc26ActualV81(m);
-    const hasReal=!!(r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a));
+  if(typeof render === 'function' && !render.__v82Wrapped){
+    const baseRender = render;
+    render = function(){
+      wc26RestoreKoTipsV82();
+      const out = baseRender.apply(this, arguments);
+      wc26RememberKoTipsV82();
+      return out;
+    };
+    render.__v82Wrapped = true;
+  }
 
-    if(hasReal){
-      realRows.push({m:{id:m.id,h:m.h,a:m.a,g:m.g,d:m.d,title:m.title,index:m.index},p:{h:+r.h,a:+r.a},source:'Valós'});
-    }else{
-      const p=m.kind==='group'?(getPred(m.id)||PRED[m.id]||null):(KO_PRED[m.id]||null);
-      if(p&&validScore(p.h)&&validScore(p.a)){
-        tipRows.push({m:{id:m.id,h:m.h,a:m.a,g:m.g,d:m.d,title:m.title,index:m.index},p:{h:+p.h,a:+p.a,pH:p.pH,pA:p.pA},source:'Tipp'});
+  /* koPred fallback: even if KO_PRED gets blanked, cards still read from last-good/local backup. */
+  window.__wc26BaseKoPredV82 = typeof koPred === 'function' ? koPred : null;
+  koPred = function(id){
+    let p = (KO_PRED || {})[id] || (window.__WC26_V82_LAST_GOOD_KO__ || {})[id] || readBackup()[id];
+    if(!p || !validScore(p.h) || !validScore(p.a)) return null;
+    let h=+p.h,a=+p.a,ph=validScore(p.pH)?+p.pH:null,pa=validScore(p.pA)?+p.pA:null;
+    if(h===a && (ph==null || pa==null || ph===pa)) return null;
+    return {h,a,pH:ph,pA:pa,pen:h===a};
+  };
+
+  if(typeof koTipScore === 'function'){
+    koTipScore = function(x){
+      let p = koPred(x.id);
+      if(!p || !validScore(p.h) || !validScore(p.a)) return {cat:'',pts:0};
+      let r = actualFor({id:x.id});
+      if(!r || !(r.started || r.finished) || !validScore(r.h) || !validScore(r.a)) return {cat:'',pts:0};
+      let g = gradeKoTip(p,r);
+      return {cat:g.cat,pts:g.pts};
+    };
+  }
+
+  if(typeof wc26KoCardGrade === 'function'){
+    wc26KoCardGrade = function(m){
+      const p = koPred(m.id);
+      const r = actualFor({id:m.id});
+      if(!p || !r || !(r.started || r.finished) || !validScore(p.h) || !validScore(p.a) || !validScore(r.h) || !validScore(r.a)) return {cat:''};
+      const g = gradeTip({h:+p.h,a:+p.a},{h:+r.h,a:+r.a});
+      return {cat:g.cat || ''};
+    };
+  }
+
+  wc26RememberKoTipsV82();
+})();
+
+/* Bigger, cleaner bracket score renderer. Real score red; tip bigger; penalty compare gets extra spacing. */
+function wc26KoTipInline(score,pen){
+  if(!validScore(score)) return '';
+  return '<span class="ko-tip-ind v82-tip"><span class="ko-tip-main">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
+}
+
+function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
+  if(!team) return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
+  return '<div class="ko-team '+(cls||'')+'">'
+    +crest(team,'22px')
+    +'<span class="ko-name">'+esc(team)+'</span>'
+    +'<span class="ko-score">'
+      +(pen!=null?'<small class="ko-pen">('+pen+')</small>':'')
+      +'<b>'+(score==null?'-':score)+'</b>'
+      +wc26KoTipInline(tipScore,tipPen)
+    +'</span>'
+  +'</div>';
+}
+
+function koCard(m,row){
+  var r=LIVE_RESULTS[m.id],
+      hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),
+      p=koPred(m.id);
+
+  var dh=hasReal?+r.h:(p?p.h:null),
+      da=hasReal?+r.a:(p?p.a:null);
+
+  var dph=hasReal?(validScore(r.pH)?+r.pH:null):(p&&p.pen?p.pH:null),
+      dpa=hasReal?(validScore(r.pA)?+r.pA:null):(p&&p.pen?p.pA:null);
+
+  var realHasPen=hasReal&&validScore(r.pH)&&validScore(r.pA)&&+r.h===+r.a;
+  var tipHasPen=p&&validScore(p.h)&&validScore(p.a)&&+p.h===+p.a&&validScore(p.pH)&&validScore(p.pA);
+  var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;
+
+  if(dh!=null&&da!=null&&m.h&&m.a){
+    if(dh!==da){w=dh>da?m.h:m.a;}
+    else if(hasPen&&dph!==dpa){w=dph>dpa?m.h:m.a;}
+  }
+
+  var hw=w===m.h,aw=w===m.a;
+  var rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';
+  var sc=wc26KoCardGrade(m),cls=[];
+
+  if(hasReal) cls.push('live-result');
+  else if(p) cls.push('predicted pending-tip no-real-result');
+
+  /* RESULT COLOR ONLY WHEN THERE IS AN ACTUAL RESULT. */
+  if(hasReal && sc.cat==='exact') cls.push('result-exact');
+  else if(hasReal && sc.cat==='diff') cls.push('result-diff');
+  else if(hasReal && sc.cat==='outcome') cls.push('result-outcome');
+  else if(hasReal && sc.cat==='miss') cls.push('result-miss');
+
+  if(hasReal&&p) cls.push('has-score-compare');
+  if(hasReal&&p&&realHasPen&&tipHasPen) cls.push('has-double-pen');
+  if(m.locked) cls.push('locked');
+
+  const tipHome=(hasReal&&p)?p.h:null, tipAway=(hasReal&&p)?p.a:null;
+  const tipPenHome=(hasReal&&tipHasPen)?p.pH:null;
+  const tipPenAway=(hasReal&&tipHasPen)?p.pA:null;
+
+  return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'
+    +koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,tipHome,tipPenHome)
+    +koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,tipAway,tipPenAway)
+    +'</div>';
+}
+
+/* Match-list score renderer: bigger tip + wider real/tip gap only in penalty-compare situation. */
+function scoreHtml(x){
+  const isKo = x.id && String(x.id).startsWith('KO-');
+  const p = isKo ? koPred(x.id) : getPred(x.id);
+  const r = actualFor(x);
+  const hasReal = r && (r.started || r.finished || matchLockState({id:x.id}) !== 'open') && validScore(r.h) && validScore(r.a);
+  const pHasPen = wc26HasPenScore(p);
+  const rHasPen = wc26HasPenScore(r);
+  const bothHavePen = !!(p && hasReal && pHasPen && rHasPen);
+  let lines = '';
+
+  if(p && hasReal){
+    lines='<div class="mr-score-compare '+(bothHavePen?'has-double-pen':'')+'">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,rHasPen?r.pH:null)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,rHasPen?r.pA:null)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only '+(pHasPen?'has-tip-pen':'')+'">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only '+(rHasPen?'has-real-pen':'')+'">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,rHasPen?r.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,rHasPen?r.pA:null)+'</span></div>'
+      +'</div>';
+  }else{
+    return '<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  const stateBadge = (hasReal && r && !r.finished) ? wc26PrimaryStateBadge(r) : '';
+  return stateBadge
+    ? '<div class="mr-score-wrap '+(p?'':'no-tip')+'"><div class="mr-clock-row">'+stateBadge+'</div><div class="mr-score-lines">'+lines+'</div></div>'
+    : lines;
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* NO ACTUAL RESULT = no red/green/yellow result indicator. This fixes the Portugal-type card. */
+    .ko-card.no-real-result,
+    .ko-card.pending-tip:not(.live-result),
+    .ko-card.predicted:not(.live-result){
+      background:rgba(18,26,31,.94)!important;
+      border-color:rgba(255,255,255,.13)!important;
+      box-shadow:inset 4px 0 0 rgba(154,173,182,.42), 0 0 0 1px rgba(255,255,255,.035)!important;
+    }
+    .ko-card.no-real-result.result-exact,
+    .ko-card.no-real-result.result-diff,
+    .ko-card.no-real-result.result-outcome,
+    .ko-card.no-real-result.result-miss{
+      background:rgba(18,26,31,.94)!important;
+      border-color:rgba(255,255,255,.13)!important;
+      box-shadow:inset 4px 0 0 rgba(154,173,182,.42), 0 0 0 1px rgba(255,255,255,.035)!important;
+    }
+
+    /* Bracket: real result is red, tip is bigger and farther. */
+    .ko-card.live-result .ko-score b,
+    .ko-card.live-result .ko-score .ko-pen{
+      color:#ff6f84!important;
+    }
+    .ko-card.live-result .ko-tip-ind{
+      color:#f2f6f8!important;
+      margin-left:9px!important;
+      font-size:1.05em!important;
+      gap:3px!important;
+      transform:translateY(.01em);
+    }
+    .ko-card.live-result.has-double-pen .ko-tip-ind{
+      margin-left:13px!important;
+      font-size:1.10em!important;
+    }
+    .ko-card.live-result.has-double-pen .ko-score{
+      min-width:calc(var(--ko-card-score-col) + 14px)!important;
+    }
+    .ko-card .ko-tip-ind .ko-tip-pen{
+      color:#ffc15a!important;
+      font-size:.78em!important;
+      font-weight:950!important;
+    }
+
+    /* Match cards: normal gap unchanged, penalty real+tip compare gets more air. */
+    .mr-score-real{
+      color:#ff6f84!important;
+      font-weight:950!important;
+    }
+    .mr-score-tip{
+      color:#f4f7fb!important;
+      font-weight:950!important;
+    }
+    .mr-score-compare.has-double-pen{
+      gap:6px!important;
+    }
+    .mr-score-compare.has-double-pen .mr-score-row{
+      column-gap:clamp(12px,2.2vw,21px)!important;
+      justify-content:center!important;
+    }
+    .mr-score-compare.has-double-pen .mr-score-tip{
+      font-size:clamp(15px,3.9vw,21px)!important;
+      line-height:1!important;
+    }
+    .mr-score-compare.has-double-pen .mr-score-real{
+      font-size:clamp(13px,3.45vw,19px)!important;
+      line-height:1!important;
+    }
+
+    @media(max-width:720px){
+      .mr-score-compare.has-double-pen .mr-score-row{
+        column-gap:16px!important;
+      }
+      .mr-score-compare.has-double-pen .mr-score-tip{
+        font-size:19px!important;
+      }
+      .mr-score-compare.has-double-pen .mr-score-real{
+        font-size:17px!important;
+      }
+
+      .ko-card.live-result .ko-tip-ind{
+        margin-left:8px!important;
+        font-size:1.08em!important;
+      }
+      .ko-card.live-result.has-double-pen .ko-tip-ind{
+        margin-left:12px!important;
+        font-size:1.13em!important;
       }
     }
 
-    const html=wc26EventHtmlV81(m,r);
-    if(!html)return;
-
-    parser.innerHTML=html;
-    parser.querySelectorAll('.goal-scorer-row').forEach(row=>{
-      const team=ensure(wc26SideFromRowV81(row,m));
-      if(!team||!fp[team])return;
-
-      const isYellowRed=row.classList.contains('yellow-red-row')||!!row.querySelector('.yellow-red-card-mark');
-      const isYellow=row.classList.contains('yellow-card-row')||!!row.querySelector('.yellow-card-mark');
-      const isRed=row.classList.contains('red-card-row')||!!row.querySelector('.red-card-mark');
-
-      if(isYellowRed){fp[team].yellowRed++;return;}
-      if(isRed){fp[team].red++;return;}
-      if(isYellow){fp[team].yellow++;return;}
-
-      if(row.querySelector('.goal-scorer-ball')){
-        if(row.querySelector('.goal-scorer-og'))return;
-        const name=(row.querySelector('.goal-scorer-name')?.textContent||'').trim();
-        if(!name)return;
-        const key=name+'|'+team;
-        if(!scorers[key])scorers[key]={player:name,team,goals:0};
-        scorers[key].goals++;
+    /* Phone modal: size first, not new chaos. */
+    @media(max-width:720px){
+      .tip-overlay[data-tip-kind="ko"] .penalty-box{
+        padding:10px 12px!important;
+        border-radius:16px!important;
+        margin-top:12px!important;
       }
-    });
-    parser.innerHTML='';
-  });
-
-  Object.values(fp).forEach(t=>{t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5);});
-
-  const data={
-    fp,
-    scorers:Object.values(scorers).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player,'hu')).slice(0,20),
-    realRows,
-    tipRows
-  };
-
-  window.__WC26_V81_STATS_CACHE__={sig,data};
-  return data;
-}
-
-function topScorersList(){
-  return wc26ModalDerivedStatsV81().scorers;
-}
-
-function topCardsHtml(){
-  const fp=wc26ModalDerivedStatsV81().fp;
-  const teams=Object.keys(fp);
-  const YC='<span style="display:inline-block;width:.5em;height:.72em;background:#f5c842;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
-  const RC='<span style="display:inline-block;width:.5em;height:.72em;background:#e03040;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
-  const YRC='<span style="display:inline-block;width:.8em;height:.72em;background:linear-gradient(90deg,#f5c842 50%,#e03040 50%);border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
-
-  const byYellow=teams.filter(n=>fp[n].yellow>0).sort((a,b)=>fp[b].yellow-fp[a].yellow||a.localeCompare(b)).slice(0,10);
-  const byRed=teams.filter(n=>(fp[n].red+fp[n].yellowRed+fp[n].yellowPlusRed)>0).sort((a,b)=>(fp[b].red+fp[b].yellowRed+fp[b].yellowPlusRed)-(fp[a].red+fp[a].yellowRed+fp[a].yellowPlusRed)||a.localeCompare(b));
-
-  if(!byYellow.length&&!byRed.length)return'';
-
-  function row(i,n,val,sub){
-    return'<div class="wc-stat-row"><div class="wc-stat-rank">'+i+'</div><div class="wc-stat-main"><div class="wc-stat-name stat-game-name">'+crest(n)+'<span class="stat-game-text">'+esc(n)+'</span></div><div class="wc-stat-sub">'+sub+'</div></div><div class="wc-stat-val">'+val+'</div></div>';
-  }
-
-  let out='';
-  if(byYellow.length){
-    out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 10</h2><div class="wc-stat-list stat-match-list">'
-      +byYellow.map((n,i)=>row(i+1,n,YC+' '+fp[n].yellow,fp[n].yellow+' sárga lap')).join('')
-      +'</div></section>';
-  }
-
-  if(byRed.length){
-    out+='<section class="card"><h2 class="card-title">Piros lapok &ndash; Összes</h2><div class="wc-stat-list stat-match-list">'
-      +byRed.map((n,i)=>{
-        const t=fp[n],total=t.red+t.yellowRed+t.yellowPlusRed,parts=[];
-        if(t.yellowRed)parts.push(YRC+' '+t.yellowRed+'&times; kettős sárga');
-        if(t.red)parts.push(RC+' '+t.red+'&times; direkt piros');
-        if(t.yellowPlusRed)parts.push(YRC+RC+' '+t.yellowPlusRed+'&times; sárga+piros');
-        return row(i+1,n,RC+' '+total,parts.join(' &middot; '));
-      }).join('')
-      +'</div></section>';
-  }
-  return out;
-}
-
-function topMatchesHtml(){
-  const s=wc26ModalDerivedStatsV81();
-  const res=s.realRows.concat(s.tipRows);
-  const goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
-  const diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
-
-  return '<section class="card"><h2 class="card-title">Leggólosabb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
-    +(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs adat','A valós eredmények után frissül','0')).join(''))
-    +'</div></section><section class="card"><h2 class="card-title">Legegyoldalúbb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
-    +(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs lejátszott mérkőzés','Gólkülönbség: 0','0')).join(''))
-    +'</div></section>';
-}
-
-window.WC26_MODAL_STATS_DEBUG=function(team='Mexico'){
-  const s=wc26ModalDerivedStatsV81();
-  return{team,fairPlay:s.fp[team]||null,scorers:s.scorers.filter(x=>x.team===team),realRows:s.realRows.filter(x=>x.m.h===team||x.m.a===team),tipRows:s.tipRows.filter(x=>x.m.h===team||x.m.a===team)};
-};
+      .tip-overlay[data-tip-kind="ko"] .penalty-title{
+        font-size:15px!important;
+        line-height:1.1!important;
+        margin-bottom:7px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title span:last-child{
+        font-size:10px!important;
+        max-width:92px!important;
+        line-height:1.05!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs{
+        grid-template-columns:minmax(0,1fr) 44px 12px 44px minmax(0,1fr)!important;
+        gap:6px!important;
+        align-items:center!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs input{
+        width:44px!important;
+        height:44px!important;
+        font-size:26px!important;
+        border-radius:13px!important;
+        padding:0!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-team{
+        font-size:12px!important;
+        line-height:1.05!important;
+        min-width:0!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+        white-space:nowrap!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-note{
+        margin-top:8px!important;
+        padding-top:8px!important;
+        font-size:11px!important;
+        line-height:1.35!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
 
 </script></body></html>
