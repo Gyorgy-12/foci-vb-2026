@@ -15563,464 +15563,17 @@ function scoreHtml(x){
 })();
 
 
-/* ===== WC26 v67 mobile bracket compact pens + auto backend sync on load/focus ===== */
+/* ===== WC26 v70 compact bracket + safe sync + chronological events ===== */
 
-/* Bracket cards on phone:
-   when real pens + tipped pens both exist, split the score into two tiny rows:
-   top = real score/pen, bottom = your tip/pen. This prevents the "1(2)2(2)" pile-up. */
-function wc26KoTipInline(score,pen){
-  if(!validScore(score)) return '';
-  return '<span class="ko-tip-ind"><span>'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
-}
-function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
-  if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
-  const hasTip = validScore(tipScore);
-  const hasRealPen = validScore(pen);
-  const hasTipPen = validScore(tipPen);
-  const scoreClass = (hasTip && (hasRealPen || hasTipPen)) ? ' ko-score-stacked' : '';
-  return '<div class="ko-team '+(cls||'')+'">'
-    +crest(team,'22px')
-    +'<span class="ko-name">'+esc(team)+'</span>'
-    +'<span class="ko-score'+scoreClass+'">'
-      +'<span class="ko-score-real-line">'+(hasRealPen?'<small class="ko-pen">('+esc(pen)+')</small>':'')+'<b>'+(score==null?'-':esc(score))+'</b></span>'
-      +(hasTip?'<span class="ko-score-tip-line">'+wc26KoTipInline(tipScore,tipPen)+'</span>':'')
-    +'</span>'
-  +'</div>';
-}
+/* A) Safe own-tip reload.
+   This prevents KO_PRED from being wiped when the KO tab loads before Firebase returns usable data. */
+function wc26NonEmptyObj(o){ return !!(o && typeof o === 'object' && Object.keys(o).length); }
 
-(function(){
-  const st=document.createElement('style');
-  st.textContent=`
-    /* Desktop keeps normal vibe, mobile gets the heavy compacting. */
-    .ko-card .ko-score-stacked{
-      display:inline-flex!important;
-      flex-direction:column!important;
-      align-items:flex-end!important;
-      justify-content:center!important;
-      gap:1px!important;
-      line-height:1!important;
-      min-width:0!important;
-      max-width:42%!important;
-      white-space:nowrap!important;
-    }
-    .ko-card .ko-score-stacked .ko-score-real-line,
-    .ko-card .ko-score-stacked .ko-score-tip-line{
-      display:inline-flex!important;
-      align-items:baseline!important;
-      justify-content:flex-end!important;
-      gap:2px!important;
-      min-width:0!important;
-      max-width:100%!important;
-      white-space:nowrap!important;
-      line-height:1!important;
-    }
-    .ko-card .ko-score-stacked .ko-tip-ind{
-      margin-left:0!important;
-    }
-
-    @media(max-width:720px){
-      .ko-card{
-        --ko-card-score-col:clamp(30px,8.8vw,38px)!important;
-      }
-      .ko-card .ko-team{
-        gap:clamp(3px,.75vw,5px)!important;
-      }
-      .ko-card .ko-name{
-        min-width:0!important;
-        max-width:calc(100% - 72px)!important;
-      }
-      .ko-card .ko-score,
-      .ko-card .ko-score-stacked{
-        max-width:42%!important;
-        min-width:clamp(26px,7.2vw,34px)!important;
-        overflow:visible!important;
-      }
-      .ko-card .ko-score b,
-      .ko-card .ko-score-stacked b{
-        font-size:.82em!important;
-        line-height:1!important;
-      }
-      .ko-card .ko-score .ko-pen,
-      .ko-card .ko-score-stacked .ko-pen{
-        font-size:.52em!important;
-        line-height:1!important;
-        letter-spacing:-.075em!important;
-        margin:0!important;
-        color:#ff6f84!important;
-      }
-      .ko-card .ko-tip-ind{
-        font-size:.58em!important;
-        line-height:1!important;
-        margin:0!important;
-        gap:1px!important;
-        letter-spacing:-.055em!important;
-      }
-      .ko-card .ko-tip-ind .ko-tip-pen{
-        font-size:.64em!important;
-        letter-spacing:-.075em!important;
-        color:#f0b85c!important;
-      }
-      .ko-card .ko-score-stacked .ko-score-real-line,
-      .ko-card .ko-score-stacked .ko-score-tip-line{
-        gap:1px!important;
-      }
-    }
-  `;
-  document.head.appendChild(st);
-})();
-
-/* Backend sync automatically:
-   - on first load
-   - whenever the tab/window becomes visible again
-   - whenever user switches internal app tab
-   Safe: has timeout + no overlapping calls. */
-async function wc26AutoBackendSyncV67(reason='auto'){
-  if(window.__WC26_V67_SYNC_RUNNING__) return false;
-  window.__WC26_V67_SYNC_RUNNING__=true;
-  try{
-    const tasks=[];
-    if(typeof loadMatchResultsFromBackendDb==='function'){
-      tasks.push(Promise.race([
-        loadMatchResultsFromBackendDb(true),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('results-timeout')),9000))
-      ]));
-    }else if(typeof syncLiveResults==='function'){
-      tasks.push(Promise.race([
-        syncLiveResults({force:true,skipRetry:true}),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('sync-timeout')),9000))
-      ]));
-    }
-
-    if(typeof wc26LoadKoPairsFromWorker==='function'){
-      tasks.push(Promise.race([
-        wc26LoadKoPairsFromWorker(true),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('ko-pairs-timeout')),9000))
-      ]));
-    }
-
-    await Promise.allSettled(tasks);
-
-    try{
-      if(typeof render==='function') render();
-      if(typeof patchKoCards==='function') patchKoCards();
-      if(typeof refreshOpenTipModal==='function') refreshOpenTipModal();
-      if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews();
-      if(typeof activateCrests==='function') activateCrests();
-    }catch(e){}
-    return true;
-  }catch(e){
-    console.warn('WC26 auto backend sync failed:',reason,e);
-    return false;
-  }finally{
-    window.__WC26_V67_SYNC_RUNNING__=false;
-  }
-}
-
-(function(){
-  if(window.__WC26_V67_AUTO_SYNC_INSTALLED__) return;
-  window.__WC26_V67_AUTO_SYNC_INSTALLED__=true;
-
-  const runSoon=(reason,delay=80)=>setTimeout(()=>wc26AutoBackendSyncV67(reason),delay);
-
-  runSoon('initial-load',250);
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',()=>runSoon('domcontentloaded',100),{once:true});
-  }else{
-    runSoon('already-loaded',120);
-  }
-  window.addEventListener('load',()=>runSoon('window-load',150),{once:true});
-
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible') runSoon('visibility-visible',80);
-  });
-
-  window.addEventListener('focus',()=>runSoon('window-focus',80));
-  window.addEventListener('pageshow',()=>runSoon('pageshow',80));
-
-  /* Internal tab clicks: after render changed the page, fetch backend and repaint. */
-  document.addEventListener('click',e=>{
-    const tab=e.target.closest?.('.tab[data-tab], [data-tab], [data-mf], [data-r], [data-team]');
-    if(tab) runSoon('internal-tab-click',180);
-  },true);
-})();
-
-
-/* ===== WC26 v68 bracket mobile tidy + own backend tips reload + compact penalty modal ===== */
-
-/* Safer own-tip backend refresh:
-   v67 only refreshed results/KO pairs. This also reloads the logged-in user's own tips from Firebase,
-   so the KO tab doesn't render with stale/empty KO_PRED after returning to the tab. */
-async function wc26AutoFullBackendSyncV68(reason='auto'){
-  if(window.__WC26_V68_SYNC_RUNNING__) return false;
-  window.__WC26_V68_SYNC_RUNNING__ = true;
-  try{
-    const tasks=[];
-
-    if(wc26Db && wc26User && typeof loadOwnTipsFromFirebase==='function'){
-      tasks.push(Promise.race([
-        loadOwnTipsFromFirebase(),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('own-tips-timeout')),9000))
-      ]));
-    }
-
-    if(typeof loadMatchResultsFromBackendDb==='function'){
-      tasks.push(Promise.race([
-        loadMatchResultsFromBackendDb(true),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('results-timeout')),9000))
-      ]));
-    }else if(typeof syncLiveResults==='function'){
-      tasks.push(Promise.race([
-        syncLiveResults({force:true,skipRetry:true}),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('sync-timeout')),9000))
-      ]));
-    }
-
-    if(typeof wc26LoadKoPairsFromWorker==='function'){
-      tasks.push(Promise.race([
-        wc26LoadKoPairsFromWorker(true),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('ko-pairs-timeout')),9000))
-      ]));
-    }
-
-    await Promise.allSettled(tasks);
-
-    try{
-      if(typeof render==='function') render();
-      if(typeof patchKoCards==='function') patchKoCards();
-      if(typeof refreshOpenTipModal==='function') refreshOpenTipModal();
-      if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews();
-      if(typeof activateCrests==='function') activateCrests();
-    }catch(e){}
-    return true;
-  }catch(e){
-    console.warn('WC26 v68 full backend sync failed:', reason, e);
-    return false;
-  }finally{
-    window.__WC26_V68_SYNC_RUNNING__ = false;
-  }
-}
-
-(function(){
-  if(window.__WC26_V68_AUTO_SYNC_INSTALLED__) return;
-  window.__WC26_V68_AUTO_SYNC_INSTALLED__=true;
-
-  const runSoon=(reason,delay=120)=>setTimeout(()=>wc26AutoFullBackendSyncV68(reason),delay);
-
-  runSoon('initial-load',450);
-
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible') runSoon('visibility-visible',120);
-  });
-  window.addEventListener('focus',()=>runSoon('window-focus',120));
-  window.addEventListener('pageshow',()=>runSoon('pageshow',120));
-
-  document.addEventListener('click',e=>{
-    const tab=e.target.closest?.('.tab[data-tab], [data-tab], [data-mf], [data-r], [data-team]');
-    if(tab) runSoon('internal-tab-click',260);
-  },true);
-})();
-
-/* Bracket mobile: the v67 stacked score made the bracket narrower/uglier.
-   New structure: fixed compact score column.
-   - real score line: score + real pen
-   - tip line: small tip score + tip pen
-   This prevents the "1(2)2(2)" pile-up and avoids pushing the card width. */
-function wc26KoTipInline(score,pen){
-  if(!validScore(score)) return '';
-  return '<span class="ko-tip-ind"><span class="ko-tip-score-num">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
-}
-function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
-  if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
-  const hasTip = validScore(tipScore);
-  const hasRealPen = validScore(pen);
-  const hasTipPen = validScore(tipPen);
-  const stacked = hasTip && (hasRealPen || hasTipPen);
-  return '<div class="ko-team '+(cls||'')+'">'
-    +crest(team,'22px')
-    +'<span class="ko-name">'+esc(team)+'</span>'
-    +'<span class="ko-score '+(stacked?'ko-score-stacked-v68':'')+'">'
-      +'<span class="ko-score-real-line"><b>'+(score==null?'-':esc(score))+'</b>'+(hasRealPen?'<small class="ko-pen">('+esc(pen)+')</small>':'')+'</span>'
-      +(hasTip?'<span class="ko-score-tip-line">'+wc26KoTipInline(tipScore,tipPen)+'</span>':'')
-    +'</span>'
-  +'</div>';
-}
-
-(function(){
-  const st=document.createElement('style');
-  st.textContent=`
-    /* Bracket: fixed score column so the score area never eats the team name. */
-    .ko-card .ko-team{
-      grid-template-columns:auto minmax(0,1fr) clamp(30px,7.2vw,46px)!important;
-      column-gap:clamp(3px,.8vw,6px)!important;
-    }
-    .ko-card .ko-name{
-      min-width:0!important;
-      overflow:hidden!important;
-      text-overflow:ellipsis!important;
-      white-space:nowrap!important;
-      max-width:100%!important;
-    }
-    .ko-card .ko-score,
-    .ko-card .ko-score-stacked-v68{
-      width:clamp(30px,7.2vw,46px)!important;
-      min-width:clamp(30px,7.2vw,46px)!important;
-      max-width:clamp(30px,7.2vw,46px)!important;
-      display:flex!important;
-      flex-direction:column!important;
-      align-items:flex-end!important;
-      justify-content:center!important;
-      gap:1px!important;
-      overflow:visible!important;
-      white-space:nowrap!important;
-      line-height:1!important;
-      text-align:right!important;
-    }
-    .ko-card .ko-score-real-line,
-    .ko-card .ko-score-tip-line{
-      display:inline-flex!important;
-      align-items:baseline!important;
-      justify-content:flex-end!important;
-      gap:2px!important;
-      min-width:0!important;
-      max-width:100%!important;
-      white-space:nowrap!important;
-      line-height:1!important;
-    }
-    .ko-card .ko-score b{
-      font-size:.96em!important;
-      line-height:1!important;
-      font-weight:950!important;
-    }
-    .ko-card .ko-pen{
-      order:2!important;
-      color:#ff6f84!important;
-      font-size:.58em!important;
-      line-height:1!important;
-      letter-spacing:-.055em!important;
-      margin:0!important;
-      font-weight:950!important;
-    }
-    .ko-card .ko-tip-ind{
-      display:inline-flex!important;
-      align-items:baseline!important;
-      justify-content:flex-end!important;
-      gap:1px!important;
-      margin:0!important;
-      color:#d7e0e6!important;
-      font-size:.66em!important;
-      line-height:1!important;
-      font-weight:900!important;
-      letter-spacing:-.035em!important;
-      white-space:nowrap!important;
-      opacity:.92!important;
-    }
-    .ko-card .ko-tip-ind .ko-tip-pen{
-      color:#f0b85c!important;
-      font-size:.72em!important;
-      line-height:1!important;
-      letter-spacing:-.055em!important;
-    }
-
-    @media(max-width:720px){
-      .ko-card{
-        --ko-card-score-col:34px!important;
-      }
-      .ko-card .ko-team{
-        grid-template-columns:auto minmax(0,1fr) 34px!important;
-      }
-      .ko-card .ko-score,
-      .ko-card .ko-score-stacked-v68{
-        width:34px!important;
-        min-width:34px!important;
-        max-width:34px!important;
-      }
-      .ko-card .ko-score b{
-        font-size:.88em!important;
-      }
-      .ko-card .ko-pen{
-        font-size:.50em!important;
-        letter-spacing:-.075em!important;
-      }
-      .ko-card .ko-tip-ind{
-        font-size:.56em!important;
-        letter-spacing:-.055em!important;
-      }
-      .ko-card .ko-tip-ind .ko-tip-pen{
-        font-size:.64em!important;
-        letter-spacing:-.075em!important;
-      }
-    }
-
-    /* Match modal penalty box: compact and proportional on phones. */
-    @media(max-width:720px){
-      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen,
-      .tip-overlay[data-tip-kind="ko"] .penalty-box{
-        margin-top:clamp(10px,2.4vw,14px)!important;
-        padding:12px 12px 14px!important;
-        border-radius:16px!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .penalty-title{
-        display:grid!important;
-        grid-template-columns:1fr auto!important;
-        gap:8px!important;
-        align-items:start!important;
-        font-size:clamp(15px,4vw,18px)!important;
-        line-height:1.08!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .penalty-title span:first-child{
-        max-width:100%!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .penalty-title span:last-child{
-        font-size:clamp(10px,2.65vw,12px)!important;
-        line-height:1.1!important;
-        text-align:right!important;
-        opacity:.82!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .penalty-inputs{
-        display:grid!important;
-        grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr)!important;
-        align-items:center!important;
-        gap:6px!important;
-        margin-top:12px!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-team{
-        font-size:clamp(12px,3.2vw,15px)!important;
-        min-width:0!important;
-        overflow:hidden!important;
-        text-overflow:ellipsis!important;
-        white-space:nowrap!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-inputs input{
-        width:clamp(44px,11.2vw,54px)!important;
-        height:clamp(44px,11.2vw,54px)!important;
-        font-size:clamp(25px,6.8vw,32px)!important;
-        border-radius:12px!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-sep{
-        font-size:clamp(18px,4.8vw,23px)!important;
-        opacity:.65!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-note{
-        margin-top:10px!important;
-        font-size:clamp(11px,2.9vw,13px)!important;
-        line-height:1.32!important;
-      }
-    }
-  `;
-  document.head.appendChild(st);
-})();
-
-
-/* ===== WC26 v69 safe own tips + chronological cards + mobile UI cleanup ===== */
-
-/* 1) Own KO tips must NOT disappear when opening / returning to KO tab.
-   Remote empty ko payload no longer overwrites visible KO_PRED. */
-function wc26NonEmptyObj(o){ return !!(o && typeof o==='object' && Object.keys(o).length); }
-async function wc26LoadOwnTipsSafelyV69(){
+async function wc26LoadOwnTipsSafelyV70(){
   if(!wc26Db || !wc26User) return false;
 
-  const keepPred = {...(PRED||{})};
-  const keepKo = {...(KO_PRED||{})};
+  const keepPred = {...(PRED || {})};
+  const keepKo = {...(KO_PRED || {})};
 
   try{
     const doc = await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();
@@ -16038,7 +15591,6 @@ async function wc26LoadOwnTipsSafelyV69(){
       wc26OwnTipsLoadFailed = false;
       savePred();
       render();
-      if(groupsComplete() && wc26NonEmptyObj(KO_PRED) && typeof syncKoPairsToWorker==='function') syncKoPairsToWorker();
       return true;
     }
 
@@ -16057,42 +15609,49 @@ async function wc26LoadOwnTipsSafelyV69(){
     return false;
   }
 }
-loadOwnTipsFromFirebase = wc26LoadOwnTipsSafelyV69;
+loadOwnTipsFromFirebase = wc26LoadOwnTipsSafelyV70;
 
-/* Safe auto sync override: includes own tips, results, KO pairs, but preserves current tips on empty/failed remote. */
-async function wc26AutoFullBackendSyncV68(reason='auto'){
-  if(window.__WC26_V69_SYNC_RUNNING__) return false;
-  window.__WC26_V69_SYNC_RUNNING__ = true;
+/* B) Auto sync on load/focus/tab switch, but with cooldown so Firestore reads don't explode. */
+async function wc26AutoBackendSyncV70(reason='auto'){
+  const now = Date.now();
+  if(window.__WC26_V70_SYNC_RUNNING__) return false;
 
-  const keepKo = {...(KO_PRED||{})};
-  const keepPred = {...(PRED||{})};
+  /* Cooldown: focus/tab spam won't cause repeated reads. */
+  const minGap = reason === 'initial-load' ? 0 : 45000;
+  if(window.__WC26_V70_LAST_SYNC__ && now - window.__WC26_V70_LAST_SYNC__ < minGap) return false;
+
+  window.__WC26_V70_SYNC_RUNNING__ = true;
+  window.__WC26_V70_LAST_SYNC__ = now;
+
+  const keepKo = {...(KO_PRED || {})};
+  const keepPred = {...(PRED || {})};
 
   try{
-    const tasks=[];
+    const tasks = [];
 
     if(wc26Db && wc26User){
       tasks.push(Promise.race([
-        wc26LoadOwnTipsSafelyV69(),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('own-tips-timeout')),9000))
+        wc26LoadOwnTipsSafelyV70(),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('own-tips-timeout')),8000))
       ]));
     }
 
-    if(typeof loadMatchResultsFromBackendDb==='function'){
+    if(typeof loadMatchResultsFromBackendDb === 'function'){
       tasks.push(Promise.race([
         loadMatchResultsFromBackendDb(true),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('results-timeout')),9000))
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('results-timeout')),8000))
       ]));
-    }else if(typeof syncLiveResults==='function'){
+    }else if(typeof syncLiveResults === 'function'){
       tasks.push(Promise.race([
         syncLiveResults({force:true,skipRetry:true}),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('sync-timeout')),9000))
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('sync-timeout')),8000))
       ]));
     }
 
-    if(typeof wc26LoadKoPairsFromWorker==='function'){
+    if(typeof wc26LoadKoPairsFromWorker === 'function'){
       tasks.push(Promise.race([
         wc26LoadKoPairsFromWorker(true),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('ko-pairs-timeout')),9000))
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('ko-pairs-timeout')),8000))
       ]));
     }
 
@@ -16102,24 +15661,44 @@ async function wc26AutoFullBackendSyncV68(reason='auto'){
     if(wc26NonEmptyObj(keepPred) && !wc26NonEmptyObj(PRED)) PRED = keepPred;
 
     try{
-      if(typeof render==='function') render();
-      if(typeof patchKoCards==='function') patchKoCards();
-      if(typeof refreshOpenTipModal==='function') refreshOpenTipModal();
-      if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews();
-      if(typeof activateCrests==='function') activateCrests();
+      if(typeof render === 'function') render();
+      if(typeof patchKoCards === 'function') patchKoCards();
+      if(typeof refreshOpenTipModal === 'function') refreshOpenTipModal();
+      if(typeof refreshCommunityPreviews === 'function') refreshCommunityPreviews();
+      if(typeof activateCrests === 'function') activateCrests();
     }catch(e){}
+
     return true;
   }catch(e){
     if(wc26NonEmptyObj(keepKo) && !wc26NonEmptyObj(KO_PRED)) KO_PRED = keepKo;
     if(wc26NonEmptyObj(keepPred) && !wc26NonEmptyObj(PRED)) PRED = keepPred;
-    console.warn('WC26 v69 full backend sync failed:', reason, e);
+    console.warn('WC26 v70 backend sync failed:', reason, e);
     return false;
   }finally{
-    window.__WC26_V69_SYNC_RUNNING__ = false;
+    window.__WC26_V70_SYNC_RUNNING__ = false;
   }
 }
 
-/* 2) Cards / goal + yellow + red events in the modal: chronological order, including 45+1 / 90+9. */
+(function(){
+  if(window.__WC26_V70_AUTO_SYNC_INSTALLED__) return;
+  window.__WC26_V70_AUTO_SYNC_INSTALLED__ = true;
+
+  const run = (reason,delay=120)=>setTimeout(()=>wc26AutoBackendSyncV70(reason),delay);
+
+  run('initial-load',500);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState === 'visible') run('visibility-visible',160);
+  });
+  window.addEventListener('focus',()=>run('window-focus',160));
+  window.addEventListener('pageshow',()=>run('pageshow',160));
+
+  document.addEventListener('click',e=>{
+    const tab=e.target.closest?.('.tab[data-tab], [data-tab], [data-mf], [data-r], [data-team]');
+    if(tab) run('internal-tab-click',260);
+  },true);
+})();
+
+/* C) Modal event list chronological: goals + yellow/red cards, including 45+1 / 90+9. */
 function wc26MinuteValue(v){
   const s = String(v ?? '').trim();
   const m = s.match(/(\d+)(?:\s*\+\s*(\d+))?/);
@@ -16141,7 +15720,6 @@ function goalScorersHtml(r,x){
   if(r&&Array.isArray(r.redCards))events=events.concat(r.redCards.map(s=>({...s,_kind:s.yellowRed?'yellowRed':'red'})));
   if(!events.length)return'';
 
-  let sorted=events.sort(wc26EventSort);
   const infoCell=s=>{
     if(s._kind==='red')return'<span class="red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'Piros lap')+'</span>';
     if(s._kind==='yellowRed')return'<span class="yellow-red-card-mark"></span><span class="goal-scorer-name">'+(s.player?esc(shortPlayerName(s.player)):'2× Sárga')+'</span>';
@@ -16152,56 +15730,52 @@ function goalScorersHtml(r,x){
     return'<span class="goal-scorer-name">'+name+'</span>'+og+pen+'<span class="goal-scorer-ball">&#9917;</span>';
   };
 
-  return '<div class="goal-scorers">'+sorted.map(s=>{
-    const side = (s.team==='a'||s.team==='away'||s.side==='away') ? 'a' : 'h';
-    const left = side==='h' ? infoCell(s) : '';
-    const right = side==='a' ? infoCell(s) : '';
+  return '<div class="goal-scorers">'+events.sort(wc26EventSort).map(s=>{
+    const side=(s.team==='a'||s.team==='away'||s.side==='away')?'a':'h';
     return '<div class="goal-scorer-row">'
-      +'<div class="goal-scorers-col">'+left+'</div>'
+      +'<div class="goal-scorers-col">'+(side==='h'?infoCell(s):'')+'</div>'
       +'<div class="goal-scorer-min">'+esc(eventMinute(s))+'&prime;</div>'
-      +'<div class="goal-scorers-col">'+right+'</div>'
+      +'<div class="goal-scorers-col">'+(side==='a'?infoCell(s):'')+'</div>'
       +'</div>';
   }).join('')+'</div>';
 }
 
-/* 3) Bracket score renderer: real line and tip line are cleanly separated.
-   More readable than squeezing 1(2)2(4) into one pile. */
+/* D) Bracket scores: keep original card width; put real/tip indicators side-by-side, tiny enough to fit. */
 function wc26KoTipInline(score,pen){
   if(!validScore(score)) return '';
-  return '<span class="ko-tip-ind"><span class="ko-tip-score-num">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
+  return '<span class="ko-tip-ind"><span class="ko-tip-num">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
 }
 function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
   if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
-  const hasTip = validScore(tipScore);
-  const hasRealPen = validScore(pen);
-  const hasTipPen = validScore(tipPen);
-  return '<div class="ko-team '+(cls||'')+' ko-team-v69">'
+  const hasTip=validScore(tipScore);
+  const hasRealPen=validScore(pen);
+  const hasTipPen=validScore(tipPen);
+  return '<div class="ko-team '+(cls||'')+' ko-team-v70">'
     +crest(team,'22px')
     +'<span class="ko-name">'+esc(team)+'</span>'
-    +'<span class="ko-score ko-score-v69 '+(hasTip?'has-tip-v69':'')+'">'
-      +'<span class="ko-score-real-line"><b>'+(score==null?'-':esc(score))+'</b>'+(hasRealPen?'<small class="ko-pen">('+esc(pen)+')</small>':'')+'</span>'
-      +(hasTip?'<span class="ko-score-tip-line">'+wc26KoTipInline(tipScore,hasTipPen?tipPen:null)+'</span>':'')
+    +'<span class="ko-score ko-score-v70 '+(hasTip?'has-tip-v70':'')+'">'
+      +'<span class="ko-real-mini"><b>'+(score==null?'-':esc(score))+'</b>'+(hasRealPen?'<small class="ko-pen">('+esc(pen)+')</small>':'')+'</span>'
+      +(hasTip?'<span class="ko-tip-mini">'+wc26KoTipInline(tipScore,hasTipPen?tipPen:null)+'</span>':'')
     +'</span>'
   +'</div>';
 }
 
-/* 4) Mobile community profile rows: VALÓS / TIPP block goes to the LEFT, not cut on the right. */
 (function(){
   const st=document.createElement('style');
   st.textContent=`
-    /* Bracket mobile layout: a little wider card and a fixed tidy score column. */
+    /* Restore sane bracket width: do NOT widen mobile cards. */
     @media(max-width:720px){
       .ko-card{
-        max-width:220px!important;
-        width:220px!important;
-        min-width:220px!important;
+        max-width:185px!important;
+        width:100%!important;
+        min-width:0!important;
       }
-      .ko-card .ko-team-v69,
+      .ko-card .ko-team-v70,
       .ko-card .ko-team{
-        grid-template-columns:22px minmax(0,1fr) 42px!important;
-        column-gap:5px!important;
-        padding-left:7px!important;
-        padding-right:6px!important;
+        grid-template-columns:22px minmax(0,1fr) 48px!important;
+        gap:4px!important;
+        padding-left:6px!important;
+        padding-right:5px!important;
       }
       .ko-card .ko-name{
         min-width:0!important;
@@ -16210,67 +15784,116 @@ function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
         white-space:nowrap!important;
         max-width:100%!important;
       }
-      .ko-card .ko-score-v69,
+      .ko-card .ko-score-v70,
       .ko-card .ko-score{
-        width:42px!important;
-        min-width:42px!important;
-        max-width:42px!important;
-        display:flex!important;
-        flex-direction:column!important;
-        align-items:flex-end!important;
-        justify-content:center!important;
-        gap:1px!important;
-        overflow:visible!important;
-        white-space:nowrap!important;
-        text-align:right!important;
-        line-height:1!important;
-        transform:none!important;
-      }
-      .ko-card .ko-score-real-line,
-      .ko-card .ko-score-tip-line{
+        width:48px!important;
+        min-width:48px!important;
+        max-width:48px!important;
         display:inline-flex!important;
+        flex-direction:row!important;
         align-items:baseline!important;
         justify-content:flex-end!important;
-        gap:2px!important;
-        max-width:100%!important;
+        gap:3px!important;
         white-space:nowrap!important;
-        line-height:1!important;
+        overflow:visible!important;
+        transform:none!important;
+        text-align:right!important;
       }
-      .ko-card .ko-score-real-line b{
-        font-size:16px!important;
-        line-height:1!important;
-        font-weight:950!important;
-      }
-      .ko-card .ko-pen{
-        color:#ff6f84!important;
-        font-size:9px!important;
-        line-height:1!important;
-        letter-spacing:-.05em!important;
-        margin-left:1px!important;
-        font-weight:950!important;
-      }
+      .ko-card .ko-real-mini,
+      .ko-card .ko-tip-mini,
       .ko-card .ko-tip-ind{
         display:inline-flex!important;
         align-items:baseline!important;
         justify-content:flex-end!important;
         gap:1px!important;
-        margin:0!important;
-        color:#d7e0e6!important;
-        font-size:10px!important;
-        line-height:1!important;
-        font-weight:900!important;
-        letter-spacing:-.02em!important;
         white-space:nowrap!important;
-        opacity:.9!important;
+        line-height:1!important;
+        margin:0!important;
+      }
+      .ko-card .ko-real-mini b{
+        font-size:15px!important;
+        line-height:1!important;
+        font-weight:950!important;
+      }
+      .ko-card .ko-pen{
+        color:#ff6f84!important;
+        font-size:8px!important;
+        line-height:1!important;
+        letter-spacing:-.06em!important;
+        margin-left:0!important;
+        font-weight:950!important;
+      }
+      .ko-card .ko-tip-ind{
+        color:#d7e0e6!important;
+        font-size:9px!important;
+        font-weight:900!important;
+        letter-spacing:-.03em!important;
+        opacity:.92!important;
       }
       .ko-card .ko-tip-ind .ko-tip-pen{
         color:#f0b85c!important;
-        font-size:8px!important;
-        letter-spacing:-.05em!important;
+        font-size:7px!important;
+        letter-spacing:-.06em!important;
+        margin-left:0!important;
       }
     }
 
-    /* Community profile modal/mobile: put the indicators on the left side. */
+    /* Match modal penalty box: smaller, less shouty, no duplicate label. */
+    .penalty-box.locked-real-pen .penalty-title span:first-child::after{content:''!important;}
+
+    @media(max-width:720px){
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen,
+      .tip-overlay[data-tip-kind="ko"] .penalty-box{
+        margin-top:10px!important;
+        padding:10px 10px 11px!important;
+        border-radius:14px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title{
+        display:grid!important;
+        grid-template-columns:1fr auto!important;
+        align-items:start!important;
+        gap:7px!important;
+        font-size:15px!important;
+        line-height:1.08!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title span:last-child{
+        font-size:10px!important;
+        line-height:1.05!important;
+        opacity:.78!important;
+        text-align:right!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr)!important;
+        align-items:center!important;
+        gap:5px!important;
+        margin-top:10px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-team{
+        font-size:12px!important;
+        min-width:0!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+        white-space:nowrap!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs input{
+        width:42px!important;
+        height:42px!important;
+        font-size:24px!important;
+        border-radius:11px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-sep{
+        font-size:18px!important;
+        opacity:.62!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-note{
+        margin-top:8px!important;
+        font-size:11px!important;
+        line-height:1.28!important;
+      }
+    }
+
+    /* Community profile modal/mobile: indicators to the left. */
     @media(max-width:720px){
       .community-preview .community-pred{
         grid-template-columns:1fr!important;
@@ -16303,82 +15926,8 @@ function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
         text-align:left!important;
       }
     }
-
-    /* Penalty box on match modal: remove duplicate "valós eredmény" and make it proportional on phone. */
-    .penalty-box.locked-real-pen .penalty-title span:first-child::after{
-      content:''!important;
-    }
-    @media(max-width:720px){
-      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen,
-      .tip-overlay[data-tip-kind="ko"] .penalty-box{
-        margin-top:12px!important;
-        padding:12px!important;
-        border-radius:16px!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .penalty-title{
-        display:grid!important;
-        grid-template-columns:1fr auto!important;
-        gap:8px!important;
-        align-items:start!important;
-        font-size:clamp(15px,4vw,18px)!important;
-        line-height:1.08!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .penalty-title span:last-child{
-        font-size:clamp(10px,2.7vw,12px)!important;
-        line-height:1.1!important;
-        text-align:right!important;
-        opacity:.82!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-inputs{
-        display:grid!important;
-        grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr)!important;
-        align-items:center!important;
-        gap:6px!important;
-        margin-top:12px!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-team{
-        font-size:clamp(12px,3.1vw,14px)!important;
-        min-width:0!important;
-        overflow:hidden!important;
-        text-overflow:ellipsis!important;
-        white-space:nowrap!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-inputs input{
-        width:clamp(42px,10.8vw,52px)!important;
-        height:clamp(42px,10.8vw,52px)!important;
-        font-size:clamp(24px,6.3vw,30px)!important;
-        border-radius:12px!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-sep{
-        font-size:clamp(18px,4.8vw,23px)!important;
-        opacity:.65!important;
-      }
-      .tip-overlay[data-tip-kind="ko"] .pen-note{
-        margin-top:9px!important;
-        font-size:clamp(11px,2.85vw,13px)!important;
-        line-height:1.3!important;
-      }
-    }
   `;
   document.head.appendChild(st);
-})();
-
-/* Trigger safe reload when KO tab is opened, but after current render so tips do not flicker empty. */
-(function(){
-  if(window.__WC26_V69_TAB_SYNC_INSTALLED__) return;
-  window.__WC26_V69_TAB_SYNC_INSTALLED__=true;
-  document.addEventListener('click',e=>{
-    const t=e.target.closest?.('.tab[data-tab="knockout"], [data-tab="knockout"]');
-    if(t){
-      const keepKo={...(KO_PRED||{})}, keepPred={...(PRED||{})};
-      setTimeout(async()=>{
-        await wc26AutoFullBackendSyncV68('knockout-tab');
-        if(wc26NonEmptyObj(keepKo) && !wc26NonEmptyObj(KO_PRED)) KO_PRED=keepKo;
-        if(wc26NonEmptyObj(keepPred) && !wc26NonEmptyObj(PRED)) PRED=keepPred;
-        render();
-      },120);
-    }
-  },true);
 })();
 
 </script></body></html>
