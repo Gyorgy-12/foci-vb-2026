@@ -16581,4 +16581,136 @@ function topMatchesHtml(){
   }, 30000);
 })();
 
+
+/* ===== WC26 v73 overview/stats hard backend refresh ===== */
+
+/*
+  The overview stats were still sometimes calculated from stale LIVE_RESULTS.
+  This explicitly reads the Worker /results endpoint and FORCE-updates LIVE_RESULTS for stats.
+  It does not use Firestore SDK reads from the browser.
+*/
+async function wc26HardReadBackendResultsV73(reason='stats'){
+  if(FROZEN_MODE || !WC26_RESULTS_READ_URL) return false;
+  if(window.__WC26_V73_BACKEND_READ_RUNNING__) return false;
+
+  const now = Date.now();
+  const minGap = reason === 'manual' ? 0 : 25000;
+  if(window.__WC26_V73_LAST_BACKEND_READ__ && now - window.__WC26_V73_LAST_BACKEND_READ__ < minGap) return false;
+
+  window.__WC26_V73_BACKEND_READ_RUNNING__ = true;
+  window.__WC26_V73_LAST_BACKEND_READ__ = now;
+
+  try{
+    const sep = WC26_RESULTS_READ_URL.includes('?') ? '&' : '?';
+    const url = WC26_RESULTS_READ_URL + sep + 'hardStats=1&t=' + Date.now();
+    const data = await Promise.race([
+      fetch(url, {cache:'no-store'}).then(r=>r.ok?r.json():null),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('backend-results-timeout')),9000))
+    ]).catch(e=>{
+      console.warn('WC26 v73 backend /results read failed', e);
+      return null;
+    });
+
+    if(!data || !data.results) return false;
+
+    window.__WC26_V73_LAST_RESULTS_RAW__ = data.results;
+    let changed = false;
+
+    Object.entries(data.results).forEach(([id,obj])=>{
+      const r = normalizeLiveResult(id,obj);
+      if(!r) return;
+
+      const old = LIVE_RESULTS[id];
+
+      /*
+        Force update here: stats must reflect backend truth, including late card edits
+        on already finished matches where score didn't change.
+      */
+      if(JSON.stringify(old) !== JSON.stringify(r)){
+        LIVE_RESULTS[id] = r;
+        changed = true;
+      }
+
+      if(String(id).startsWith('KO-') && r.date && r.time && KO_SCHEDULE[id]){
+        KO_SCHEDULE[id].date = r.date;
+        KO_SCHEDULE[id].t = r.time;
+      }
+    });
+
+    window.__WC26_V73_LAST_BACKEND_RESULTS_AT__ = new Date().toISOString();
+
+    if(changed && (S?.tab === 'overview' || S?.tab === 'stats')){
+      try{ render(); }catch(e){}
+    }
+    return changed;
+  }finally{
+    window.__WC26_V73_BACKEND_READ_RUNNING__ = false;
+  }
+}
+
+/* Override the normal backend loader so bypassCache=true really means no-store hard read. */
+const __wc26BaseLoadMatchResultsFromBackendDbV73 = typeof loadMatchResultsFromBackendDb === 'function' ? loadMatchResultsFromBackendDb : null;
+if(__wc26BaseLoadMatchResultsFromBackendDbV73 && !window.__WC26_V73_LOAD_WRAP__){
+  window.__WC26_V73_LOAD_WRAP__ = true;
+  loadMatchResultsFromBackendDb = async function(bypassCache=false){
+    if(bypassCache){
+      const ok = await wc26HardReadBackendResultsV73('manual');
+      if(ok) return true;
+    }
+    return __wc26BaseLoadMatchResultsFromBackendDbV73.apply(this, arguments);
+  };
+}
+
+/* When Overview / Stats is opened or revisited, force backend read first, then render. */
+(function(){
+  if(window.__WC26_V73_OVERVIEW_STATS_SYNC__) return;
+  window.__WC26_V73_OVERVIEW_STATS_SYNC__ = true;
+
+  const run = (reason,delay=100)=>setTimeout(async()=>{
+    if(S?.tab === 'overview' || S?.tab === 'stats'){
+      await wc26HardReadBackendResultsV73(reason);
+      try{ render(); }catch(e){}
+    }
+  }, delay);
+
+  run('initial-overview-stats',500);
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState === 'visible') run('visible',120);
+  });
+
+  window.addEventListener('focus',()=>run('focus',120));
+  window.addEventListener('pageshow',()=>run('pageshow',120));
+
+  document.addEventListener('click',e=>{
+    const tab = e.target.closest?.('.tab[data-tab], [data-tab]');
+    if(!tab) return;
+    const t = tab.dataset?.tab;
+    if(t === 'overview' || t === 'stats') run('tab-'+t,180);
+  }, true);
+
+  if(window.__WC26_V73_STATS_BACKEND_TIMER__) clearInterval(window.__WC26_V73_STATS_BACKEND_TIMER__);
+  window.__WC26_V73_STATS_BACKEND_TIMER__ = setInterval(()=>{
+    if(!document.hidden && (S?.tab === 'overview' || S?.tab === 'stats')){
+      wc26HardReadBackendResultsV73('timer').then(()=>{try{render();}catch(e){}});
+    }
+  }, 30000);
+})();
+
+/* Tiny debug helper in console:
+   WC26_STATS_DEBUG()
+   shows whether the page has actually read /results and how many red cards Mexico has in memory.
+*/
+window.WC26_STATS_DEBUG = function(){
+  const fp = typeof calcFairPlay === 'function' ? calcFairPlay() : {};
+  return {
+    lastBackendResultsAt: window.__WC26_V73_LAST_BACKEND_RESULTS_AT__ || null,
+    liveResultsCount: Object.keys(LIVE_RESULTS||{}).length,
+    mexicoFairPlay: fp.Mexico || fp['México'] || null,
+    mexicoDocs: Object.entries(LIVE_RESULTS||{})
+      .filter(([id,r])=>String(r?.homeTeam||'').includes('Mexico') || String(r?.awayTeam||'').includes('Mexico') || String(r?.homeTeam||'').includes('México') || String(r?.awayTeam||'').includes('México'))
+      .map(([id,r])=>({id, h:r.h, a:r.a, redCards:r.redCards, yellowCards:r.yellowCards, updatedAt:r.updatedAt}))
+  };
+};
+
 </script></body></html>
