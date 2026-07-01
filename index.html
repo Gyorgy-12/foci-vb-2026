@@ -18397,4 +18397,914 @@ function wc26TinyPenaltySummaryV87(){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v88: backend-first KO tips for bracket, realtime snapshot =====
+   Cél:
+   - logged-in usernél a KO/bracket tippek elsődleges forrása a backend/Firebase user doc
+   - nem polling, hanem onSnapshot realtime listener
+   - backend üres/átmeneti snapshot nem törli ki a képernyőről a tippeket
+   - bracket render közben is koPred() backend-first tipet ad vissza
+*/
+
+(function(){
+  if(window.__WC26_V88_BACKEND_KO_TIPS_INSTALLED__) return;
+  window.__WC26_V88_BACKEND_KO_TIPS_INSTALLED__ = true;
+
+  window.__WC26_BACKEND_KO_TIPS__ = window.__WC26_BACKEND_KO_TIPS__ || {};
+  window.__WC26_BACKEND_PRED_TIPS__ = window.__WC26_BACKEND_PRED_TIPS__ || {};
+  window.__WC26_OWN_TIPS_UNSUB_V88__ = window.__WC26_OWN_TIPS_UNSUB_V88__ || null;
+  window.__WC26_OWN_TIPS_UID_V88__ = window.__WC26_OWN_TIPS_UID_V88__ || '';
+
+  function nonEmpty(o){
+    return !!(o && typeof o === 'object' && Object.keys(o).length);
+  }
+
+  function safeObj(o){
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+  }
+
+  function clean(o){
+    try{ return wc26CleanTips(safeObj(o)); }catch(e){ return safeObj(o); }
+  }
+
+  function pickTipObj(d, keys){
+    try{
+      if(typeof wc26PickObj === 'function') return wc26PickObj(d, keys);
+    }catch(e){}
+    for(const k of keys){
+      if(d && d[k] && typeof d[k] === 'object') return d[k];
+    }
+    return {};
+  }
+
+  function getRemotePayload(docData){
+    const d = safeObj(docData);
+    const remotePred = clean(pickTipObj(d, ['pred','predictions','tips','groupPred','groupPredictions','PRED']));
+    const remoteKo = clean(pickTipObj(d, ['ko','koPred','koPredictions','knockout','knockoutPred','knockoutPredictions','KO_PRED']));
+    return {remotePred, remoteKo};
+  }
+
+  function rememberLocalMirror(){
+    try{
+      if(typeof wc26WriteKoTipBackupsV85 === 'function' && nonEmpty(KO_PRED)) wc26WriteKoTipBackupsV85(KO_PRED);
+      if(typeof wc26RememberKoTipsV82 === 'function') wc26RememberKoTipsV82();
+      if(nonEmpty(KO_PRED)){
+        window.__WC26_V88_LAST_VISIBLE_KO__ = {...(window.__WC26_V88_LAST_VISIBLE_KO__||{}), ...KO_PRED};
+      }
+    }catch(e){}
+  }
+
+  function readLocalFallback(){
+    let out = {};
+    try{
+      if(typeof wc26ReadKoTipBackupsV85 === 'function') out = {...out, ...safeObj(wc26ReadKoTipBackupsV85())};
+    }catch(e){}
+    out = {
+      ...out,
+      ...(window.__WC26_V88_LAST_VISIBLE_KO__ || {}),
+      ...(window.__WC26_V85_LAST_GOOD_KO__ || {}),
+      ...(window.__WC26_V82_LAST_GOOD_KO__ || {}),
+      ...(window.__WC26_V71_LAST_GOOD_KO__ || {})
+    };
+    return out;
+  }
+
+  function applyRemoteTips(payload, source){
+    const remotePred = clean(payload && payload.remotePred);
+    const remoteKo = clean(payload && payload.remoteKo);
+
+    let changed = false;
+
+    if(nonEmpty(remotePred)){
+      window.__WC26_BACKEND_PRED_TIPS__ = {...remotePred};
+      PRED = {...PRED, ...remotePred};
+      changed = true;
+    }
+
+    if(nonEmpty(remoteKo)){
+      /*
+        Backend az elsődleges, de nem nullázunk.
+        Ha a snapshot átmenetileg hiányos/üres, a látható tippek nem tűnhetnek el.
+      */
+      window.__WC26_BACKEND_KO_TIPS__ = {...remoteKo};
+      KO_PRED = {...KO_PRED, ...remoteKo};
+      window.__WC26_V88_LAST_VISIBLE_KO__ = {...(window.__WC26_V88_LAST_VISIBLE_KO__||{}), ...KO_PRED};
+      try{
+        if(typeof wc26WriteKoTipBackupsV85 === 'function') wc26WriteKoTipBackupsV85(KO_PRED);
+      }catch(e){}
+      changed = true;
+    }else{
+      const fallback = readLocalFallback();
+      if(nonEmpty(fallback) && !nonEmpty(KO_PRED)){
+        KO_PRED = {...fallback};
+        changed = true;
+      }
+    }
+
+    if(changed){
+      try{ savePred(); }catch(e){}
+      if(S && S.tab === 'knockout' && !document.querySelector('.tip-overlay')){
+        try{ render(); }catch(e){}
+      }else{
+        try{ patchKoCards(); }catch(e){}
+      }
+      try{ refreshCommunityPreviews(); }catch(e){}
+    }
+
+    rememberLocalMirror();
+    return changed;
+  }
+
+  window.wc26ApplyBackendTipsV88 = applyRemoteTips;
+
+  window.wc26AttachOwnTipsBackendListenerV88 = function(){
+    if(FROZEN_MODE || !wc26Db || !wc26User || !wc26User.uid) return false;
+
+    const uid = wc26User.uid;
+    if(window.__WC26_OWN_TIPS_UNSUB_V88__ && window.__WC26_OWN_TIPS_UID_V88__ === uid) return true;
+
+    try{
+      if(window.__WC26_OWN_TIPS_UNSUB_V88__) window.__WC26_OWN_TIPS_UNSUB_V88__();
+    }catch(e){}
+
+    window.__WC26_OWN_TIPS_UID_V88__ = uid;
+
+    try{
+      /*
+        A régi loadOwnTipsFromFirebase is a WC26_COMMUNITY_COLLECTION/doc(uid)-ből olvas,
+        ezért ugyanarra a doksira állunk rá realtime onSnapshot-tal.
+      */
+      window.__WC26_OWN_TIPS_UNSUB_V88__ = wc26Db
+        .collection(WC26_COMMUNITY_COLLECTION)
+        .doc(uid)
+        .onSnapshot(doc=>{
+          if(!doc || !doc.exists) return;
+          const payload = getRemotePayload(doc.data() || {});
+          applyRemoteTips(payload, 'own-doc-snapshot');
+        }, err=>{
+          console.warn('WC26 v88 own tip snapshot failed', err && err.message ? err.message : err);
+        });
+      return true;
+    }catch(e){
+      console.warn('WC26 v88 listener attach failed', e && e.message ? e.message : e);
+      return false;
+    }
+  };
+
+  /* loadOwnTipsFromFirebase után mindig rácsatlakozunk a backend listenerre. */
+  if(typeof loadOwnTipsFromFirebase === 'function' && !loadOwnTipsFromFirebase.__v88Wrapped){
+    const baseLoadOwn = loadOwnTipsFromFirebase;
+    loadOwnTipsFromFirebase = async function(){
+      const before = readLocalFallback();
+      const out = await baseLoadOwn.apply(this, arguments);
+
+      if(wc26Db && wc26User && wc26User.uid){
+        wc26AttachOwnTipsBackendListenerV88();
+      }
+
+      /*
+        Ha a normál loader KO_PRED-et üresen hagyta, a bracket akkor se villanjon üresre.
+      */
+      if(!nonEmpty(KO_PRED)){
+        const fallback = {...before, ...readLocalFallback(), ...window.__WC26_BACKEND_KO_TIPS__};
+        if(nonEmpty(fallback)) KO_PRED = {...fallback};
+      }
+
+      rememberLocalMirror();
+      return out;
+    };
+    loadOwnTipsFromFirebase.__v88Wrapped = true;
+  }
+
+  /* save után a backend snapshot lesz a source-of-truth, de addig local mirror is látható marad. */
+  if(typeof savePred === 'function' && !savePred.__v88Wrapped){
+    const baseSave = savePred;
+    savePred = function(){
+      rememberLocalMirror();
+      const out = baseSave.apply(this, arguments);
+      rememberLocalMirror();
+      if(wc26Db && wc26User && wc26User.uid) wc26AttachOwnTipsBackendListenerV88();
+      return out;
+    };
+    savePred.__v88Wrapped = true;
+  }
+
+  /* render előtt is biztosítjuk, hogy a backend/mirror tippek ott legyenek. */
+  if(typeof render === 'function' && !render.__v88Wrapped){
+    const baseRender = render;
+    render = function(){
+      const fallback = {...readLocalFallback(), ...window.__WC26_BACKEND_KO_TIPS__, ...KO_PRED};
+      if(nonEmpty(fallback)) KO_PRED = {...fallback};
+      if(wc26Db && wc26User && wc26User.uid) wc26AttachOwnTipsBackendListenerV88();
+      const out = baseRender.apply(this, arguments);
+      rememberLocalMirror();
+      return out;
+    };
+    render.__v88Wrapped = true;
+  }
+
+  /*
+    Bracket lookup: backend-first.
+    Ez a lényeg: a koCard/koWinner/koLoser mindig ezt látja, tehát nem tud a bracket
+    pár mp után üres KO_PRED miatt tippek nélkül újrarajzolni.
+  */
+  koPred = function(id){
+    const p =
+      (window.__WC26_BACKEND_KO_TIPS__ || {})[id] ||
+      (KO_PRED || {})[id] ||
+      readLocalFallback()[id];
+
+    if(!p || !validScore(p.h) || !validScore(p.a)) return null;
+
+    let h = +p.h, a = +p.a;
+    let ph = validScore(p.pH) ? +p.pH : null;
+    let pa = validScore(p.pA) ? +p.pA : null;
+
+    if(h === a && (ph == null || pa == null || ph === pa)) return null;
+
+    if(!(KO_PRED || {})[id]){
+      KO_PRED = {...(KO_PRED || {}), [id]:p};
+      rememberLocalMirror();
+    }
+
+    return {h,a,pH:ph,pA:pa,pen:h===a};
+  };
+
+  /* Start attempt after Firebase/auth likely initialized. */
+  setTimeout(()=>{ try{ wc26AttachOwnTipsBackendListenerV88(); }catch(e){} }, 400);
+  setTimeout(()=>{ try{ wc26AttachOwnTipsBackendListenerV88(); }catch(e){} }, 1600);
+})();
+
+
+/* ===== WC26 v89: KO tip delete tombstone sync =====
+   Ha a Mérkőzések fülön törlöd a KO tippedet, akkor:
+   - bracketben is azonnal eltűnik
+   - backend snapshot régi tippedet nem húzza vissza pár másodperc múlva
+   - local/last-good backupból sem áll vissza
+   - ha később újra tippelsz ugyanarra a meccsre, a tombstone törlődik
+*/
+
+(function(){
+  if(window.__WC26_V89_DELETE_SYNC_INSTALLED__) return;
+  window.__WC26_V89_DELETE_SYNC_INSTALLED__ = true;
+
+  function uid(){
+    try{return (wc26User && wc26User.uid) ? wc26User.uid : 'anon';}catch(e){return 'anon';}
+  }
+
+  function tombKey(){
+    return 'wc26_ko_deleted_tips_v89_' + uid();
+  }
+
+  function safeObj(o){
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+  }
+
+  function readTombs(){
+    try{
+      const x = JSON.parse(localStorage.getItem(tombKey()) || '{}');
+      return safeObj(x);
+    }catch(e){return {};}
+  }
+
+  function writeTombs(o){
+    try{ localStorage.setItem(tombKey(), JSON.stringify(safeObj(o))); }catch(e){}
+  }
+
+  function isDeleted(id){
+    return !!readTombs()[id];
+  }
+
+  function setDeleted(id){
+    if(!id) return;
+    const t = readTombs();
+    t[id] = Date.now();
+    writeTombs(t);
+    window.__WC26_V89_DELETED_KO__ = {...(window.__WC26_V89_DELETED_KO__ || {}), [id]:Date.now()};
+  }
+
+  function clearDeleted(id){
+    if(!id) return;
+    const t = readTombs();
+    if(t[id]){
+      delete t[id];
+      writeTombs(t);
+    }
+    if(window.__WC26_V89_DELETED_KO__) delete window.__WC26_V89_DELETED_KO__[id];
+  }
+
+  function stripDeletedFromObj(obj){
+    obj = safeObj(obj);
+    const tombs = readTombs();
+    const out = {};
+    Object.entries(obj).forEach(([id,v])=>{
+      if(!tombs[id]) out[id] = v;
+    });
+    return out;
+  }
+
+  function removeEverywhere(id){
+    if(!id) return;
+
+    try{ if(KO_PRED) delete KO_PRED[id]; }catch(e){}
+    try{ if(window.__WC26_BACKEND_KO_TIPS__) delete window.__WC26_BACKEND_KO_TIPS__[id]; }catch(e){}
+    try{ if(window.__WC26_V88_LAST_VISIBLE_KO__) delete window.__WC26_V88_LAST_VISIBLE_KO__[id]; }catch(e){}
+    try{ if(window.__WC26_V85_LAST_GOOD_KO__) delete window.__WC26_V85_LAST_GOOD_KO__[id]; }catch(e){}
+    try{ if(window.__WC26_V82_LAST_GOOD_KO__) delete window.__WC26_V82_LAST_GOOD_KO__[id]; }catch(e){}
+    try{ if(window.__WC26_V71_LAST_GOOD_KO__) delete window.__WC26_V71_LAST_GOOD_KO__[id]; }catch(e){}
+    try{ if(window.__WC26_V89_LAST_GOOD_KO__) delete window.__WC26_V89_LAST_GOOD_KO__[id]; }catch(e){}
+
+    try{
+      const keys = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i) || '';
+        if(/wc26.*(ko|knockout).*pred/i.test(k)) keys.push(k);
+      }
+      keys.forEach(k=>{
+        try{
+          const obj = JSON.parse(localStorage.getItem(k) || '{}');
+          if(obj && typeof obj === 'object' && obj[id]){
+            delete obj[id];
+            localStorage.setItem(k, JSON.stringify(obj));
+          }
+        }catch(e){}
+      });
+    }catch(e){}
+  }
+
+  function repaintAfterDelete(){
+    try{ savePred(); }catch(e){}
+    try{
+      if(S && S.tab === 'knockout') render();
+      else {
+        patchKoCards();
+        if(S && S.tab === 'matches') render();
+      }
+    }catch(e){
+      try{ render(); }catch(_){}
+    }
+  }
+
+  window.wc26KoTipIsDeletedV89 = isDeleted;
+  window.wc26KoTipMarkDeletedV89 = function(id){
+    setDeleted(id);
+    removeEverywhere(id);
+  };
+  window.wc26KoTipClearDeletedV89 = clearDeleted;
+
+  /* Backend snapshot filter: régi snapshot ne tudja visszahozni a törölt tippet. */
+  if(typeof wc26ApplyBackendTipsV88 === 'function' && !wc26ApplyBackendTipsV88.__v89Wrapped){
+    const baseApply = wc26ApplyBackendTipsV88;
+    wc26ApplyBackendTipsV88 = function(payload, source){
+      if(payload && payload.remoteKo){
+        payload = {...payload, remoteKo: stripDeletedFromObj(payload.remoteKo)};
+      }
+      return baseApply.call(this, payload, source);
+    };
+    wc26ApplyBackendTipsV88.__v89Wrapped = true;
+  }
+
+  /* Delete button / modal delete: ez a fő pont. */
+  if(typeof wc26DeleteKoTip === 'function' && !wc26DeleteKoTip.__v89Wrapped){
+    const baseDelete = wc26DeleteKoTip;
+    wc26DeleteKoTip = async function(id){
+      setDeleted(id);
+      removeEverywhere(id);
+      let out;
+      try{
+        out = await baseDelete.apply(this, arguments);
+      }finally{
+        setDeleted(id);
+        removeEverywhere(id);
+        repaintAfterDelete();
+      }
+      return out;
+    };
+    wc26DeleteKoTip.__v89Wrapped = true;
+  }
+
+  /* Néhány régebbi build saveKoTip-ot használ. Új tipp mentésénél oldjuk a tombstone-t. */
+  if(typeof saveKoTip === 'function' && !saveKoTip.__v89Wrapped){
+    const baseSaveKo = saveKoTip;
+    saveKoTip = function(id){
+      clearDeleted(id);
+      const out = baseSaveKo.apply(this, arguments);
+      try{
+        if(KO_PRED && KO_PRED[id]){
+          if(window.__WC26_BACKEND_KO_TIPS__) window.__WC26_BACKEND_KO_TIPS__[id] = KO_PRED[id];
+          if(typeof wc26WriteKoTipBackupsV85 === 'function') wc26WriteKoTipBackupsV85(KO_PRED);
+        }
+      }catch(e){}
+      return out;
+    };
+    saveKoTip.__v89Wrapped = true;
+  }
+
+  if(typeof wc26SaveKoTip === 'function' && !wc26SaveKoTip.__v89Wrapped){
+    const baseSaveKo2 = wc26SaveKoTip;
+    wc26SaveKoTip = function(id){
+      clearDeleted(id);
+      const out = baseSaveKo2.apply(this, arguments);
+      try{
+        if(KO_PRED && KO_PRED[id]){
+          if(window.__WC26_BACKEND_KO_TIPS__) window.__WC26_BACKEND_KO_TIPS__[id] = KO_PRED[id];
+          if(typeof wc26WriteKoTipBackupsV85 === 'function') wc26WriteKoTipBackupsV85(KO_PRED);
+        }
+      }catch(e){}
+      return out;
+    };
+    wc26SaveKoTip.__v89Wrapped = true;
+  }
+
+  /* Backend-first marad, de tombstone erősebb mindennél. */
+  koPred = function(id){
+    if(isDeleted(id)) return null;
+
+    const p =
+      (window.__WC26_BACKEND_KO_TIPS__ || {})[id] ||
+      (KO_PRED || {})[id] ||
+      (typeof wc26ReadKoTipBackupsV85 === 'function' ? (wc26ReadKoTipBackupsV85() || {})[id] : null) ||
+      (window.__WC26_V88_LAST_VISIBLE_KO__ || {})[id] ||
+      (window.__WC26_V85_LAST_GOOD_KO__ || {})[id] ||
+      (window.__WC26_V82_LAST_GOOD_KO__ || {})[id] ||
+      (window.__WC26_V71_LAST_GOOD_KO__ || {})[id];
+
+    if(!p || !validScore(p.h) || !validScore(p.a)) return null;
+
+    let h = +p.h, a = +p.a;
+    let ph = validScore(p.pH) ? +p.pH : null;
+    let pa = validScore(p.pA) ? +p.pA : null;
+
+    if(h === a && (ph == null || pa == null || ph === pa)) return null;
+
+    if(!(KO_PRED || {})[id]){
+      KO_PRED = {...(KO_PRED || {}), [id]:p};
+    }
+
+    return {h,a,pH:ph,pA:pa,pen:h===a};
+  };
+
+  /* Render előtt törölt ID-ket kiszedjük minden cache-ből. */
+  if(typeof render === 'function' && !render.__v89Wrapped){
+    const baseRender = render;
+    render = function(){
+      const tombs = readTombs();
+      Object.keys(tombs).forEach(removeEverywhere);
+      return baseRender.apply(this, arguments);
+    };
+    render.__v89Wrapped = true;
+  }
+})();
+
+
+/* ===== WC26 v90: clean final override — penalty modal rewrite, bracket fit, group gap, HT/quote fix =====
+   Ez a patch nem újabb réteget próbál "szépen" igazítani, hanem a hibás részeket felülírja:
+   1) locked real penalty segment: teljes innerHTML csere, nincs régi/dupla szöveg
+   2) bracket score: egy sor, fix belső rail, nagyobb score-col, score előtt nincs zárójeles pen
+   3) mérkőzéslista score gap: csoportkörös gap konkrét másolata
+   4) HT és aposztróf: liveClockLabel soha nem ad &#39;-et textContentbe, hanem sima ' jelet
+*/
+
+function wc26CleanClockTextV90(v){
+  if(v == null) return '';
+  if(typeof v === 'object'){
+    const vals=[v.display,v.shortDetail,v.detail,v.description,v.m,v.min,v.minute,v.elapsed,v.value,v.clock,v.text,v.displayValue];
+    for(const x of vals){ const got=wc26CleanClockTextV90(x); if(got) return got; }
+    return '';
+  }
+  let s=String(v).trim();
+  if(!s) return '';
+  let up=s.toUpperCase();
+
+  if(up === 'HT' || up === 'HALF' || up.includes('HALF TIME') || up.includes('HALFTIME') || up.includes('INTERVAL')) return 'HT';
+  if(up === 'FT' || up.includes('FULL TIME') || up.includes('FINISHED') || up.includes('FINAL')) return 'FT';
+  if(up.includes('PEN')) return 'PEN';
+  if(up.includes('AET')) return 'AET';
+
+  let plus=s.match(/(\d{1,3})\s*(?:['’`´])?\s*\+\s*(\d{1,2})/);
+  if(plus) return plus[1]+'+'+plus[2]+"'";
+
+  let clockPlus=s.match(/(\d{1,3})\s*:\s*\d{2}\s*\+\s*(\d{1,2})/);
+  if(clockPlus) return clockPlus[1]+'+'+clockPlus[2]+"'";
+
+  let mmss=s.match(/^(\d{1,3})\s*:\s*\d{2}$/);
+  if(mmss){
+    const n=+mmss[1];
+    if(Number.isFinite(n)&&n>0&&n<140) return n+"'";
+  }
+
+  let simple=s.match(/(^|\D)(\d{1,3})(?:\s*(?:['’`´]|min\b))?(\D|$)/i);
+  if(simple){
+    const n=+simple[2];
+    if(Number.isFinite(n)&&n>0&&n<140) return n+"'";
+  }
+  return '';
+}
+
+function wc26IsHalfTimeV90(r){
+  if(!r) return false;
+  const blob=String([
+    r.status,r.minute,r.matchMinute,r.elapsed,r.currentMinute,r.liveMinute,
+    r.matchTime,r.time,r.statusMinute,r.displayClock,r.clock
+  ].filter(x=>x!=null).join(' ')).toUpperCase();
+  return /\bHT\b/.test(blob) || blob.includes('HALF TIME') || blob.includes('HALFTIME') || blob.includes('INTERVAL');
+}
+
+function wc26ExtractClockLabelFromValue(v){
+  return wc26CleanClockTextV90(v);
+}
+
+function liveClockLabel(r){
+  if(!r || !r.started || r.finished) return '';
+  if(wc26IsHalfTimeV90(r)) return 'HT';
+
+  const status=String(r.status||'').toLowerCase();
+  if(status==='ft'||status.includes('finished')||status.includes('full time')) return '';
+
+  const vals=[r.minute,r.status,r.matchMinute,r.elapsed,r.currentMinute,r.liveMinute,r.matchTime,r.time,r.statusMinute,r.displayClock,r.clock];
+  for(const v of vals){
+    const got=wc26CleanClockTextV90(v);
+    if(got && got !== 'FT') return got;
+  }
+
+  if((status.includes('live')||status.includes('play')||status.includes('progress')||r.started)&&r.kickoff){
+    const elapsed=Math.floor((Date.now()-new Date(r.kickoff).getTime())/60000);
+    if(elapsed>0&&elapsed<140){
+      if(elapsed>105) return "105+"+(elapsed-105)+"'";
+      if(elapsed>90) return "90+"+(elapsed-90)+"'";
+      if(elapsed>45&&elapsed<60) return "45+"+(elapsed-45)+"'";
+      if(elapsed>=60) return Math.min(90,elapsed-15)+"'";
+      return elapsed+"'";
+    }
+  }
+  return 'LIVE';
+}
+
+/* Normalize live result status too: if incoming has halftime text, status/minute become HT. */
+if(typeof normalizeLiveResult === 'function' && !normalizeLiveResult.__v90Wrapped){
+  const __baseNormalizeLiveResultV90=normalizeLiveResult;
+  normalizeLiveResult=function(id,d){
+    const r=__baseNormalizeLiveResultV90(id,d);
+    if(r && wc26IsHalfTimeV90({...r,...(d||{})})){
+      r.started=true;
+      r.finished=false;
+      r.status='HT';
+      r.minute='HT';
+    }
+    return r;
+  };
+  normalizeLiveResult.__v90Wrapped=true;
+}
+
+/* --- Match list: exact group-card gap copy. */
+function scoreHtml(x){
+  const isKo = x.id && String(x.id).startsWith('KO-');
+  const p = isKo ? koPred(x.id) : getPred(x.id);
+  const r = actualFor(x);
+  const hasReal = r && (r.started || r.finished || matchLockState({id:x.id}) !== 'open') && validScore(r.h) && validScore(r.a);
+  const pHasPen = wc26HasPenScore(p);
+  const rHasPen = wc26HasPenScore(r);
+  let lines = '';
+
+  if(p && hasReal){
+    lines='<div class="mr-score-compare v90-group-gap">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,rHasPen?r.pH:null)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,rHasPen?r.pA:null)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only v90-group-gap">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only v90-group-gap">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,rHasPen?r.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,rHasPen?r.pA:null)+'</span></div>'
+      +'</div>';
+  }else{
+    return '<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  const clock=liveClockLabel(r);
+  const rawSt=r&&r.status?String(r.status).toUpperCase():'';
+  const isInt=rawSt.includes('INT');
+  const stateBadge = (hasReal && r && !r.finished && (clock || isInt)) ? wc26PrimaryStateBadge(r) : '';
+
+  return stateBadge
+    ? '<div class="mr-score-wrap '+(p?'':'no-tip')+'"><div class="mr-clock-row">'+stateBadge+'</div><div class="mr-score-lines">'+lines+'</div></div>'
+    : lines;
+}
+
+/* --- Bracket: one-line, inside-card score rail. */
+function wc26KoTipInline(score,pen){
+  if(!validScore(score)) return '';
+  return '<span class="ko-tip-ind v90-tip"><span class="ko-tip-main">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
+}
+
+function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
+  if(!team) return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
+  const hasTip=validScore(tipScore), hasRealPen=pen!=null, hasTipPen=validScore(tipPen);
+  return '<div class="ko-team '+(cls||'')+'">'
+    +crest(team,'22px')
+    +'<span class="ko-name">'+esc(team)+'</span>'
+    +'<span class="ko-score v90-inline '+(hasTip?'has-tip ':'')+(hasRealPen?'has-real-pen ':'')+(hasTipPen?'has-tip-pen ':'')+(hasRealPen&&hasTipPen?'has-double-pen ':'')+'">'
+      +'<span class="ko-real-pack"><b>'+(score==null?'-':score)+'</b>'+(hasRealPen?'<small class="ko-pen">('+pen+')</small>':'')+'</span>'
+      +wc26KoTipInline(tipScore,tipPen)
+    +'</span>'
+  +'</div>';
+}
+
+function koCard(m,row){
+  var r=LIVE_RESULTS[m.id],hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),p=koPred(m.id);
+  var dh=hasReal?+r.h:(p?p.h:null),da=hasReal?+r.a:(p?p.a:null);
+  var dph=hasReal?(validScore(r.pH)?+r.pH:null):(p&&p.pen?p.pH:null),dpa=hasReal?(validScore(r.pA)?+r.pA:null):(p&&p.pen?p.pA:null);
+  var realHasPen=hasReal&&validScore(r.pH)&&validScore(r.pA)&&+r.h===+r.a;
+  var tipHasPen=p&&validScore(p.h)&&validScore(p.a)&&+p.h===+p.a&&validScore(p.pH)&&validScore(p.pA);
+  var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;
+  if(dh!=null&&da!=null&&m.h&&m.a){if(dh!==da)w=dh>da?m.h:m.a;else if(hasPen&&dph!==dpa)w=dph>dpa?m.h:m.a;}
+  var hw=w===m.h,aw=w===m.a,rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';
+  var sc=wc26KoCardGrade(m),cls=[];
+  if(hasReal)cls.push('live-result');else if(p)cls.push('predicted pending-tip no-real-result');
+  if(hasReal&&sc.cat==='exact')cls.push('result-exact');
+  else if(hasReal&&sc.cat==='diff')cls.push('result-diff');
+  else if(hasReal&&sc.cat==='outcome')cls.push('result-outcome');
+  else if(hasReal&&sc.cat==='miss')cls.push('result-miss');
+  if(hasReal&&p)cls.push('has-score-compare');
+  if(hasReal&&p&&realHasPen&&tipHasPen)cls.push('has-double-pen');
+  if(m.locked)cls.push('locked');
+  const tipHome=(hasReal&&p)?p.h:null,tipAway=(hasReal&&p)?p.a:null;
+  const tipPenHome=(hasReal&&tipHasPen)?p.pH:null,tipPenAway=(hasReal&&tipHasPen)?p.pA:null;
+  return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'
+    +koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,tipHome,tipPenHome)
+    +koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,tipAway,tipPenAway)
+    +'</div>';
+}
+
+/* --- Penalty segment rewrite from zero: replace locked-real-pen content completely. */
+function wc26RewriteLockedPenaltySegmentV90(){
+  const ov=document.querySelector('.tip-overlay[data-tip-kind="ko"]');
+  if(!ov) return;
+  const id=ov.dataset.tipId;
+  const r=id?actualFor({id}):null;
+  const box=ov.querySelector('.penalty-box.locked-real-pen');
+  if(!box || !r || !validScore(r.pH) || !validScore(r.pA)) return;
+
+  box.classList.remove('hidden');
+  box.dataset.v90='1';
+  box.innerHTML =
+    '<div class="pen-v90">'
+      +'<span class="pen-v90-label">Valós büntetők</span>'
+      +'<span class="pen-v90-score"><b>'+esc(r.pH)+'</b><em>–</em><b>'+esc(r.pA)+'</b></span>'
+    +'</div>';
+}
+
+(function(){
+  const baseOpenKo=typeof openKoTip==='function'?openKoTip:null;
+  if(baseOpenKo&&!openKoTip.__v90Wrapped){
+    openKoTip=function(){
+      const out=baseOpenKo.apply(this,arguments);
+      setTimeout(wc26RewriteLockedPenaltySegmentV90,0);
+      setTimeout(wc26RewriteLockedPenaltySegmentV90,80);
+      return out;
+    };
+    openKoTip.__v90Wrapped=true;
+  }
+
+  const baseRefresh=typeof refreshOpenTipModal==='function'?refreshOpenTipModal:null;
+  if(baseRefresh&&!refreshOpenTipModal.__v90Wrapped){
+    refreshOpenTipModal=function(){
+      const out=baseRefresh.apply(this,arguments);
+      setTimeout(wc26RewriteLockedPenaltySegmentV90,0);
+      return out;
+    };
+    refreshOpenTipModal.__v90Wrapped=true;
+  }
+
+  const st=document.createElement('style');
+  st.textContent=`
+    /* MATCH LIST: exact group-stage score gap, no KO special widening. */
+    .matches-main .match-row .mr-score-compare.v90-group-gap,
+    .matches-main .match-row .mr-score-compare,
+    .matches-main .match-row .mr-score-tip-only.v90-group-gap,
+    .matches-main .match-row .mr-score-actual-only.v90-group-gap{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(5px,.52vw,8px)!important;
+      min-width:0!important;
+    }
+    .matches-main .match-row .mr-score-compare.v90-group-gap .mr-score-row,
+    .matches-main .match-row .mr-score-compare .mr-score-row,
+    .matches-main .match-row .mr-score-tip-only.v90-group-gap .mr-score-row,
+    .matches-main .match-row .mr-score-actual-only.v90-group-gap .mr-score-row,
+    .matches-main .match-row .mr-score-compare.has-double-pen .mr-score-row{
+      display:flex!important;
+      grid-template-columns:none!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(6px,.55vw,10px)!important;
+      column-gap:clamp(6px,.55vw,10px)!important;
+      min-height:1.18em!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+    .matches-main .match-row .mr-score-real,
+    .matches-main .match-row .mr-score-tip,
+    .matches-main .match-row .mr-score-single,
+    .matches-main .match-row .mr-score-compare.has-double-pen .mr-score-real,
+    .matches-main .match-row .mr-score-compare.has-double-pen .mr-score-tip{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:2px!important;
+      font-size:inherit!important;
+      line-height:1!important;
+      font-weight:950!important;
+      white-space:nowrap!important;
+    }
+
+    /* BRACKET: one-line inside card. Reserve enough rail, truncate names instead of clipping score. */
+    .ko-card{
+      --ko-card-score-col:54px!important;
+      overflow:hidden!important;
+    }
+    .ko-card.has-score-compare{--ko-card-score-col:74px!important;}
+    .ko-card.has-double-pen{--ko-card-score-col:88px!important;}
+    .ko-card .ko-team{
+      grid-template-columns:var(--ko-card-crest) minmax(0,1fr) var(--ko-card-score-col)!important;
+      gap:5px!important;
+      overflow:hidden!important;
+    }
+    .ko-card .ko-name{
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+      padding-right:1px!important;
+    }
+    .ko-card .ko-score.v90-inline,
+    .ko-card .ko-score.v87-inline,
+    .ko-card .ko-score.v86-stack,
+    .ko-card .ko-score.v85-rail,
+    .ko-card .ko-score.v84-rail{
+      width:var(--ko-card-score-col)!important;
+      min-width:var(--ko-card-score-col)!important;
+      max-width:var(--ko-card-score-col)!important;
+      display:flex!important;
+      flex-direction:row!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:0!important;
+      overflow:hidden!important;
+      white-space:nowrap!important;
+      transform:none!important;
+      line-height:1!important;
+      letter-spacing:-.035em!important;
+    }
+    .ko-card .ko-real-pack{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:1px!important;
+      min-width:0!important;
+      flex:0 0 auto!important;
+      overflow:visible!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+    .ko-card .ko-real-pack b{
+      font-size:.98em!important;
+      line-height:1!important;
+      font-weight:950!important;
+    }
+    .ko-card.live-result .ko-real-pack b,
+    .ko-card.live-result .ko-real-pack .ko-pen{
+      color:#ff6f84!important;
+    }
+    .ko-card .ko-real-pack .ko-pen{
+      font-size:.54em!important;
+      line-height:1!important;
+      font-weight:950!important;
+      margin-left:1px!important;
+    }
+    .ko-card .ko-tip-ind.v90-tip,
+    .ko-card .ko-tip-ind.v87-tip,
+    .ko-card .ko-tip-ind.v86-tip,
+    .ko-card .ko-tip-ind.v85-tip,
+    .ko-card .ko-tip-ind.v84-tip{
+      display:inline-flex!important;
+      flex-direction:row!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:1px!important;
+      margin-left:5px!important;
+      min-width:0!important;
+      flex:0 0 auto!important;
+      overflow:visible!important;
+      white-space:nowrap!important;
+      color:#f4f7fb!important;
+      font-size:.90em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      opacity:.98!important;
+    }
+    .ko-card.has-double-pen .ko-tip-ind.v90-tip,
+    .ko-card.has-double-pen .ko-tip-ind.v87-tip,
+    .ko-card.has-double-pen .ko-tip-ind.v86-tip,
+    .ko-card.has-double-pen .ko-tip-ind.v85-tip,
+    .ko-card.has-double-pen .ko-tip-ind.v84-tip{
+      margin-left:5px!important;
+      font-size:.86em!important;
+    }
+    .ko-card .ko-tip-ind .ko-tip-pen{
+      color:#ffc15a!important;
+      font-size:.54em!important;
+      line-height:1!important;
+      font-weight:950!important;
+      margin-left:1px!important;
+    }
+    @media(max-width:720px){
+      .ko-card{--ko-card-score-col:52px!important;}
+      .ko-card.has-score-compare{--ko-card-score-col:72px!important;}
+      .ko-card.has-double-pen{--ko-card-score-col:84px!important;}
+      .ko-card .ko-real-pack b{font-size:.96em!important;}
+      .ko-card .ko-real-pack .ko-pen{font-size:.50em!important;}
+      .ko-card .ko-tip-ind.v90-tip,
+      .ko-card .ko-tip-ind.v87-tip,
+      .ko-card .ko-tip-ind.v86-tip,
+      .ko-card .ko-tip-ind.v85-tip,
+      .ko-card .ko-tip-ind.v84-tip{font-size:.86em!important;margin-left:4px!important;}
+      .ko-card.has-double-pen .ko-tip-ind.v90-tip,
+      .ko-card.has-double-pen .ko-tip-ind.v87-tip,
+      .ko-card.has-double-pen .ko-tip-ind.v86-tip,
+      .ko-card.has-double-pen .ko-tip-ind.v85-tip,
+      .ko-card.has-double-pen .ko-tip-ind.v84-tip{font-size:.82em!important;margin-left:4px!important;}
+      .ko-card .ko-tip-ind .ko-tip-pen{font-size:.50em!important;}
+    }
+
+    /* PENALTY MODAL: zero-rewritten single segment. */
+    .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen[data-v90="1"]{
+      padding:0!important;
+      margin-top:10px!important;
+      border-radius:14px!important;
+      overflow:hidden!important;
+      min-height:0!important;
+      background:rgba(10,18,24,.98)!important;
+      border:1px solid rgba(255,104,128,.36)!important;
+    }
+    .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen[data-v90="1"] .pen-v90{
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:12px!important;
+      padding:10px 12px!important;
+      min-height:42px!important;
+      line-height:1!important;
+      width:100%!important;
+      box-sizing:border-box!important;
+    }
+    .pen-v90-label{
+      color:#f2f6f8!important;
+      font-size:14px!important;
+      font-weight:950!important;
+      white-space:nowrap!important;
+    }
+    .pen-v90-score{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:7px!important;
+      color:#ff6f8d!important;
+      white-space:nowrap!important;
+    }
+    .pen-v90-score b{
+      color:#ff6f8d!important;
+      font-size:28px!important;
+      font-weight:950!important;
+      line-height:1!important;
+    }
+    .pen-v90-score em{
+      color:#8fa1ad!important;
+      font-style:normal!important;
+      font-size:16px!important;
+      font-weight:950!important;
+    }
+    @media(max-width:720px){
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen[data-v90="1"]{
+        margin-top:8px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen[data-v90="1"] .pen-v90{
+        min-height:36px!important;
+        padding:8px 10px!important;
+        gap:9px!important;
+      }
+      .pen-v90-label{font-size:12px!important;}
+      .pen-v90-score{gap:6px!important;}
+      .pen-v90-score b{font-size:23px!important;}
+      .pen-v90-score em{font-size:14px!important;}
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
