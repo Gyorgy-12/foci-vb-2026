@@ -16680,4 +16680,707 @@ function scoreHtml(x){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v83 from v82: safe remaining stats too, no extra reads ===== */
+
+/*
+  A v82 UI/KO-tip fixek mellé ez megcsinálja a "többit" is:
+  - piros/sárga lap statok minden meglévő LIVE_RESULTS-ből
+  - top góllövők minden meglévő LIVE_RESULTS-ből
+  - leggólosabb / legegyoldalúbb meccsek: valós + még nem játszott tippek
+  - nincs backend read
+  - nincs Firestore read
+  - nincs interval
+  - nincs calcFairPlay override, tehát tabella-sort nem lassítjuk
+*/
+
+function wc26ArrV83(v){
+  if(Array.isArray(v)) return v;
+  if(typeof v === 'string'){
+    try{
+      const x = JSON.parse(v);
+      return Array.isArray(x) ? x : [];
+    }catch(e){ return []; }
+  }
+  return [];
+}
+
+function wc26TeamV83(v){
+  v = String(v || '').trim();
+  if(!v || v === 'TBD' || v === 'null' || v === 'undefined') return '';
+  try{ return normalizeTeamName(v) || v; }catch(e){ return v; }
+}
+
+function wc26KoMetaV83(id){
+  id = String(id || '');
+  const idx = +(id.match(/-(\d+)$/)?.[1] || 0);
+  if(id.includes('R32')) return {title:'Legjobb 32', index:idx};
+  if(id.includes('R16')) return {title:'Nyolcaddöntő', index:idx};
+  if(id.includes('QF')) return {title:'Negyeddöntő', index:idx};
+  if(id.includes('SF')) return {title:'Elődöntő', index:idx};
+  if(id.includes('BR')) return {title:'Bronzmeccs', index:idx || 1};
+  if(id.includes('F-')) return {title:'Döntő', index:idx || 1};
+  return {title:'Kieséses kör', index:idx};
+}
+
+function wc26AllKnownMatchesV83(){
+  const map = new Map();
+
+  (FX || []).forEach(m=>{
+    if(m && m.id) map.set(m.id, {
+      id:m.id,
+      h:m.h,
+      a:m.a,
+      g:m.g || '',
+      d:m.d || m.date || '',
+      title:m.title || '',
+      index:m.index || '',
+      kind:'group'
+    });
+  });
+
+  try{
+    const rounds = buildKO();
+    const bronze = buildBronze(rounds);
+    rounds.flatMap(r=>r.matches).concat([bronze]).forEach(m=>{
+      if(!m || !m.id) return;
+      const meta = wc26KoMetaV83(m.id);
+      map.set(m.id, {
+        id:m.id,
+        h:wc26TeamV83(m.h || m.homeTeam || ''),
+        a:wc26TeamV83(m.a || m.awayTeam || ''),
+        g:'',
+        d:m.date || '',
+        title:m.title || meta.title,
+        index:m.index || meta.index,
+        kind:'ko'
+      });
+    });
+  }catch(e){}
+
+  Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
+    const old = map.get(id) || {};
+    const meta = wc26KoMetaV83(id);
+    const h = wc26TeamV83(r?.homeTeam || r?.home || old.h || '');
+    const a = wc26TeamV83(r?.awayTeam || r?.away || old.a || '');
+    map.set(id, {
+      ...old,
+      id,
+      h:h || old.h || '',
+      a:a || old.a || '',
+      g:old.g || '',
+      d:old.d || r?.date || '',
+      title:old.title || meta.title,
+      index:old.index || meta.index,
+      kind:old.kind || (String(id).startsWith('KO-') ? 'ko' : 'live')
+    });
+  });
+
+  return map;
+}
+
+function wc26EventTeamV83(ev, match){
+  const raw = String(ev?.team || ev?.side || ev?.teamSide || '').trim();
+  const low = raw.toLowerCase();
+
+  if(low === 'a' || low === 'away') return wc26TeamV83(match.a);
+  if(low === 'h' || low === 'home') return wc26TeamV83(match.h);
+
+  if(raw && raw.length > 1){
+    const n = wc26TeamV83(raw);
+    if(n) return n;
+  }
+
+  return wc26TeamV83(match.h);
+}
+
+function wc26StatsSnapshotV83(){
+  const sig = JSON.stringify({
+    live:Object.keys(LIVE_RESULTS||{}).sort().map(id=>{
+      const r=LIVE_RESULTS[id]||{};
+      return [
+        id,r.h,r.a,r.pH,r.pA,r.started,r.finished,r.status,r.updatedAt,
+        JSON.stringify(r.scorers||''),
+        JSON.stringify(r.redCards||''),
+        JSON.stringify(r.yellowCards||'')
+      ].join('|');
+    }),
+    pred:Object.keys(PRED||{}).map(k=>k+':'+JSON.stringify(PRED[k])).sort(),
+    ko:Object.keys(KO_PRED||{}).map(k=>k+':'+JSON.stringify(KO_PRED[k])).sort(),
+    lastGood:Object.keys(window.__WC26_V82_LAST_GOOD_KO__||{}).map(k=>k+':'+JSON.stringify(window.__WC26_V82_LAST_GOOD_KO__[k])).sort()
+  });
+
+  if(window.__WC26_V83_STATS_CACHE__ && window.__WC26_V83_STATS_CACHE__.sig === sig){
+    return window.__WC26_V83_STATS_CACHE__.data;
+  }
+
+  const fp = {};
+  const scorerCounts = {};
+  const realRows = [];
+  const tipRows = [];
+  const matches = wc26AllKnownMatchesV83();
+
+  const ensure = n => {
+    n = wc26TeamV83(n);
+    if(!n) return '';
+    if(!fp[n]) fp[n] = {yellow:0, yellowRed:0, red:0, yellowPlusRed:0, score:0};
+    return n;
+  };
+
+  (ALL || []).forEach(ensure);
+
+  Object.entries(LIVE_RESULTS || {}).forEach(([id,r])=>{
+    if(!r || !(r.started || r.finished)) return;
+
+    const m = matches.get(id) || {};
+    const h = ensure(r.homeTeam || r.home || m.h);
+    const a = ensure(r.awayTeam || r.away || m.a);
+    if(!h && !a) return;
+
+    const match = {h,a};
+
+    if(validScore(r.h) && validScore(r.a)){
+      realRows.push({
+        m:{
+          id,
+          h:h || m.h || '',
+          a:a || m.a || '',
+          g:m.g || '',
+          d:m.d || r.date || '',
+          title:m.title || wc26KoMetaV83(id).title,
+          index:m.index || wc26KoMetaV83(id).index
+        },
+        p:{h:+r.h,a:+r.a},
+        source:'Valós'
+      });
+    }
+
+    wc26ArrV83(r.yellowCards).forEach(c=>{
+      const team = wc26EventTeamV83(c, match);
+      if(team && fp[team]) fp[team].yellow++;
+    });
+
+    wc26ArrV83(r.redCards).forEach(c=>{
+      const team = wc26EventTeamV83(c, match);
+      if(!team || !fp[team]) return;
+
+      const blob = JSON.stringify(c || {}).toLowerCase();
+      const typ = String(c.type || c.card || c.eventType || c.kind || c.name || '').toLowerCase();
+
+      const yellowRed =
+        !!(c.yellowRed || c.secondYellow) ||
+        typ.includes('second yellow') ||
+        typ.includes('yellow-red') ||
+        typ.includes('second_yellow') ||
+        blob.includes('second yellow');
+
+      const yellowPlusRed =
+        !!(c.yellowPlusRed || c.yellowAndRed) ||
+        typ.includes('yellow+red') ||
+        blob.includes('yellowplusred');
+
+      if(yellowRed) fp[team].yellowRed++;
+      else if(yellowPlusRed) fp[team].yellowPlusRed++;
+      else fp[team].red++;
+    });
+
+    wc26ArrV83(r.scorers).forEach(s=>{
+      const player = String(s?.player || s?.playerName || s?.name || '').trim();
+      if(!player || s?.og) return;
+      const team = wc26EventTeamV83(s, match);
+      if(!team) return;
+      const key = player + '|' + team;
+      if(!scorerCounts[key]) scorerCounts[key] = {player, team, goals:0};
+      scorerCounts[key].goals++;
+    });
+  });
+
+  /* Tip-only meccsek a top match statokhoz: valós meccset nem duplázunk. */
+  const realIds = new Set(realRows.map(x=>x.m.id));
+
+  (FX || []).forEach(m=>{
+    if(!m || !m.id || realIds.has(m.id)) return;
+    const p = getPred(m.id) || PRED[m.id];
+    if(p && validScore(p.h) && validScore(p.a)){
+      tipRows.push({
+        m:{id:m.id,h:m.h,a:m.a,g:m.g||'',d:m.d||m.date||'',title:m.title||'',index:m.index||''},
+        p:{h:+p.h,a:+p.a},
+        source:'Tipp'
+      });
+    }
+  });
+
+  try{
+    const rounds = buildKO();
+    const bronze = buildBronze(rounds);
+    rounds.flatMap(r=>r.matches).concat([bronze]).forEach(m=>{
+      if(!m || !m.id || realIds.has(m.id) || !m.h || !m.a) return;
+      const p = koPred(m.id) || KO_PRED[m.id] || window.__WC26_V82_LAST_GOOD_KO__?.[m.id];
+      if(p && validScore(p.h) && validScore(p.a)){
+        tipRows.push({
+          m:{id:m.id,h:m.h,a:m.a,g:'',d:m.date||'',title:m.title,index:m.index},
+          p:{h:+p.h,a:+p.a,pH:p.pH,pA:p.pA},
+          source:'Tipp'
+        });
+      }
+    });
+  }catch(e){}
+
+  Object.values(fp).forEach(t=>{
+    t.score = -(t.yellow*1 + t.yellowRed*3 + t.red*4 + t.yellowPlusRed*5);
+  });
+
+  const data = {
+    fp,
+    scorers:Object.values(scorerCounts).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player,'hu')).slice(0,20),
+    realRows,
+    tipRows
+  };
+
+  window.__WC26_V83_STATS_CACHE__ = {sig,data};
+  return data;
+}
+
+/* Do NOT override calcFairPlay; table tiebreak remains fast/stable. */
+function topScorersList(){
+  return wc26StatsSnapshotV83().scorers;
+}
+
+function topCardsHtml(){
+  const fp=wc26StatsSnapshotV83().fp;
+  const teams=Object.keys(fp);
+
+  const YC='<span style="display:inline-block;width:.5em;height:.72em;background:#f5c842;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
+  const RC='<span style="display:inline-block;width:.5em;height:.72em;background:#e03040;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
+  const YRC='<span style="display:inline-block;width:.8em;height:.72em;background:linear-gradient(90deg,#f5c842 50%,#e03040 50%);border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
+
+  const byYellow=teams.filter(n=>fp[n].yellow>0)
+    .sort((a,b)=>fp[b].yellow-fp[a].yellow||a.localeCompare(b)).slice(0,10);
+
+  const byRed=teams.filter(n=>(fp[n].red+fp[n].yellowRed+fp[n].yellowPlusRed)>0)
+    .sort((a,b)=>(fp[b].red+fp[b].yellowRed+fp[b].yellowPlusRed)-(fp[a].red+fp[a].yellowRed+fp[a].yellowPlusRed)||a.localeCompare(b));
+
+  if(!byYellow.length&&!byRed.length)return'';
+
+  function row(i,n,val,sub){
+    return '<div class="wc-stat-row">'
+      +'<div class="wc-stat-rank">'+i+'</div>'
+      +'<div class="wc-stat-main">'
+        +'<div class="wc-stat-name stat-game-name">'+crest(n)+'<span class="stat-game-text">'+esc(n)+'</span></div>'
+        +'<div class="wc-stat-sub">'+sub+'</div>'
+      +'</div>'
+      +'<div class="wc-stat-val">'+val+'</div>'
+    +'</div>';
+  }
+
+  let out='';
+  if(byYellow.length){
+    out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 10</h2>'
+      +'<div class="wc-stat-list stat-match-list">'
+      +byYellow.map((n,i)=>row(i+1,n,YC+' '+fp[n].yellow,fp[n].yellow+' sárga lap')).join('')
+      +'</div></section>';
+  }
+
+  if(byRed.length){
+    out+='<section class="card"><h2 class="card-title">Piros lapok &ndash; Összes</h2>'
+      +'<div class="wc-stat-list stat-match-list">'
+      +byRed.map((n,i)=>{
+        const t=fp[n];
+        const total=t.red+t.yellowRed+t.yellowPlusRed;
+        const parts=[];
+        if(t.yellowRed)parts.push(YRC+' '+t.yellowRed+'&times; kettős sárga');
+        if(t.red)parts.push(RC+' '+t.red+'&times; direkt piros');
+        if(t.yellowPlusRed)parts.push(YRC+RC+' '+t.yellowPlusRed+'&times; sárga+piros');
+        return row(i+1,n,RC+' '+total,parts.join(' &middot; '));
+      }).join('')
+      +'</div></section>';
+  }
+
+  return out;
+}
+
+function topMatchesHtml(){
+  const s = wc26StatsSnapshotV83();
+  const res = s.realRows.concat(s.tipRows);
+
+  const goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
+  const diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
+
+  return '<section class="card"><h2 class="card-title">Leggólosabb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
+    +(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs adat','A valós eredmények után frissül','0')).join(''))
+    +'</div></section><section class="card"><h2 class="card-title">Legegyoldalúbb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
+    +(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'Még nincs lejátszott mérkőzés','Gólkülönbség: 0','0')).join(''))
+    +'</div></section>';
+}
+
+window.WC26_STATS_DEBUG_V83 = function(team='Mexico'){
+  const s=wc26StatsSnapshotV83();
+  return {
+    team,
+    fairPlay:s.fp[team]||null,
+    scorers:s.scorers.filter(x=>x.team===team),
+    realRows:s.realRows.filter(x=>x.m.h===team||x.m.a===team),
+    tipRows:s.tipRows.filter(x=>x.m.h===team||x.m.a===team)
+  };
+};
+
+
+/* ===== WC26 v84 final KO visual polish: compact rail, spacing, modal proportions ===== */
+
+/*
+  Ez csak a felsorolt 5 prioritás UI/state részeit húzza meg erősebbre.
+  Nincs extra backend/Firestore read.
+*/
+
+/* 1) KO tipp fallback még render/KO-pair sync után is maradjon */
+(function(){
+  function safeRestore(){
+    try{
+      if(typeof wc26RestoreKoTipsV82 === 'function') wc26RestoreKoTipsV82();
+      if(typeof wc26RememberKoTipsV82 === 'function') wc26RememberKoTipsV82();
+    }catch(e){}
+  }
+
+  if(typeof wc26LoadKoPairsFromWorker === 'function' && !wc26LoadKoPairsFromWorker.__v84Wrapped){
+    const base = wc26LoadKoPairsFromWorker;
+    wc26LoadKoPairsFromWorker = async function(){
+      safeRestore();
+      const out = await base.apply(this, arguments);
+      safeRestore();
+      return out;
+    };
+    wc26LoadKoPairsFromWorker.__v84Wrapped = true;
+  }
+
+  if(typeof syncLiveResults === 'function' && !syncLiveResults.__v84Wrapped){
+    const base = syncLiveResults;
+    syncLiveResults = async function(){
+      safeRestore();
+      const out = await base.apply(this, arguments);
+      safeRestore();
+      return out;
+    };
+    syncLiveResults.__v84Wrapped = true;
+  }
+})();
+
+/* 2 + 4) Bracket rail: compact, fixed width, no widening; outcome color only with real result */
+function wc26KoTipInline(score,pen){
+  if(!validScore(score)) return '';
+  return '<span class="ko-tip-ind v84-tip">'
+    +'<span class="ko-tip-main">'+esc(score)+'</span>'
+    +(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')
+  +'</span>';
+}
+
+function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
+  if(!team) return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
+
+  const hasTip = validScore(tipScore);
+  const hasRealPen = pen != null;
+  const hasTipPen = validScore(tipPen);
+  const scoreCls = 'ko-score v84-rail'
+    +(hasTip?' has-tip':'')
+    +(hasRealPen?' has-real-pen':'')
+    +(hasTipPen?' has-tip-pen':'')
+    +(hasRealPen&&hasTipPen?' has-double-pen':'');
+
+  return '<div class="ko-team '+(cls||'')+'">'
+    +crest(team,'22px')
+    +'<span class="ko-name">'+esc(team)+'</span>'
+    +'<span class="'+scoreCls+'">'
+      +'<span class="ko-real-pack">'
+        +(hasRealPen?'<small class="ko-pen">('+pen+')</small>':'')
+        +'<b>'+(score==null?'-':score)+'</b>'
+      +'</span>'
+      +wc26KoTipInline(tipScore,tipPen)
+    +'</span>'
+  +'</div>';
+}
+
+function koCard(m,row){
+  var r=LIVE_RESULTS[m.id],
+      hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),
+      p=koPred(m.id);
+
+  var dh=hasReal?+r.h:(p?p.h:null),
+      da=hasReal?+r.a:(p?p.a:null);
+
+  var dph=hasReal?(validScore(r.pH)?+r.pH:null):(p&&p.pen?p.pH:null),
+      dpa=hasReal?(validScore(r.pA)?+r.pA:null):(p&&p.pen?p.pA:null);
+
+  var realHasPen=hasReal&&validScore(r.pH)&&validScore(r.pA)&&+r.h===+r.a;
+  var tipHasPen=p&&validScore(p.h)&&validScore(p.a)&&+p.h===+p.a&&validScore(p.pH)&&validScore(p.pA);
+  var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;
+
+  if(dh!=null&&da!=null&&m.h&&m.a){
+    if(dh!==da){w=dh>da?m.h:m.a;}
+    else if(hasPen&&dph!==dpa){w=dph>dpa?m.h:m.a;}
+  }
+
+  var hw=w===m.h,aw=w===m.a,rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';
+  var sc=wc26KoCardGrade(m),cls=[];
+
+  if(hasReal) cls.push('live-result');
+  else if(p) cls.push('predicted pending-tip no-real-result');
+
+  /* Színes eredmény-indikátor csak valós eredménynél. */
+  if(hasReal && sc.cat==='exact') cls.push('result-exact');
+  else if(hasReal && sc.cat==='diff') cls.push('result-diff');
+  else if(hasReal && sc.cat==='outcome') cls.push('result-outcome');
+  else if(hasReal && sc.cat==='miss') cls.push('result-miss');
+
+  if(hasReal&&p) cls.push('has-score-compare');
+  if(hasReal&&p&&realHasPen&&tipHasPen) cls.push('has-double-pen');
+  if(m.locked) cls.push('locked');
+
+  const tipHome=(hasReal&&p)?p.h:null, tipAway=(hasReal&&p)?p.a:null;
+  const tipPenHome=(hasReal&&tipHasPen)?p.pH:null;
+  const tipPenAway=(hasReal&&tipHasPen)?p.pA:null;
+
+  return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'
+    +koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,tipHome,tipPenHome)
+    +koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,tipAway,tipPenAway)
+    +'</div>';
+}
+
+/* 3) Match-list score spacing: only penalty compare gets bigger gap and bigger tip */
+function scoreHtml(x){
+  const isKo = x.id && String(x.id).startsWith('KO-');
+  const p = isKo ? koPred(x.id) : getPred(x.id);
+  const r = actualFor(x);
+  const hasReal = r && (r.started || r.finished || matchLockState({id:x.id}) !== 'open') && validScore(r.h) && validScore(r.a);
+  const pHasPen = wc26HasPenScore(p);
+  const rHasPen = wc26HasPenScore(r);
+  const bothHavePen = !!(p && hasReal && pHasPen && rHasPen);
+  let lines = '';
+
+  if(p && hasReal){
+    lines='<div class="mr-score-compare '+(bothHavePen?'has-double-pen':'')+'">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,rHasPen?r.pH:null)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,rHasPen?r.pA:null)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only '+(pHasPen?'has-tip-pen':'')+'">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only '+(rHasPen?'has-real-pen':'')+'">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,rHasPen?r.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,rHasPen?r.pA:null)+'</span></div>'
+      +'</div>';
+  }else{
+    return '<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  const stateBadge = (hasReal && r && !r.finished) ? wc26PrimaryStateBadge(r) : '';
+  return stateBadge
+    ? '<div class="mr-score-wrap '+(p?'':'no-tip')+'"><div class="mr-clock-row">'+stateBadge+'</div><div class="mr-score-lines">'+lines+'</div></div>'
+    : lines;
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* 2) Pending predicted card = neutral. No red/orange/green indicator without actual result. */
+    .ko-card.no-real-result,
+    .ko-card.predicted:not(.live-result),
+    .ko-card.pending-tip:not(.live-result),
+    .ko-card.no-real-result.result-exact,
+    .ko-card.no-real-result.result-diff,
+    .ko-card.no-real-result.result-outcome,
+    .ko-card.no-real-result.result-miss{
+      background:rgba(16,25,30,.96)!important;
+      border-color:rgba(255,255,255,.13)!important;
+      box-shadow:inset 4px 0 0 rgba(154,173,182,.45),0 0 0 1px rgba(255,255,255,.035)!important;
+    }
+
+    /* 4) Compact bracket rail: fixed score column, no card widening. */
+    .ko-card{
+      --ko-card-score-col:clamp(52px,4.3vw,68px)!important;
+      overflow:hidden!important;
+    }
+    .ko-card .ko-team{
+      grid-template-columns:var(--ko-card-crest) minmax(0,1fr) var(--ko-card-score-col)!important;
+    }
+    .ko-card .ko-name{
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+      padding-right:2px!important;
+    }
+    .ko-card .ko-score.v84-rail{
+      width:var(--ko-card-score-col)!important;
+      min-width:var(--ko-card-score-col)!important;
+      max-width:var(--ko-card-score-col)!important;
+      display:flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:0!important;
+      overflow:visible!important;
+      transform:none!important;
+      white-space:nowrap!important;
+      letter-spacing:-.02em!important;
+    }
+    .ko-card .ko-real-pack{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:2px!important;
+      min-width:0!important;
+    }
+    .ko-card.live-result .ko-real-pack b,
+    .ko-card.live-result .ko-real-pack .ko-pen{
+      color:#ff6f84!important;
+    }
+    .ko-card .ko-real-pack b{
+      font-size:1em!important;
+      font-weight:950!important;
+      line-height:1!important;
+    }
+    .ko-card .ko-real-pack .ko-pen{
+      font-size:.70em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      margin:0 1px 0 0!important;
+    }
+    .ko-card .ko-tip-ind.v84-tip{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:2px!important;
+      margin-left:6px!important;
+      color:#f3f7fb!important;
+      font-weight:950!important;
+      font-size:1.08em!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      opacity:1!important;
+    }
+    .ko-card.has-double-pen .ko-tip-ind.v84-tip{
+      margin-left:9px!important;
+      font-size:1.12em!important;
+    }
+    .ko-card .ko-tip-ind .ko-tip-pen{
+      color:#ffc15a!important;
+      font-size:.72em!important;
+      font-weight:950!important;
+      line-height:1!important;
+    }
+
+    @media(max-width:720px){
+      .ko-card{
+        --ko-card-score-col:58px!important;
+      }
+      .ko-card .ko-tip-ind.v84-tip{
+        margin-left:5px!important;
+        font-size:1.10em!important;
+      }
+      .ko-card.has-double-pen .ko-tip-ind.v84-tip{
+        margin-left:8px!important;
+        font-size:1.14em!important;
+      }
+      .ko-card .ko-real-pack .ko-pen{
+        font-size:.66em!important;
+      }
+      .ko-card .ko-tip-ind .ko-tip-pen{
+        font-size:.68em!important;
+      }
+    }
+
+    /* 3) Match-list compare: normal unchanged; penalty compare gets air and bigger tip. */
+    .mr-score-real{
+      color:#ff6f84!important;
+      font-weight:950!important;
+    }
+    .mr-score-tip{
+      color:#f4f7fb!important;
+      font-weight:950!important;
+    }
+    .mr-score-compare:not(.has-double-pen) .mr-score-row{
+      column-gap:clamp(5px,.8vw,10px)!important;
+    }
+    .mr-score-compare.has-double-pen{
+      gap:7px!important;
+    }
+    .mr-score-compare.has-double-pen .mr-score-row{
+      display:grid!important;
+      grid-template-columns:max-content max-content!important;
+      justify-content:center!important;
+      column-gap:clamp(15px,2.7vw,26px)!important;
+    }
+    .mr-score-compare.has-double-pen .mr-score-tip{
+      font-size:clamp(16px,4.1vw,23px)!important;
+      line-height:1!important;
+    }
+    .mr-score-compare.has-double-pen .mr-score-real{
+      font-size:clamp(13px,3.55vw,19px)!important;
+      line-height:1!important;
+    }
+
+    @media(max-width:720px){
+      .mr-score-compare.has-double-pen .mr-score-row{
+        column-gap:19px!important;
+      }
+      .mr-score-compare.has-double-pen .mr-score-tip{
+        font-size:20px!important;
+      }
+      .mr-score-compare.has-double-pen .mr-score-real{
+        font-size:17px!important;
+      }
+    }
+
+    /* 5) Mobile penalty modal proportions: primarily size and spacing. */
+    @media(max-width:720px){
+      .tip-overlay[data-tip-kind="ko"] .sheet{
+        padding-bottom:10px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-box{
+        padding:9px 11px!important;
+        border-radius:15px!important;
+        margin-top:10px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title{
+        font-size:14px!important;
+        line-height:1.08!important;
+        margin-bottom:6px!important;
+        gap:8px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title span:last-child{
+        font-size:9.5px!important;
+        max-width:86px!important;
+        line-height:1.05!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs{
+        grid-template-columns:minmax(42px,1fr) 40px 10px 40px minmax(42px,1fr)!important;
+        gap:5px!important;
+        align-items:center!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs input{
+        width:40px!important;
+        height:40px!important;
+        font-size:24px!important;
+        border-radius:12px!important;
+        padding:0!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-team{
+        font-size:11px!important;
+        line-height:1.05!important;
+        min-width:0!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+        white-space:nowrap!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-note{
+        margin-top:7px!important;
+        padding-top:7px!important;
+        font-size:10.5px!important;
+        line-height:1.32!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
