@@ -19307,4 +19307,1153 @@ function wc26RewriteLockedPenaltySegmentV90(){
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v91: move live/real penalty segment ABOVE odds + live PEN refresh =====
+   - A valós/élő tizenegyes szegmens az odds panel fölé kerül.
+   - Nem a régi penalty-boxot toldozza: külön, tiszta .pen-v91-card blokkot rak be.
+   - A régi .penalty-box.locked-real-pen mobil/desktopon el van rejtve, hogy ne legyen duplikáció.
+   - Élőben frissül, ha LIVE_RESULTS-ben változik pH/pA/status.
+   - PEN státusz badge már a wc26PrimaryMatchState logikában is támogatott; itt ráerősítünk.
+*/
+
+function wc26IsPenaltyPhaseV91(r){
+  if(!r) return false;
+  const blob = String([
+    r.status, r.minute, r.period, r.shortDetail, r.detail,
+    r.displayClock, r.statusText, r.statusType, r.state,
+    r.name, r.description
+  ].filter(v=>v!=null).join(' ')).toUpperCase();
+
+  return wc26HasPenScore(r) ||
+    blob.includes('PENAL') ||
+    /\bPEN\b/.test(blob) ||
+    /\bAP\b/.test(blob) ||
+    blob.includes('SHOOTOUT');
+}
+
+function wc26PenaltySegmentDataV91(){
+  const ov = document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]');
+  if(!ov) return null;
+
+  const id = ov.dataset.tipId || ov.dataset.koid || ov.dataset.matchId || '';
+  if(!id) return null;
+
+  const r = actualFor({id});
+  if(!r || !wc26IsPenaltyPhaseV91(r)) return null;
+
+  const hasPH = validScore(r.pH);
+  const hasPA = validScore(r.pA);
+  const hasScore = hasPH && hasPA;
+
+  const isLivePen = !r.finished && String(r.status || r.minute || '').toUpperCase().includes('PEN');
+  const label = isLivePen ? 'Élő tizenegyespárbaj' : 'Valós büntetők';
+
+  return {
+    id,
+    r,
+    label,
+    live: isLivePen,
+    pH: hasPH ? r.pH : null,
+    pA: hasPA ? r.pA : null,
+    scoreText: hasScore ? (String(r.pH) + '–' + String(r.pA)) : 'PEN'
+  };
+}
+
+function wc26RenderPenaltySegmentV91(){
+  const ov = document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]');
+  if(!ov) return;
+
+  /* régi/hibás panel elrejtése minden esetben, ha létezik */
+  ov.querySelectorAll('.penalty-box.locked-real-pen').forEach(el=>{
+    el.classList.add('v91-old-pen-hidden');
+    el.style.display = 'none';
+  });
+
+  const odds = ov.querySelector('.tip-prob-card');
+  if(!odds) return;
+
+  const data = wc26PenaltySegmentDataV91();
+  let card = ov.querySelector('.pen-v91-card');
+
+  if(!data){
+    if(card) card.remove();
+    return;
+  }
+
+  if(!card){
+    card = document.createElement('div');
+    card.className = 'pen-v91-card';
+    odds.parentNode.insertBefore(card, odds);
+  }else if(card.nextElementSibling !== odds){
+    odds.parentNode.insertBefore(card, odds);
+  }
+
+  card.dataset.penLive = data.live ? '1' : '0';
+  card.dataset.penScore = data.scoreText;
+
+  card.innerHTML =
+    '<div class="pen-v91-inner">'
+      +'<div class="pen-v91-left">'
+        +'<span class="pen-v91-title">'+esc(data.label)+'</span>'
+        +(data.live ? '<span class="pen-v91-live-dot">PEN</span>' : '')
+      +'</div>'
+      +'<div class="pen-v91-score">'
+        +(validScore(data.pH) ? '<b>'+esc(data.pH)+'</b><em>–</em><b>'+esc(data.pA)+'</b>' : '<b class="pen-v91-penonly">PEN</b>')
+      +'</div>'
+    +'</div>';
+}
+
+/* PEN status badge hardening: live shootout shows PEN even before final. */
+if(typeof wc26PrimaryMatchState === 'function' && !wc26PrimaryMatchState.__v91Wrapped){
+  const basePrimaryStateV91 = wc26PrimaryMatchState;
+  wc26PrimaryMatchState = function(r){
+    if(wc26IsPenaltyPhaseV91(r)) return 'PEN';
+    return basePrimaryStateV91.apply(this, arguments);
+  };
+  wc26PrimaryMatchState.__v91Wrapped = true;
+}
+
+/* Run after modal opens / refreshes. */
+(function(){
+  const baseOpenKo = typeof openKoTip === 'function' ? openKoTip : null;
+  if(baseOpenKo && !openKoTip.__v91Wrapped){
+    openKoTip = function(){
+      const out = baseOpenKo.apply(this, arguments);
+      setTimeout(wc26RenderPenaltySegmentV91, 0);
+      setTimeout(wc26RenderPenaltySegmentV91, 80);
+      setTimeout(wc26RenderPenaltySegmentV91, 250);
+      return out;
+    };
+    openKoTip.__v91Wrapped = true;
+  }
+
+  const baseRefresh = typeof refreshOpenTipModal === 'function' ? refreshOpenTipModal : null;
+  if(baseRefresh && !refreshOpenTipModal.__v91Wrapped){
+    refreshOpenTipModal = function(){
+      const out = baseRefresh.apply(this, arguments);
+      setTimeout(wc26RenderPenaltySegmentV91, 0);
+      setTimeout(wc26RenderPenaltySegmentV91, 80);
+      return out;
+    };
+    refreshOpenTipModal.__v91Wrapped = true;
+  }
+
+  const baseMerge = typeof mergeLiveResults === 'function' ? mergeLiveResults : null;
+  if(baseMerge && !mergeLiveResults.__v91Wrapped){
+    mergeLiveResults = function(){
+      const out = baseMerge.apply(this, arguments);
+      setTimeout(wc26RenderPenaltySegmentV91, 0);
+      return out;
+    };
+    mergeLiveResults.__v91Wrapped = true;
+  }
+
+  if(window.__WC26_V91_PEN_MODAL_TIMER__) clearInterval(window.__WC26_V91_PEN_MODAL_TIMER__);
+  window.__WC26_V91_PEN_MODAL_TIMER__ = setInterval(()=>{
+    if(document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]')){
+      wc26RenderPenaltySegmentV91();
+    }
+  }, 900);
+
+  const st = document.createElement('style');
+  st.textContent = `
+    /* hide every previous locked-real penalty implementation */
+    .tip-overlay .penalty-box.locked-real-pen.v91-old-pen-hidden,
+    .tip-overlay .penalty-box.locked-real-pen[data-v90="1"],
+    .tip-overlay .penalty-box.locked-real-pen[data-v87-tiny="1"],
+    .tip-overlay .penalty-box.locked-real-pen[data-v86-compact="1"]{
+      display:none!important;
+    }
+
+    /* The real/live penalty segment belongs ABOVE the odds card */
+    .pen-v91-card{
+      margin:clamp(12px,3.2vw,18px) clamp(16px,4vw,24px) 0;
+      border:1px solid rgba(255,104,128,.38);
+      background:linear-gradient(90deg,rgba(255,104,128,.09),rgba(10,18,24,.98));
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
+    }
+
+    .pen-v91-card[data-pen-live="1"]{
+      border-color:rgba(255,194,90,.45);
+      background:linear-gradient(90deg,rgba(255,194,90,.10),rgba(10,18,24,.98));
+    }
+
+    .pen-v91-inner{
+      min-height:clamp(38px,4.2vw,52px);
+      padding:clamp(8px,2vw,12px) clamp(12px,3vw,18px);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      box-sizing:border-box;
+    }
+
+    .pen-v91-left{
+      min-width:0;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      white-space:nowrap;
+      overflow:hidden;
+    }
+
+    .pen-v91-title{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      color:#f2f6f8;
+      font-size:clamp(13px,2.9vw,16px);
+      font-weight:950;
+      line-height:1;
+    }
+
+    .pen-v91-live-dot{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:3px 7px;
+      border-radius:999px;
+      background:rgba(255,194,90,.16);
+      border:1px solid rgba(255,194,90,.38);
+      color:#ffc25a;
+      font-size:clamp(10px,2.2vw,12px);
+      font-weight:950;
+      line-height:1;
+    }
+
+    .pen-v91-score{
+      flex:0 0 auto;
+      display:inline-flex;
+      align-items:baseline;
+      justify-content:flex-end;
+      gap:7px;
+      white-space:nowrap;
+      color:#ff6f8d;
+      line-height:1;
+    }
+
+    .pen-v91-score b{
+      color:#ff6f8d;
+      font-size:clamp(22px,5.2vw,30px);
+      font-weight:950;
+      line-height:1;
+    }
+
+    .pen-v91-card[data-pen-live="1"] .pen-v91-score b{
+      color:#ffc25a;
+    }
+
+    .pen-v91-score em{
+      color:#8fa1ad;
+      font-size:clamp(14px,3vw,18px);
+      font-style:normal;
+      font-weight:950;
+      line-height:1;
+    }
+
+    .pen-v91-penonly{
+      letter-spacing:.03em;
+      font-size:clamp(18px,4.4vw,25px)!important;
+    }
+
+    @media(max-width:720px){
+      .pen-v91-card{
+        margin:10px 14px 0!important;
+        border-radius:13px!important;
+      }
+
+      .pen-v91-inner{
+        min-height:36px!important;
+        padding:8px 10px!important;
+        gap:9px!important;
+      }
+
+      .pen-v91-title{
+        font-size:12.5px!important;
+      }
+
+      .pen-v91-live-dot{
+        padding:3px 6px!important;
+        font-size:10px!important;
+      }
+
+      .pen-v91-score{
+        gap:6px!important;
+      }
+
+      .pen-v91-score b{
+        font-size:23px!important;
+      }
+
+      .pen-v91-score em{
+        font-size:14px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v92: stable modal status pill =====
+   A modal FT/HT/PEN pill ne villogjon:
+   - külön stabil .wc26-v92-modal-state pillt rakunk a gólszerzők fölé
+   - a régi auto-frissülő .tip-live-clock elemeket a tip-below-score-on belül elrejtjük
+   - refresh után és live merge után is visszarakjuk ugyanarra a helyre
+*/
+
+function wc26ModalStatusLabelV92(r){
+  if(!r) return '';
+
+  try{
+    const primary = wc26PrimaryMatchState(r);
+    if(primary) return primary;
+  }catch(e){}
+
+  if(r.finished) return 'FT';
+  if(wc26IsHalfTimeV90 && wc26IsHalfTimeV90(r)) return 'HT';
+  if(wc26IsPenaltyPhaseV91 && wc26IsPenaltyPhaseV91(r)) return 'PEN';
+
+  try{
+    return liveClockLabel(r) || '';
+  }catch(e){
+    return '';
+  }
+}
+
+function wc26EnsureStableModalStatusV92(){
+  const ov = document.querySelector('.tip-overlay[data-tip-id], .tip-overlay[data-tip-kind="ko"]');
+  if(!ov) return;
+
+  const id = ov.dataset.tipId || ov.dataset.koid || ov.dataset.matchId || '';
+  if(!id) return;
+
+  const x = FX_BY_ID[id] || {id};
+  const r = actualFor(x);
+  if(!r) return;
+
+  const label = wc26ModalStatusLabelV92(r);
+  const box = ov.querySelector('.tip-below-score');
+  if(!box || !label) return;
+
+  /* A régi pill villogott: refreshOpenTipModal néha kiürítette, majd újra létrehozta. */
+  box.querySelectorAll('.tip-live-clock:not(.wc26-v92-modal-state)').forEach(el=>{
+    el.classList.add('wc26-v92-old-clock-hidden');
+    el.style.display = 'none';
+  });
+
+  let pill = box.querySelector('.wc26-v92-modal-state');
+  if(!pill){
+    pill = document.createElement('span');
+    pill.className = 'tip-live-clock wc26-v92-modal-state';
+    box.insertBefore(pill, box.firstChild);
+  }
+
+  if(pill.textContent !== label) pill.textContent = label;
+
+  pill.dataset.state = label.toLowerCase();
+  pill.style.display = 'inline-flex';
+  pill.style.opacity = '1';
+  pill.style.visibility = 'visible';
+}
+
+(function(){
+  if(window.__WC26_V92_MODAL_STATE_INSTALLED__) return;
+  window.__WC26_V92_MODAL_STATE_INSTALLED__ = true;
+
+  const run = () => {
+    wc26EnsureStableModalStatusV92();
+    setTimeout(wc26EnsureStableModalStatusV92, 40);
+    setTimeout(wc26EnsureStableModalStatusV92, 160);
+  };
+
+  const baseRefresh = typeof refreshOpenTipModal === 'function' ? refreshOpenTipModal : null;
+  if(baseRefresh && !refreshOpenTipModal.__v92Wrapped){
+    refreshOpenTipModal = function(){
+      const out = baseRefresh.apply(this, arguments);
+      run();
+      return out;
+    };
+    refreshOpenTipModal.__v92Wrapped = true;
+  }
+
+  const baseOpen = typeof openTip === 'function' ? openTip : null;
+  if(baseOpen && !openTip.__v92Wrapped){
+    openTip = function(){
+      const out = baseOpen.apply(this, arguments);
+      run();
+      return out;
+    };
+    openTip.__v92Wrapped = true;
+  }
+
+  const baseOpenKo = typeof openKoTip === 'function' ? openKoTip : null;
+  if(baseOpenKo && !openKoTip.__v92Wrapped){
+    openKoTip = function(){
+      const out = baseOpenKo.apply(this, arguments);
+      run();
+      return out;
+    };
+    openKoTip.__v92Wrapped = true;
+  }
+
+  const baseMerge = typeof mergeLiveResults === 'function' ? mergeLiveResults : null;
+  if(baseMerge && !mergeLiveResults.__v92Wrapped){
+    mergeLiveResults = function(){
+      const out = baseMerge.apply(this, arguments);
+      run();
+      return out;
+    };
+    mergeLiveResults.__v92Wrapped = true;
+  }
+
+  if(window.__WC26_V92_MODAL_STATE_TIMER__) clearInterval(window.__WC26_V92_MODAL_STATE_TIMER__);
+  window.__WC26_V92_MODAL_STATE_TIMER__ = setInterval(()=>{
+    if(document.querySelector('.tip-overlay[data-tip-id], .tip-overlay[data-tip-kind="ko"]')){
+      wc26EnsureStableModalStatusV92();
+    }
+  }, 700);
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .tip-below-score .wc26-v92-old-clock-hidden{
+      display:none!important;
+    }
+
+    .tip-below-score .wc26-v92-modal-state{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:46px!important;
+      height:26px!important;
+      padding:0 12px!important;
+      margin:0 auto 3px!important;
+      border-radius:999px!important;
+      background:rgba(255,104,128,.16)!important;
+      border:1px solid rgba(255,104,128,.44)!important;
+      color:#ff7b92!important;
+      font-size:14px!important;
+      font-weight:950!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      opacity:1!important;
+      visibility:visible!important;
+      white-space:nowrap!important;
+      transition:none!important;
+    }
+
+    .tip-below-score .wc26-v92-modal-state[data-state="ht"]{
+      background:rgba(255,194,90,.16)!important;
+      border-color:rgba(255,194,90,.42)!important;
+      color:#ffc25a!important;
+    }
+
+    .tip-below-score .wc26-v92-modal-state[data-state="pen"]{
+      background:rgba(255,194,90,.16)!important;
+      border-color:rgba(255,194,90,.42)!important;
+      color:#ffc25a!important;
+    }
+
+    @media(max-width:720px){
+      .tip-below-score .wc26-v92-modal-state{
+        min-width:42px!important;
+        height:24px!important;
+        padding:0 10px!important;
+        font-size:13px!important;
+        margin-bottom:2px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+
+  run();
+})();
+
+
+/* ===== WC26 v93: remove opacity fade everywhere it affected live/modal/status updates =====
+   Nincs több opacity fade:
+   - modal clock / FT / HT / PEN pill
+   - modal goal/card event block
+   - match-row score/status update
+   - first render main fade
+   - row flash opacity animation
+   Nem nyúl a szándékos "dim" állapotokhoz, csak az update/fade elemekhez.
+*/
+
+function wc26NoOpacityFadeCleanupV93(){
+  try{
+    const sel = [
+      '#main',
+      '.tip-below-score',
+      '.tip-live-clock',
+      '.wc26-v92-modal-state',
+      '.tip-real-cell',
+      '.mr-scores',
+      '.mr-live-state',
+      '.mr-score-wrap',
+      '.match-row',
+      '.live-row-flash',
+      '.live-updating'
+    ].join(',');
+
+    document.querySelectorAll(sel).forEach(el=>{
+      el.style.transition = 'none';
+      el.style.animation = 'none';
+      if(
+        el.matches('#main,.tip-below-score,.tip-live-clock,.wc26-v92-modal-state,.tip-real-cell,.mr-scores,.mr-live-state,.mr-score-wrap,.live-row-flash') ||
+        el.classList.contains('live-updating')
+      ){
+        el.style.opacity = '1';
+      }
+      el.classList.remove('live-row-flash');
+      el.classList.remove('live-updating');
+    });
+  }catch(e){}
+}
+
+(function(){
+  if(window.__WC26_V93_NO_OPACITY_FADE_INSTALLED__) return;
+  window.__WC26_V93_NO_OPACITY_FADE_INSTALLED__ = true;
+
+  const run = () => {
+    wc26NoOpacityFadeCleanupV93();
+    setTimeout(wc26NoOpacityFadeCleanupV93, 0);
+    setTimeout(wc26NoOpacityFadeCleanupV93, 60);
+    setTimeout(wc26NoOpacityFadeCleanupV93, 220);
+  };
+
+  const wrap = (name) => {
+    try{
+      const fn = window[name] || eval(name);
+      if(typeof fn !== 'function' || fn.__v93Wrapped) return;
+      const wrapped = function(){
+        run();
+        const out = fn.apply(this, arguments);
+        run();
+        return out;
+      };
+      wrapped.__v93Wrapped = true;
+      window[name] = wrapped;
+      try{ eval(name + ' = window[name]'); }catch(e){}
+    }catch(e){}
+  };
+
+  wrap('refreshOpenTipModal');
+  wrap('patchLiveRows');
+  wrap('render');
+  wrap('openTip');
+  wrap('openKoTip');
+  wrap('mergeLiveResults');
+  wrap('patchKoCards');
+
+  if(window.__WC26_V93_NO_FADE_TIMER__) clearInterval(window.__WC26_V93_NO_FADE_TIMER__);
+  window.__WC26_V93_NO_FADE_TIMER__ = setInterval(()=>{
+    if(document.querySelector('.tip-overlay') || document.querySelector('.live-updating,.live-row-flash')){
+      wc26NoOpacityFadeCleanupV93();
+    }
+  }, 300);
+
+  const st = document.createElement('style');
+  st.textContent = `
+    /* Kill opacity transitions used by live/modal refreshes */
+    #main,
+    .mr-scores,
+    .mr-live-state,
+    .mr-score-wrap,
+    .tip-real-cell,
+    .tip-live-clock,
+    .tip-below-score,
+    .wc26-v92-modal-state,
+    .wc26-primary-state-badge,
+    .live-row-flash{
+      transition:none!important;
+      animation:none!important;
+    }
+
+    /* These were the explicit fade targets. Keep them visible. */
+    #main,
+    .tip-real-cell,
+    .tip-live-clock,
+    .tip-below-score,
+    .wc26-v92-modal-state,
+    .mr-scores,
+    .mr-live-state,
+    .mr-score-wrap,
+    .live-row-flash,
+    .live-updating .mr-scores,
+    .live-updating .mr-live-state,
+    .live-updating .mr-score-wrap{
+      opacity:1!important;
+      visibility:visible!important;
+    }
+
+    /* Disable classes/keyframes that were only used for opacity flash. */
+    .live-updating .mr-scores,
+    .live-updating .mr-live-state{
+      opacity:1!important;
+    }
+
+    .match-row.live-locked .mr-scores{
+      animation:none!important;
+    }
+
+    @keyframes scoreFlash{
+      0%{opacity:1}
+      60%{opacity:1}
+      100%{opacity:1}
+    }
+
+    @keyframes rowFlash{
+      0%{opacity:1}
+      100%{opacity:1}
+    }
+
+    @keyframes fadeIn{
+      from{opacity:1}
+      to{opacity:1}
+    }
+
+    /* Keep modal slide movement if CSS still uses it, but no opacity fade. */
+    @keyframes slideUp{
+      from{transform:translateY(30px);opacity:1}
+      to{transform:translateY(0);opacity:1}
+    }
+  `;
+  document.head.appendChild(st);
+
+  run();
+})();
+
+
+/* ===== WC26 v94: single PEN badge inside match modal =====
+   Élő tizenegyeseknél a modalban csak a percmutató/státusz pirula mutathat PEN-t.
+   A külön penalty szegmens nem kap PEN badge-et, és nem ír ki PEN-only score-t.
+*/
+
+function wc26RenderPenaltySegmentV94(){
+  const ov = document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]');
+  if(!ov) return;
+
+  /* A régi locked penalty box marad rejtve. */
+  ov.querySelectorAll('.penalty-box.locked-real-pen').forEach(el=>{
+    el.classList.add('v94-old-pen-hidden');
+    el.style.display = 'none';
+  });
+
+  const odds = ov.querySelector('.tip-prob-card');
+  if(!odds) return;
+
+  const id = ov.dataset.tipId || ov.dataset.koid || ov.dataset.matchId || '';
+  const r = id ? actualFor({id}) : null;
+  const isPen = r && typeof wc26IsPenaltyPhaseV91 === 'function' && wc26IsPenaltyPhaseV91(r);
+  const hasPenScore = r && validScore(r.pH) && validScore(r.pA);
+  const isLivePen = !!(isPen && r && !r.finished);
+
+  let card = ov.querySelector('.pen-v91-card, .pen-v94-card');
+
+  /*
+    Ha élő PEN van, de még nincs büntetőállás, akkor ne legyen külön "PEN" blokk.
+    A PEN ilyenkor csak a percmutató pirulán látszik.
+  */
+  if(!isPen || !hasPenScore){
+    if(card) card.remove();
+    return;
+  }
+
+  if(!card){
+    card = document.createElement('div');
+    odds.parentNode.insertBefore(card, odds);
+  }else if(card.nextElementSibling !== odds){
+    odds.parentNode.insertBefore(card, odds);
+  }
+
+  card.className = 'pen-v94-card';
+  card.dataset.penLive = isLivePen ? '1' : '0';
+
+  card.innerHTML =
+    '<div class="pen-v94-inner">'
+      +'<span class="pen-v94-title">'+esc(isLivePen ? 'Tizenegyespárbaj' : 'Valós büntetők')+'</span>'
+      +'<span class="pen-v94-score"><b>'+esc(r.pH)+'</b><em>–</em><b>'+esc(r.pA)+'</b></span>'
+    +'</div>';
+
+  /* biztosan ne maradjon másik PEN badge a modalban */
+  ov.querySelectorAll('.pen-v91-live-dot, .pen-v91-penonly, .wc26-status-pill.pen').forEach(el=>el.remove());
+}
+
+function wc26EnsureOnlyOnePenBadgeV94(){
+  const ov = document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]');
+  if(!ov) return;
+
+  const id = ov.dataset.tipId || ov.dataset.koid || ov.dataset.matchId || '';
+  const r = id ? actualFor({id}) : null;
+  const isPen = r && typeof wc26IsPenaltyPhaseV91 === 'function' && wc26IsPenaltyPhaseV91(r);
+
+  if(isPen){
+    /* Ez az egyetlen PEN badge: a stabil percmutató/status pirula. */
+    let pill = ov.querySelector('.wc26-v92-modal-state');
+    const box = ov.querySelector('.tip-below-score');
+    if(box){
+      if(!pill){
+        pill = document.createElement('span');
+        pill.className = 'tip-live-clock wc26-v92-modal-state';
+        box.insertBefore(pill, box.firstChild);
+      }
+      pill.textContent = 'PEN';
+      pill.dataset.state = 'pen';
+      pill.style.display = 'inline-flex';
+      pill.style.opacity = '1';
+      pill.style.visibility = 'visible';
+    }
+
+    /* Minden más PEN felirat/badge eltűnik a modalból. */
+    ov.querySelectorAll('.pen-v91-live-dot, .pen-v91-penonly, .wc26-status-pill.pen').forEach(el=>el.remove());
+    ov.querySelectorAll('.tip-live-clock:not(.wc26-v92-modal-state)').forEach(el=>{
+      if(String(el.textContent || '').trim().toUpperCase() === 'PEN'){
+        el.style.display = 'none';
+        el.classList.add('v94-extra-pen-hidden');
+      }
+    });
+  }
+}
+
+(function(){
+  if(window.__WC26_V94_SINGLE_PEN_BADGE__) return;
+  window.__WC26_V94_SINGLE_PEN_BADGE__ = true;
+
+  const run = () => {
+    wc26RenderPenaltySegmentV94();
+    wc26EnsureOnlyOnePenBadgeV94();
+    setTimeout(()=>{ wc26RenderPenaltySegmentV94(); wc26EnsureOnlyOnePenBadgeV94(); }, 40);
+    setTimeout(()=>{ wc26RenderPenaltySegmentV94(); wc26EnsureOnlyOnePenBadgeV94(); }, 180);
+  };
+
+  const baseOpenKo = typeof openKoTip === 'function' ? openKoTip : null;
+  if(baseOpenKo && !openKoTip.__v94Wrapped){
+    openKoTip = function(){
+      const out = baseOpenKo.apply(this, arguments);
+      run();
+      return out;
+    };
+    openKoTip.__v94Wrapped = true;
+  }
+
+  const baseRefresh = typeof refreshOpenTipModal === 'function' ? refreshOpenTipModal : null;
+  if(baseRefresh && !refreshOpenTipModal.__v94Wrapped){
+    refreshOpenTipModal = function(){
+      const out = baseRefresh.apply(this, arguments);
+      run();
+      return out;
+    };
+    refreshOpenTipModal.__v94Wrapped = true;
+  }
+
+  const baseMerge = typeof mergeLiveResults === 'function' ? mergeLiveResults : null;
+  if(baseMerge && !mergeLiveResults.__v94Wrapped){
+    mergeLiveResults = function(){
+      const out = baseMerge.apply(this, arguments);
+      run();
+      return out;
+    };
+    mergeLiveResults.__v94Wrapped = true;
+  }
+
+  if(window.__WC26_V94_SINGLE_PEN_TIMER__) clearInterval(window.__WC26_V94_SINGLE_PEN_TIMER__);
+  window.__WC26_V94_SINGLE_PEN_TIMER__ = setInterval(()=>{
+    if(document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]')) run();
+  }, 700);
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .tip-overlay .pen-v91-live-dot,
+    .tip-overlay .pen-v91-penonly,
+    .tip-overlay .wc26-status-pill.pen,
+    .tip-overlay .v94-extra-pen-hidden{
+      display:none!important;
+    }
+
+    .tip-overlay .penalty-box.locked-real-pen.v94-old-pen-hidden{
+      display:none!important;
+    }
+
+    .pen-v94-card{
+      margin:clamp(12px,3.2vw,18px) clamp(16px,4vw,24px) 0;
+      border:1px solid rgba(255,104,128,.38);
+      background:linear-gradient(90deg,rgba(255,104,128,.09),rgba(10,18,24,.98));
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
+    }
+
+    .pen-v94-card[data-pen-live="1"]{
+      border-color:rgba(255,194,90,.42);
+      background:linear-gradient(90deg,rgba(255,194,90,.08),rgba(10,18,24,.98));
+    }
+
+    .pen-v94-inner{
+      min-height:clamp(38px,4.2vw,52px);
+      padding:clamp(8px,2vw,12px) clamp(12px,3vw,18px);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      box-sizing:border-box;
+    }
+
+    .pen-v94-title{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      color:#f2f6f8;
+      font-size:clamp(13px,2.9vw,16px);
+      font-weight:950;
+      line-height:1;
+    }
+
+    .pen-v94-score{
+      flex:0 0 auto;
+      display:inline-flex;
+      align-items:baseline;
+      justify-content:flex-end;
+      gap:7px;
+      white-space:nowrap;
+      color:#ff6f8d;
+      line-height:1;
+    }
+
+    .pen-v94-card[data-pen-live="1"] .pen-v94-score{
+      color:#ffc25a;
+    }
+
+    .pen-v94-score b{
+      color:currentColor;
+      font-size:clamp(22px,5.2vw,30px);
+      font-weight:950;
+      line-height:1;
+    }
+
+    .pen-v94-score em{
+      color:#8fa1ad;
+      font-size:clamp(14px,3vw,18px);
+      font-style:normal;
+      font-weight:950;
+      line-height:1;
+    }
+
+    @media(max-width:720px){
+      .pen-v94-card{
+        margin:10px 14px 0!important;
+        border-radius:13px!important;
+      }
+      .pen-v94-inner{
+        min-height:36px!important;
+        padding:8px 10px!important;
+        gap:9px!important;
+      }
+      .pen-v94-title{font-size:12.5px!important;}
+      .pen-v94-score{gap:6px!important;}
+      .pen-v94-score b{font-size:23px!important;}
+      .pen-v94-score em{font-size:14px!important;}
+    }
+  `;
+  document.head.appendChild(st);
+
+  run();
+})();
+
+
+
+/* ===== WC26 v95: KO match-card no-pen gap parity with group-stage cards =====
+   Goal: on knockout match cards WITHOUT penalties, use the same tiny actual-vs-tip gap
+   feeling as the group-stage cards. Penalty rows may keep a roomier layout.
+*/
+(function(){
+  if(window.__WC26_V95_KO_GAP_PARITY__) return;
+  window.__WC26_V95_KO_GAP_PARITY__ = true;
+
+  function wc26ApplyKoGapParityV95(){
+    document.querySelectorAll('.matches-main .match-row[data-ko-mid]').forEach(function(row){
+      row.querySelectorAll('.mr-score-compare, .mr-score-tip-only, .mr-score-actual-only').forEach(function(box){
+        var hasPen = !!box.querySelector('.wc26-card-pen');
+        box.classList.toggle('v95-no-pen', !hasPen);
+        box.classList.toggle('v95-has-pen', hasPen);
+      });
+    });
+  }
+
+  var style = document.createElement('style');
+  style.textContent = `
+    /* KO cards only: no-pen rows should sit as tight as the group-stage score pairs. */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-no-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-no-pen{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(3px,.22vw,5px)!important;
+      width:auto!important;
+      min-width:0!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-no-pen .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-no-pen .mr-score-row{
+      display:inline-grid!important;
+      grid-template-columns:auto auto!important;
+      width:auto!important;
+      min-width:0!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:clamp(2px,.12vw,4px)!important;
+      column-gap:clamp(2px,.12vw,4px)!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-no-pen .mr-score-row.single,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-no-pen .mr-score-row.single{
+      grid-template-columns:auto!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-no-pen .mr-score-single,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-no-pen .mr-score-single{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:1px!important;
+      min-width:0!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+
+    /* Keep penalty variants a touch roomier. */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-has-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-has-pen{
+      gap:clamp(5px,.45vw,8px)!important;
+    }
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-has-pen .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-has-pen .mr-score-row{
+      display:inline-grid!important;
+      grid-template-columns:auto auto!important;
+      width:auto!important;
+      min-width:0!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:clamp(4px,.28vw,7px)!important;
+      column-gap:clamp(4px,.28vw,7px)!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-has-pen .mr-score-row.single,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-has-pen .mr-score-row.single{
+      grid-template-columns:auto!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-has-pen .mr-score-single,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-has-pen .mr-score-single{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:1px!important;
+      min-width:0!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+
+    /* Make sure the KO score block doesn't artificially stretch the pair apart. */
+    .matches-main .match-row[data-ko-mid] .mr-score-lines,
+    .matches-main .match-row[data-ko-mid] .mr-scores,
+    .matches-main .match-row[data-ko-mid] .mr-score-wrap{
+      width:auto!important;
+      min-width:0!important;
+      justify-self:end!important;
+      align-items:center!important;
+    }
+
+    @media(max-width:720px){
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen,
+      .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-no-pen,
+      .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-no-pen{
+        gap:2px!important;
+      }
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-no-pen .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-no-pen .mr-score-row{
+        gap:2px!important;
+        column-gap:2px!important;
+      }
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-tip-only.v95-has-pen .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-actual-only.v95-has-pen .mr-score-row{
+        gap:4px!important;
+        column-gap:4px!important;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  var run = function(){ wc26ApplyKoGapParityV95(); };
+  var baseRenderMatches = typeof renderMatches === 'function' ? renderMatches : null;
+  if(baseRenderMatches && !renderMatches.__v95Wrapped){
+    renderMatches = function(){
+      var out = baseRenderMatches.apply(this, arguments);
+      setTimeout(run, 0);
+      setTimeout(run, 80);
+      return out;
+    };
+    renderMatches.__v95Wrapped = true;
+  }
+
+  var baseScoreHtml = typeof scoreHtml === 'function' ? scoreHtml : null;
+  if(baseScoreHtml && !scoreHtml.__v95WrappedFlag){
+    var wrapped = function(){ return baseScoreHtml.apply(this, arguments); };
+    wrapped.__v95WrappedFlag = true;
+    scoreHtml = wrapped;
+  }
+
+  setTimeout(run, 0);
+  setTimeout(run, 120);
+  if(window.__WC26_V95_KO_GAP_TIMER__) clearInterval(window.__WC26_V95_KO_GAP_TIMER__);
+  window.__WC26_V95_KO_GAP_TIMER__ = setInterval(function(){
+    if(document.querySelector('.matches-main .match-row[data-ko-mid]')) run();
+  }, 900);
+})();
+
+
+/* ===== WC26 v96: KO match-card penalty compare needs wider gap =====
+   Penalty cases like: 1 (2) 2 (2)
+   - no-pen KO rows stay very tight
+   - penalty KO rows get a clearly wider actual-vs-tip gap
+*/
+(function(){
+  if(window.__WC26_V96_KO_PEN_GAP__) return;
+  window.__WC26_V96_KO_PEN_GAP__ = true;
+
+  function markPenaltyRowsV96(){
+    document.querySelectorAll('.matches-main .match-row[data-ko-mid]').forEach(row=>{
+      row.querySelectorAll('.mr-score-compare, .mr-score-tip-only, .mr-score-actual-only').forEach(box=>{
+        const hasPen = !!box.querySelector('.wc26-card-pen');
+        box.classList.toggle('v96-pen-gap', hasPen);
+        box.classList.toggle('v96-no-pen-gap', !hasPen);
+      });
+    });
+  }
+
+  const st = document.createElement('style');
+  st.textContent = `
+    /* no-pen: keep the very tight group-stage style */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap .mr-score-row{
+      display:inline-grid!important;
+      grid-template-columns:auto auto!important;
+      width:auto!important;
+      gap:clamp(2px,.12vw,4px)!important;
+      column-gap:clamp(2px,.12vw,4px)!important;
+      justify-content:center!important;
+      align-items:baseline!important;
+      white-space:nowrap!important;
+    }
+
+    /* PEN compare: this is the exact case from the screenshot; make actual-vs-tip breathe. */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-row{
+      display:inline-grid!important;
+      grid-template-columns:auto auto!important;
+      width:auto!important;
+      min-width:max-content!important;
+      gap:clamp(12px,1.25vw,22px)!important;
+      column-gap:clamp(12px,1.25vw,22px)!important;
+      justify-content:center!important;
+      align-items:baseline!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-tip{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:2px!important;
+      min-width:max-content!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .wc26-card-score,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .wc26-card-score{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:2px!important;
+      white-space:nowrap!important;
+      min-width:max-content!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen{
+      width:auto!important;
+      min-width:max-content!important;
+      align-items:center!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-scores{
+      overflow:visible!important;
+    }
+
+    @media(max-width:720px){
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-row{
+        gap:10px!important;
+        column-gap:10px!important;
+      }
+
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap .mr-score-row{
+        gap:2px!important;
+        column-gap:2px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+
+  const run=()=>{
+    markPenaltyRowsV96();
+    setTimeout(markPenaltyRowsV96, 60);
+  };
+
+  const baseRenderMatches = typeof renderMatches === 'function' ? renderMatches : null;
+  if(baseRenderMatches && !renderMatches.__v96Wrapped){
+    renderMatches = function(){
+      const out = baseRenderMatches.apply(this, arguments);
+      run();
+      return out;
+    };
+    renderMatches.__v96Wrapped = true;
+  }
+
+  const basePatchLiveRows = typeof patchLiveRows === 'function' ? patchLiveRows : null;
+  if(basePatchLiveRows && !patchLiveRows.__v96Wrapped){
+    patchLiveRows = function(){
+      const out = basePatchLiveRows.apply(this, arguments);
+      run();
+      return out;
+    };
+    patchLiveRows.__v96Wrapped = true;
+  }
+
+  run();
+  if(window.__WC26_V96_KO_PEN_GAP_TIMER__) clearInterval(window.__WC26_V96_KO_PEN_GAP_TIMER__);
+  window.__WC26_V96_KO_PEN_GAP_TIMER__ = setInterval(()=>{
+    if(document.querySelector('.matches-main .match-row[data-ko-mid]')) markPenaltyRowsV96();
+  }, 1000);
+})();
+
 </script></body></html>
