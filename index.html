@@ -16312,20 +16312,25 @@ function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
 })();
 
 
-/* ===== WC26 v80 from v71: stats derived from the SAME modal HTML logic ===== */
+/* ===== WC26 v81 from v71: safe modal-derived stat cards only ===== */
 
 /*
-  Na ez már tényleg más irány:
-  - nem backendből húz újra agresszíven
-  - nem Firestore-t darál
-  - nem merge-logikát borít
-  - hanem a statisztikák ugyanazt a modal-render logikát használják:
-      goalScorersHtml(r, teams) + redCardsHtml(r, teams)
-    tehát ami a meccsmodalban látszik gól/sárga/piros eseményként,
-    az ebből a generált HTML-ből számolódik vissza a statokba.
+  v80 azért tudott beakadni, mert globálisan felülírta a calcFairPlay()-t.
+  A calcFairPlay() a tabellák rendezésénél rengetegszer fut, ezért ha abban DOM/HTML-parsolás van, megöli a betöltést.
+
+  v81:
+  - calcFairPlay() NEM módosul, a tabellák maradnak gyorsak.
+  - csak a stat-card függvények használják a modal-render logikát:
+      topCardsHtml()
+      topScorersList()
+      topMatchesHtml()
+  - nincs backend read
+  - nincs Firestore read
+  - nincs interval
+  - nincs render/merge/patch wrapper
 */
 
-function wc26KoMetaV80(id){
+function wc26KoMetaV81(id){
   id=String(id||'');
   const idx=+(id.match(/-(\d+)$/)?.[1]||0);
   if(id.includes('R32'))return{title:'Legjobb 32',index:idx};
@@ -16337,30 +16342,19 @@ function wc26KoMetaV80(id){
   return{title:'Kieséses kör',index:idx};
 }
 
-function wc26NormTeamV80(v){
+function wc26NormTeamV81(v){
   v=String(v||'').trim();
   if(!v||v==='TBD'||v==='null'||v==='undefined')return'';
   try{return normalizeTeamName(v)||v;}catch(e){return v;}
 }
 
-function wc26AllModalStatMatchesV80(){
-  const out=[];
-  const seen=new Set();
+function wc26AllStatMatchesV81(){
+  const out=[],seen=new Set();
 
   (FX||[]).forEach(m=>{
     if(!m||!m.id||seen.has(m.id))return;
     seen.add(m.id);
-    out.push({
-      id:m.id,
-      kind:'group',
-      h:m.h,
-      a:m.a,
-      g:m.g||'',
-      d:m.d||m.date||'',
-      title:m.title||'',
-      index:m.index||'',
-      raw:m
-    });
+    out.push({id:m.id,kind:'group',h:m.h,a:m.a,g:m.g||'',d:m.d||m.date||'',title:m.title||'',index:m.index||'',raw:m});
   });
 
   try{
@@ -16369,12 +16363,12 @@ function wc26AllModalStatMatchesV80(){
     rounds.flatMap(r=>r.matches).concat([bronze]).forEach(m=>{
       if(!m||!m.id||seen.has(m.id))return;
       seen.add(m.id);
-      const meta=wc26KoMetaV80(m.id);
+      const meta=wc26KoMetaV81(m.id);
       out.push({
         id:m.id,
         kind:'ko',
-        h:wc26NormTeamV80(m.h||m.homeTeam||''),
-        a:wc26NormTeamV80(m.a||m.awayTeam||''),
+        h:wc26NormTeamV81(m.h||m.homeTeam||''),
+        a:wc26NormTeamV81(m.a||m.awayTeam||''),
         g:'',
         d:m.date||'',
         title:m.title||meta.title,
@@ -16386,28 +16380,18 @@ function wc26AllModalStatMatchesV80(){
 
   Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{
     if(seen.has(id))return;
-    const meta=wc26KoMetaV80(id);
-    const h=wc26NormTeamV80(r?.homeTeam||r?.home||'');
-    const a=wc26NormTeamV80(r?.awayTeam||r?.away||'');
+    const meta=wc26KoMetaV81(id);
+    const h=wc26NormTeamV81(r?.homeTeam||r?.home||'');
+    const a=wc26NormTeamV81(r?.awayTeam||r?.away||'');
     if(!h&&!a)return;
     seen.add(id);
-    out.push({
-      id,
-      kind:String(id).startsWith('KO-')?'ko':'live',
-      h,
-      a,
-      g:'',
-      d:r?.date||'',
-      title:meta.title,
-      index:meta.index,
-      raw:{id,h,a,title:meta.title,index:meta.index,date:r?.date||'',t:r?.time||''}
-    });
+    out.push({id,kind:String(id).startsWith('KO-')?'ko':'live',h,a,g:'',d:r?.date||'',title:meta.title,index:meta.index,raw:{id,h,a,title:meta.title,index:meta.index,date:r?.date||'',t:r?.time||''}});
   });
 
   return out;
 }
 
-function wc26ModalActualV80(m){
+function wc26ActualV81(m){
   try{
     const r=actualFor({id:m.id});
     if(r)return r;
@@ -16415,108 +16399,88 @@ function wc26ModalActualV80(m){
   return LIVE_RESULTS?.[m.id]||null;
 }
 
-function wc26ModalTeamsV80(m){
-  return {h:wc26NormTeamV80(m.h), a:wc26NormTeamV80(m.a)};
-}
-
-function wc26ModalEventHtmlV80(m,r){
+function wc26EventHtmlV81(m,r){
   if(!r||!(r.started||r.finished))return'';
-  const teams=wc26ModalTeamsV80(m);
   try{
-    return (goalScorersHtml(r,teams)||'') + (typeof redCardsHtml==='function'?(redCardsHtml(r,teams)||''):'');
-  }catch(e){
-    return'';
-  }
+    return (goalScorersHtml(r,{h:m.h,a:m.a})||'') + (typeof redCardsHtml==='function'?(redCardsHtml(r,{h:m.h,a:m.a})||''):'');
+  }catch(e){return'';}
 }
 
-function wc26HtmlToNodeV80(html){
-  const box=document.createElement('div');
-  box.innerHTML=html||'';
-  return box;
-}
-
-function wc26SideFromRowV80(row,teams){
+function wc26SideFromRowV81(row,m){
   const cols=row.querySelectorAll('.goal-scorers-col');
-  const left=cols[0], right=cols[1];
-  if(left && left.textContent.trim())return teams.h;
-  if(right && right.textContent.trim())return teams.a;
-  if(left && left.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return teams.h;
-  if(right && right.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return teams.a;
-  return teams.h;
+  const left=cols[0],right=cols[1];
+  if(left&&left.textContent.trim())return m.h;
+  if(right&&right.textContent.trim())return m.a;
+  if(left&&left.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return m.h;
+  if(right&&right.querySelector('.red-card-mark,.yellow-card-mark,.yellow-red-card-mark,.goal-scorer-ball'))return m.a;
+  return m.h;
 }
 
-/* Egyetlen közös modal-derived source: lapok + gólszerzők + valós/tipp meccs-statok. */
-function wc26ModalDerivedStatsV80(){
-  const fp={};
-  const scorers={};
-  const realRows=[];
-  const tipRows=[];
+function wc26ModalDerivedStatsV81(){
+  const sig=JSON.stringify({
+    ids:Object.keys(LIVE_RESULTS||{}).sort().map(id=>{
+      const r=LIVE_RESULTS[id]||{};
+      return [id,r.h,r.a,r.pH,r.pA,r.started,r.finished,r.status,r.updatedAt,
+        Array.isArray(r.scorers)?r.scorers.length:String(r.scorers||'').length,
+        Array.isArray(r.redCards)?r.redCards.length:String(r.redCards||'').length,
+        Array.isArray(r.yellowCards)?r.yellowCards.length:String(r.yellowCards||'').length
+      ].join(':');
+    }),
+    pred:Object.keys(PRED||{}).length,
+    ko:Object.keys(KO_PRED||{}).length
+  });
 
-  const ensureTeam=n=>{
-    n=wc26NormTeamV80(n);
+  if(window.__WC26_V81_STATS_CACHE__&&window.__WC26_V81_STATS_CACHE__.sig===sig){
+    return window.__WC26_V81_STATS_CACHE__.data;
+  }
+
+  const fp={},scorers={},realRows=[],tipRows=[];
+
+  const ensure=n=>{
+    n=wc26NormTeamV81(n);
     if(!n)return'';
     if(!fp[n])fp[n]={yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0};
     return n;
   };
 
-  (ALL||[]).forEach(ensureTeam);
+  (ALL||[]).forEach(ensure);
 
-  wc26AllModalStatMatchesV80().forEach(m=>{
-    const teams=wc26ModalTeamsV80(m);
-    ensureTeam(teams.h);
-    ensureTeam(teams.a);
+  const parser=document.createElement('div');
 
-    const r=wc26ModalActualV80(m);
+  wc26AllStatMatchesV81().forEach(m=>{
+    m.h=ensure(m.h);
+    m.a=ensure(m.a);
+    if(!m.h&&!m.a)return;
+
+    const r=wc26ActualV81(m);
     const hasReal=!!(r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a));
 
     if(hasReal){
-      realRows.push({
-        m:{id:m.id,h:teams.h,a:teams.a,g:m.g,d:m.d,title:m.title,index:m.index},
-        p:{h:+r.h,a:+r.a},
-        source:'Valós'
-      });
+      realRows.push({m:{id:m.id,h:m.h,a:m.a,g:m.g,d:m.d,title:m.title,index:m.index},p:{h:+r.h,a:+r.a},source:'Valós'});
     }else{
-      let p=null;
-      if(m.kind==='group')p=getPred(m.id)||PRED[m.id]||null;
-      else p=KO_PRED[m.id]||null;
-
+      const p=m.kind==='group'?(getPred(m.id)||PRED[m.id]||null):(KO_PRED[m.id]||null);
       if(p&&validScore(p.h)&&validScore(p.a)){
-        tipRows.push({
-          m:{id:m.id,h:teams.h,a:teams.a,g:m.g,d:m.d,title:m.title,index:m.index},
-          p:{h:+p.h,a:+p.a,pH:p.pH,pA:p.pA},
-          source:'Tipp'
-        });
+        tipRows.push({m:{id:m.id,h:m.h,a:m.a,g:m.g,d:m.d,title:m.title,index:m.index},p:{h:+p.h,a:+p.a,pH:p.pH,pA:p.pA},source:'Tipp'});
       }
     }
 
-    const html=wc26ModalEventHtmlV80(m,r);
+    const html=wc26EventHtmlV81(m,r);
     if(!html)return;
 
-    const box=wc26HtmlToNodeV80(html);
-    box.querySelectorAll('.goal-scorer-row').forEach(row=>{
-      const team=ensureTeam(wc26SideFromRowV80(row,teams));
+    parser.innerHTML=html;
+    parser.querySelectorAll('.goal-scorer-row').forEach(row=>{
+      const team=ensure(wc26SideFromRowV81(row,m));
       if(!team||!fp[team])return;
 
-      const isYellowRed=row.classList.contains('yellow-red-row') || !!row.querySelector('.yellow-red-card-mark');
-      const isYellow=row.classList.contains('yellow-card-row') || !!row.querySelector('.yellow-card-mark');
-      const isRed=row.classList.contains('red-card-row') || !!row.querySelector('.red-card-mark');
+      const isYellowRed=row.classList.contains('yellow-red-row')||!!row.querySelector('.yellow-red-card-mark');
+      const isYellow=row.classList.contains('yellow-card-row')||!!row.querySelector('.yellow-card-mark');
+      const isRed=row.classList.contains('red-card-row')||!!row.querySelector('.red-card-mark');
 
-      if(isYellowRed){
-        fp[team].yellowRed++;
-        return;
-      }
-      if(isRed){
-        fp[team].red++;
-        return;
-      }
-      if(isYellow){
-        fp[team].yellow++;
-        return;
-      }
+      if(isYellowRed){fp[team].yellowRed++;return;}
+      if(isRed){fp[team].red++;return;}
+      if(isYellow){fp[team].yellow++;return;}
 
-      const hasGoal=row.querySelector('.goal-scorer-ball');
-      if(hasGoal){
-        /* Öngólt ne számoljunk top scorerbe. */
+      if(row.querySelector('.goal-scorer-ball')){
         if(row.querySelector('.goal-scorer-og'))return;
         const name=(row.querySelector('.goal-scorer-name')?.textContent||'').trim();
         if(!name)return;
@@ -16525,76 +16489,57 @@ function wc26ModalDerivedStatsV80(){
         scorers[key].goals++;
       }
     });
+    parser.innerHTML='';
   });
 
-  Object.values(fp).forEach(t=>{
-    t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5);
-  });
+  Object.values(fp).forEach(t=>{t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5);});
 
-  return {
+  const data={
     fp,
     scorers:Object.values(scorers).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player,'hu')).slice(0,20),
     realRows,
     tipRows
   };
-}
 
-function calcFairPlay(){
-  return wc26ModalDerivedStatsV80().fp;
+  window.__WC26_V81_STATS_CACHE__={sig,data};
+  return data;
 }
 
 function topScorersList(){
-  return wc26ModalDerivedStatsV80().scorers;
+  return wc26ModalDerivedStatsV81().scorers;
 }
 
 function topCardsHtml(){
-  const fp=calcFairPlay();
+  const fp=wc26ModalDerivedStatsV81().fp;
   const teams=Object.keys(fp);
   const YC='<span style="display:inline-block;width:.5em;height:.72em;background:#f5c842;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const RC='<span style="display:inline-block;width:.5em;height:.72em;background:#e03040;border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
   const YRC='<span style="display:inline-block;width:.8em;height:.72em;background:linear-gradient(90deg,#f5c842 50%,#e03040 50%);border-radius:2px;vertical-align:middle;margin-right:2px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.5)"></span>';
 
-  const byYellow=teams.filter(n=>fp[n].yellow>0)
-    .sort((a,b)=>fp[b].yellow-fp[a].yellow||a.localeCompare(b)).slice(0,10);
-
-  const byRed=teams.filter(n=>(fp[n].red+fp[n].yellowRed+fp[n].yellowPlusRed)>0)
-    .sort((a,b)=>(fp[b].red+fp[b].yellowRed+fp[b].yellowPlusRed)-(fp[a].red+fp[a].yellowRed+fp[a].yellowPlusRed)||a.localeCompare(b));
+  const byYellow=teams.filter(n=>fp[n].yellow>0).sort((a,b)=>fp[b].yellow-fp[a].yellow||a.localeCompare(b)).slice(0,10);
+  const byRed=teams.filter(n=>(fp[n].red+fp[n].yellowRed+fp[n].yellowPlusRed)>0).sort((a,b)=>(fp[b].red+fp[b].yellowRed+fp[b].yellowPlusRed)-(fp[a].red+fp[a].yellowRed+fp[a].yellowPlusRed)||a.localeCompare(b));
 
   if(!byYellow.length&&!byRed.length)return'';
 
-  function cardStatRow(i,n,val,sub){
-    return'<div class="wc-stat-row">'
-      +'<div class="wc-stat-rank">'+i+'</div>'
-      +'<div class="wc-stat-main">'
-        +'<div class="wc-stat-name stat-game-name">'+crest(n)+'<span class="stat-game-text">'+esc(n)+'</span></div>'
-        +'<div class="wc-stat-sub">'+sub+'</div>'
-      +'</div>'
-      +'<div class="wc-stat-val">'+val+'</div>'
-    +'</div>';
+  function row(i,n,val,sub){
+    return'<div class="wc-stat-row"><div class="wc-stat-rank">'+i+'</div><div class="wc-stat-main"><div class="wc-stat-name stat-game-name">'+crest(n)+'<span class="stat-game-text">'+esc(n)+'</span></div><div class="wc-stat-sub">'+sub+'</div></div><div class="wc-stat-val">'+val+'</div></div>';
   }
 
   let out='';
   if(byYellow.length){
-    out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 10</h2>'
-      +'<div class="wc-stat-list stat-match-list">'
-      +byYellow.map((n,i)=>{
-        const t=fp[n];
-        return cardStatRow(i+1,n,YC+' '+t.yellow,t.yellow+' sárga lap');
-      }).join('')
+    out+='<section class="card"><h2 class="card-title">Legtöbb sárga lap &ndash; Top 10</h2><div class="wc-stat-list stat-match-list">'
+      +byYellow.map((n,i)=>row(i+1,n,YC+' '+fp[n].yellow,fp[n].yellow+' sárga lap')).join('')
       +'</div></section>';
   }
 
   if(byRed.length){
-    out+='<section class="card"><h2 class="card-title">Piros lapok &ndash; Összes</h2>'
-      +'<div class="wc-stat-list stat-match-list">'
+    out+='<section class="card"><h2 class="card-title">Piros lapok &ndash; Összes</h2><div class="wc-stat-list stat-match-list">'
       +byRed.map((n,i)=>{
-        const t=fp[n];
-        const total=t.red+t.yellowRed+t.yellowPlusRed;
-        const parts=[];
+        const t=fp[n],total=t.red+t.yellowRed+t.yellowPlusRed,parts=[];
         if(t.yellowRed)parts.push(YRC+' '+t.yellowRed+'&times; kettős sárga');
         if(t.red)parts.push(RC+' '+t.red+'&times; direkt piros');
         if(t.yellowPlusRed)parts.push(YRC+RC+' '+t.yellowPlusRed+'&times; sárga+piros');
-        return cardStatRow(i+1,n,RC+' '+total,parts.join(' &middot; '));
+        return row(i+1,n,RC+' '+total,parts.join(' &middot; '));
       }).join('')
       +'</div></section>';
   }
@@ -16602,7 +16547,7 @@ function topCardsHtml(){
 }
 
 function topMatchesHtml(){
-  const s=wc26ModalDerivedStatsV80();
+  const s=wc26ModalDerivedStatsV81();
   const res=s.realRows.concat(s.tipRows);
   const goalMatches=res.slice().sort((a,b)=>(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
   const diffMatches=res.slice().sort((a,b)=>Math.abs(b.p.h-b.p.a)-Math.abs(a.p.h-a.p.a)||(b.p.h+b.p.a)-(a.p.h+a.p.a)).slice(0,20);
@@ -16614,32 +16559,9 @@ function topMatchesHtml(){
     +'</div></section>';
 }
 
-/* Ha overviewben live update jön és a régi patch csak a meccssort frissíti, kérünk egy teljes overview/stat rerendert.
-   Ez nem readel semmit, csak újraszámol ugyanabból a memóriából. */
-(function(){
-  if(window.__WC26_V80_PATCH_REFRESH__)return;
-  window.__WC26_V80_PATCH_REFRESH__=true;
-  const basePatch=typeof patchLiveRows==='function'?patchLiveRows:null;
-  if(basePatch){
-    patchLiveRows=function(){
-      const out=basePatch.apply(this,arguments);
-      if(!document.querySelector('.tip-overlay')&&(S?.tab==='overview'||S?.tab==='stats')){
-        requestAnimationFrame(()=>{try{render();}catch(e){}});
-      }
-      return out;
-    };
-  }
-})();
-
 window.WC26_MODAL_STATS_DEBUG=function(team='Mexico'){
-  const s=wc26ModalDerivedStatsV80();
-  return {
-    team,
-    fairPlay:s.fp[team]||null,
-    scorers:s.scorers.filter(x=>x.team===team),
-    realRows:s.realRows.filter(x=>x.m.h===team||x.m.a===team),
-    tipRows:s.tipRows.filter(x=>x.m.h===team||x.m.a===team)
-  };
+  const s=wc26ModalDerivedStatsV81();
+  return{team,fairPlay:s.fp[team]||null,scorers:s.scorers.filter(x=>x.team===team),realRows:s.realRows.filter(x=>x.m.h===team||x.m.a===team),tipRows:s.tipRows.filter(x=>x.m.h===team||x.m.a===team)};
 };
 
 </script></body></html>
