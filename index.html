@@ -15744,4 +15744,270 @@ async function wc26AutoBackendSyncV67(reason='auto'){
   },true);
 })();
 
+
+/* ===== WC26 v68 bracket mobile tidy + own backend tips reload + compact penalty modal ===== */
+
+/* Safer own-tip backend refresh:
+   v67 only refreshed results/KO pairs. This also reloads the logged-in user's own tips from Firebase,
+   so the KO tab doesn't render with stale/empty KO_PRED after returning to the tab. */
+async function wc26AutoFullBackendSyncV68(reason='auto'){
+  if(window.__WC26_V68_SYNC_RUNNING__) return false;
+  window.__WC26_V68_SYNC_RUNNING__ = true;
+  try{
+    const tasks=[];
+
+    if(wc26Db && wc26User && typeof loadOwnTipsFromFirebase==='function'){
+      tasks.push(Promise.race([
+        loadOwnTipsFromFirebase(),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('own-tips-timeout')),9000))
+      ]));
+    }
+
+    if(typeof loadMatchResultsFromBackendDb==='function'){
+      tasks.push(Promise.race([
+        loadMatchResultsFromBackendDb(true),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('results-timeout')),9000))
+      ]));
+    }else if(typeof syncLiveResults==='function'){
+      tasks.push(Promise.race([
+        syncLiveResults({force:true,skipRetry:true}),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('sync-timeout')),9000))
+      ]));
+    }
+
+    if(typeof wc26LoadKoPairsFromWorker==='function'){
+      tasks.push(Promise.race([
+        wc26LoadKoPairsFromWorker(true),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('ko-pairs-timeout')),9000))
+      ]));
+    }
+
+    await Promise.allSettled(tasks);
+
+    try{
+      if(typeof render==='function') render();
+      if(typeof patchKoCards==='function') patchKoCards();
+      if(typeof refreshOpenTipModal==='function') refreshOpenTipModal();
+      if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews();
+      if(typeof activateCrests==='function') activateCrests();
+    }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('WC26 v68 full backend sync failed:', reason, e);
+    return false;
+  }finally{
+    window.__WC26_V68_SYNC_RUNNING__ = false;
+  }
+}
+
+(function(){
+  if(window.__WC26_V68_AUTO_SYNC_INSTALLED__) return;
+  window.__WC26_V68_AUTO_SYNC_INSTALLED__=true;
+
+  const runSoon=(reason,delay=120)=>setTimeout(()=>wc26AutoFullBackendSyncV68(reason),delay);
+
+  runSoon('initial-load',450);
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible') runSoon('visibility-visible',120);
+  });
+  window.addEventListener('focus',()=>runSoon('window-focus',120));
+  window.addEventListener('pageshow',()=>runSoon('pageshow',120));
+
+  document.addEventListener('click',e=>{
+    const tab=e.target.closest?.('.tab[data-tab], [data-tab], [data-mf], [data-r], [data-team]');
+    if(tab) runSoon('internal-tab-click',260);
+  },true);
+})();
+
+/* Bracket mobile: the v67 stacked score made the bracket narrower/uglier.
+   New structure: fixed compact score column.
+   - real score line: score + real pen
+   - tip line: small tip score + tip pen
+   This prevents the "1(2)2(2)" pile-up and avoids pushing the card width. */
+function wc26KoTipInline(score,pen){
+  if(!validScore(score)) return '';
+  return '<span class="ko-tip-ind"><span class="ko-tip-score-num">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
+}
+function koTeamLine(team,seed,score,cls,pen,tipScore,tipPen){
+  if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
+  const hasTip = validScore(tipScore);
+  const hasRealPen = validScore(pen);
+  const hasTipPen = validScore(tipPen);
+  const stacked = hasTip && (hasRealPen || hasTipPen);
+  return '<div class="ko-team '+(cls||'')+'">'
+    +crest(team,'22px')
+    +'<span class="ko-name">'+esc(team)+'</span>'
+    +'<span class="ko-score '+(stacked?'ko-score-stacked-v68':'')+'">'
+      +'<span class="ko-score-real-line"><b>'+(score==null?'-':esc(score))+'</b>'+(hasRealPen?'<small class="ko-pen">('+esc(pen)+')</small>':'')+'</span>'
+      +(hasTip?'<span class="ko-score-tip-line">'+wc26KoTipInline(tipScore,tipPen)+'</span>':'')
+    +'</span>'
+  +'</div>';
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Bracket: fixed score column so the score area never eats the team name. */
+    .ko-card .ko-team{
+      grid-template-columns:auto minmax(0,1fr) clamp(30px,7.2vw,46px)!important;
+      column-gap:clamp(3px,.8vw,6px)!important;
+    }
+    .ko-card .ko-name{
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+      max-width:100%!important;
+    }
+    .ko-card .ko-score,
+    .ko-card .ko-score-stacked-v68{
+      width:clamp(30px,7.2vw,46px)!important;
+      min-width:clamp(30px,7.2vw,46px)!important;
+      max-width:clamp(30px,7.2vw,46px)!important;
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:flex-end!important;
+      justify-content:center!important;
+      gap:1px!important;
+      overflow:visible!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+      text-align:right!important;
+    }
+    .ko-card .ko-score-real-line,
+    .ko-card .ko-score-tip-line{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:2px!important;
+      min-width:0!important;
+      max-width:100%!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+    .ko-card .ko-score b{
+      font-size:.96em!important;
+      line-height:1!important;
+      font-weight:950!important;
+    }
+    .ko-card .ko-pen{
+      order:2!important;
+      color:#ff6f84!important;
+      font-size:.58em!important;
+      line-height:1!important;
+      letter-spacing:-.055em!important;
+      margin:0!important;
+      font-weight:950!important;
+    }
+    .ko-card .ko-tip-ind{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:1px!important;
+      margin:0!important;
+      color:#d7e0e6!important;
+      font-size:.66em!important;
+      line-height:1!important;
+      font-weight:900!important;
+      letter-spacing:-.035em!important;
+      white-space:nowrap!important;
+      opacity:.92!important;
+    }
+    .ko-card .ko-tip-ind .ko-tip-pen{
+      color:#f0b85c!important;
+      font-size:.72em!important;
+      line-height:1!important;
+      letter-spacing:-.055em!important;
+    }
+
+    @media(max-width:720px){
+      .ko-card{
+        --ko-card-score-col:34px!important;
+      }
+      .ko-card .ko-team{
+        grid-template-columns:auto minmax(0,1fr) 34px!important;
+      }
+      .ko-card .ko-score,
+      .ko-card .ko-score-stacked-v68{
+        width:34px!important;
+        min-width:34px!important;
+        max-width:34px!important;
+      }
+      .ko-card .ko-score b{
+        font-size:.88em!important;
+      }
+      .ko-card .ko-pen{
+        font-size:.50em!important;
+        letter-spacing:-.075em!important;
+      }
+      .ko-card .ko-tip-ind{
+        font-size:.56em!important;
+        letter-spacing:-.055em!important;
+      }
+      .ko-card .ko-tip-ind .ko-tip-pen{
+        font-size:.64em!important;
+        letter-spacing:-.075em!important;
+      }
+    }
+
+    /* Match modal penalty box: compact and proportional on phones. */
+    @media(max-width:720px){
+      .tip-overlay[data-tip-kind="ko"] .penalty-box.locked-real-pen,
+      .tip-overlay[data-tip-kind="ko"] .penalty-box{
+        margin-top:clamp(10px,2.4vw,14px)!important;
+        padding:12px 12px 14px!important;
+        border-radius:16px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title{
+        display:grid!important;
+        grid-template-columns:1fr auto!important;
+        gap:8px!important;
+        align-items:start!important;
+        font-size:clamp(15px,4vw,18px)!important;
+        line-height:1.08!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title span:first-child{
+        max-width:100%!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-title span:last-child{
+        font-size:clamp(10px,2.65vw,12px)!important;
+        line-height:1.1!important;
+        text-align:right!important;
+        opacity:.82!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .penalty-inputs{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr)!important;
+        align-items:center!important;
+        gap:6px!important;
+        margin-top:12px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-team{
+        font-size:clamp(12px,3.2vw,15px)!important;
+        min-width:0!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+        white-space:nowrap!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-inputs input{
+        width:clamp(44px,11.2vw,54px)!important;
+        height:clamp(44px,11.2vw,54px)!important;
+        font-size:clamp(25px,6.8vw,32px)!important;
+        border-radius:12px!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-sep{
+        font-size:clamp(18px,4.8vw,23px)!important;
+        opacity:.65!important;
+      }
+      .tip-overlay[data-tip-kind="ko"] .pen-note{
+        margin-top:10px!important;
+        font-size:clamp(11px,2.9vw,13px)!important;
+        line-height:1.32!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
