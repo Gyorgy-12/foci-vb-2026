@@ -10314,4 +10314,282 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 })();
 
+
+/* ===== WC26 v116: KO match rows are literal group-card clones ===== */
+(function(){
+  if(window.__WC26_V116_KO_ROWS_GROUP_CLONE__) return;
+  window.__WC26_V116_KO_ROWS_GROUP_CLONE__ = true;
+
+  function v116BaseCat(cat){
+    cat=String(cat||'');
+    if(!cat)return'';
+    if(cat==='miss')return'miss';
+    if(cat.indexOf('exact')===0)return'exact';
+    if(cat==='draw-pen-outcome')return'outcome';
+    if(cat.indexOf('draw')===0)return'diff';
+    if(cat.indexOf('diff')>=0)return'diff';
+    if(cat.indexOf('outcome')>=0)return'outcome';
+    return cat;
+  }
+
+  function v116KoTime(m){
+    const lr=LIVE_RESULTS[m.id]||null;
+    const md=lr&&lr.date?lr.date:m.date;
+    const mt=lr&&lr.time?lr.time:(KO_SCHEDULE[m.id]||{}).t||m.t||'';
+    if(md&&mt){
+      try{
+        return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{
+          hour:'2-digit',
+          minute:'2-digit',
+          timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone
+        });
+      }catch(e){return mt;}
+    }
+    return '--:--';
+  }
+
+  function v116KoBadge(m){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m);
+    const base=sc.base||v116BaseCat(sc.cat);
+    const r=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null;
+    const clk=r&&!r.finished?liveClockLabel(r):'';
+
+    if(base==='exact')return'<em class="mr-live-state ok">'+esc(sc.label||'Pontos')+'</em>';
+    if(base==='diff')return'<em class="mr-live-state diff">'+esc(sc.label||'G&oacute;lk&uuml;l.')+'</em>';
+    if(base==='outcome')return'<em class="mr-live-state outcome">'+esc(sc.label||'Kimenetel')+'</em>';
+    if(base==='miss')return'<em class="mr-live-state bad">'+esc(sc.label||'Hib&aacute;s')+'</em>';
+    if(state==='finished')return'';
+    if(state==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
+    if(state==='open')return'<em class="mr-live-state open">Tippelhet&#337;</em>';
+    return'<em class="mr-live-state neutral">Z&aacute;rolva</em>';
+  }
+
+  /*
+    Fontos:
+    - NINCS data-ko-mid a soron, mert arra ráültek régi KO-specifikus CSS override-ok.
+    - data-ko-group-id csak JS hook, CSS nem bántja.
+    - DOM skeleton ugyanaz, mint a csoportkörös mrow().
+  */
+  koMatchRow=function(m){
+    const p=koPred(m.id);
+    const cls=p?'win':'';
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m);
+    const base=sc.base||v116BaseCat(sc.cat);
+    const locked=state!=='open';
+    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
+    const rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
+
+    return '<div class="match-row'+rowCls+' ko-as-group-card" data-ko-group-id="'+m.id+'">'
+      +'<div class="mr-date">'+v116KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v116KoBadge(m)+'</div>'
+      +'<div class="mr-sep"></div>'
+      +'<div class="mr-teams">'
+        +'<div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div>'
+        +'<div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div>'
+      +'</div>'
+      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'
+      +edit
+    +'</div>';
+  };
+
+  function bindKoGroupRowsV116(root){
+    (root||document).querySelectorAll('.match-row[data-ko-group-id]').forEach(row=>{
+      if(row.__v116KoBound)return;
+      row.__v116KoBound=true;
+      row.addEventListener('click',e=>{
+        e.stopPropagation();
+        openKoTip(row.dataset.koGroupId);
+      });
+    });
+  }
+
+  const baseRenderMatchesV116=renderMatches;
+  renderMatches=function(){
+    const out=baseRenderMatchesV116.apply(this,arguments);
+    bindKoGroupRowsV116(document.getElementById('main')||document);
+    return out;
+  };
+
+  const baseRenderV116=render;
+  render=function(){
+    const out=baseRenderV116.apply(this,arguments);
+    if(S.tab==='matches')bindKoGroupRowsV116(document.getElementById('main')||document);
+    return out;
+  };
+
+  patchLiveRows=function(next){
+    if(S.tab!=='matches'&&S.tab!=='overview')return false;
+    let ok=true;
+    Object.keys(next||{}).forEach(id=>{
+      const r=LIVE_RESULTS[id];
+      if(!r)return;
+
+      const row=document.querySelector('[data-mid="'+id+'"],[data-ko-group-id="'+id+'"],[data-ko-mid="'+id+'"]');
+      if(!row){
+        if(!document.querySelector('.tip-overlay'))ok=false;
+        return;
+      }
+
+      const scWrap=row.querySelector('.mr-scores');
+      if(!scWrap){ok=false;return;}
+
+      const m=FX_BY_ID[id]||(()=>{try{return findKoMatch(id)||null}catch(e){return null}})();
+      if(!m){ok=false;return;}
+
+      scWrap.innerHTML=scoreHtml(m);
+
+      row.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked','predicted');
+      const isKo=!!String(id).startsWith('KO-');
+      const p=isKo?koPred(id):getPred(id);
+      const sc=isKo?koTipScore(m):tipScore(m);
+      const base=isKo?(sc.base||v116BaseCat(sc.cat)):sc.cat;
+
+      if(base==='exact')row.classList.add('result-exact');
+      else if(base==='diff')row.classList.add('result-diff');
+      else if(base==='outcome')row.classList.add('result-outcome');
+      else if(base==='miss')row.classList.add('result-miss');
+
+      if(r.started&&!r.finished)row.classList.add('live-locked');
+      if(p)row.classList.add('predicted');
+
+      const date=row.querySelector('.mr-date');
+      if(date&&isKo){
+        date.innerHTML=v116KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v116KoBadge(m);
+      }else{
+        const badge=row.querySelector('.mr-live-state');
+        if(badge&&FX_BY_ID[id]){
+          const nb=matchStateBadge(m);
+          if(nb!==badge.outerHTML){
+            const tmp=document.createElement('div');
+            tmp.innerHTML=nb;
+            if(tmp.firstChild)badge.replaceWith(tmp.firstChild);
+          }
+        }
+      }
+
+      bindKoGroupRowsV116(row.parentNode||document);
+    });
+    return ok;
+  };
+
+  const st=document.createElement('style');
+  st.textContent=`
+    /*
+      KO rows in Matches tab are now group-card clones.
+      Kill every KO-row-specific visual override by avoiding data-ko-mid and by hard-normalizing this class.
+    */
+    .match-row.ko-as-group-card{
+      display:grid!important;
+    }
+
+    .match-row.ko-as-group-card .mr-date,
+    .match-row.ko-as-group-card .mr-sep,
+    .match-row.ko-as-group-card .mr-teams,
+    .match-row.ko-as-group-card .mr-scores,
+    .match-row.ko-as-group-card .mr-bell{
+      position:relative!important;
+      z-index:1!important;
+    }
+
+    .match-row.ko-as-group-card .wc26-ko-core-tip,
+    .match-row.ko-as-group-card .wc26-ko-left-clock{
+      display:none!important;
+    }
+
+    /*
+      Deliberately copy the generic/group match score behavior.
+      These values match the non-KO .mr-score-wrap base, not the old [data-ko-mid] override.
+    */
+    .match-row.ko-as-group-card .mr-score-wrap{
+      display:grid!important;
+      grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
+      align-items:center!important;
+      justify-content:end!important;
+      gap:clamp(5px,.85vw,10px)!important;
+      width:auto!important;
+      min-width:0!important;
+    }
+
+    .match-row.ko-as-group-card .mr-score-lines{
+      display:flex!important;
+      flex-direction:column!important;
+      gap:inherit!important;
+      min-width:clamp(34px,5vw,56px)!important;
+      width:auto!important;
+    }
+
+    .match-row.ko-as-group-card .mr-score-compare,
+    .match-row.ko-as-group-card .mr-score-actual-only,
+    .match-row.ko-as-group-card .mr-score-tip-only{
+      display:flex!important;
+      flex-direction:column!important;
+      gap:inherit!important;
+      width:auto!important;
+      align-items:stretch!important;
+    }
+
+    .match-row.ko-as-group-card .mr-score-row{
+      display:grid!important;
+      grid-template-columns:minmax(12px,1fr) minmax(12px,1fr)!important;
+      align-items:end!important;
+      justify-items:center!important;
+      column-gap:clamp(4px,.8vw,7px)!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      width:auto!important;
+      min-height:0!important;
+    }
+
+    .match-row.ko-as-group-card .mr-score-row.single{
+      grid-template-columns:minmax(12px,1fr)!important;
+    }
+
+    .match-row.ko-as-group-card .mr-score-real,
+    .match-row.ko-as-group-card .mr-score-tip,
+    .match-row.ko-as-group-card .mr-score-single{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:0!important;
+      white-space:nowrap!important;
+      font-size:inherit!important;
+      font-weight:950!important;
+      line-height:1.04!important;
+    }
+
+    .match-row.ko-as-group-card .mr-score-real{
+      color:#ff6470!important;
+    }
+
+    .match-row.ko-as-group-card .mr-score-tip,
+    .match-row.ko-as-group-card .mr-score-single{
+      color:#e8edf0!important;
+    }
+
+    .match-row.ko-as-group-card .wc26-card-score{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:2px!important;
+      white-space:nowrap!important;
+    }
+
+    .match-row.ko-as-group-card .wc26-card-pen{
+      color:#ffc15a!important;
+      font-size:.62em!important;
+      font-weight:950!important;
+      line-height:1!important;
+      margin-left:1px!important;
+    }
+  `;
+  document.head.appendChild(st);
+
+  if(S.tab==='matches'){
+    try{renderMatches();}catch(e){console.warn('v116 ko group clone render failed',e);}
+  }
+})();
+
 </script></body></html>
