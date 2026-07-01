@@ -22081,4 +22081,686 @@ wc26EnsureStableModalStatusV92 = wc26EnsureOneModalStatusPillV98;
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v109: community auto-refresh hard stop =====
+   A community onSnapshot már OFF, de a live-result merge még render/preview refresh útvonalon piszkálhatta.
+   Most a community oldal/modal nem frissül automatikusan live tickre.
+*/
+
+(function(){
+  if(window.__WC26_V109_COMMUNITY_AUTO_REFRESH_STOP__) return;
+  window.__WC26_V109_COMMUNITY_AUTO_REFRESH_STOP__ = true;
+
+  window.__WC26_COMMUNITY_MANUAL_REFRESH__ = false;
+
+  function isCommunityMainAlready(){
+    const m = document.getElementById('main');
+    return !!(m && m.classList.contains('community-main'));
+  }
+
+  function communityPreviewOpen(){
+    return !!document.querySelector('.community-preview[data-community-view-id]');
+  }
+
+  function preserveCommunityScroll(fn){
+    const pageY = window.scrollY;
+    const previews = Array.from(document.querySelectorAll('.community-preview[data-community-view-id]')).map(ov=>{
+      const modal = ov.querySelector('.community-modal');
+      return {
+        id: ov.dataset.communityViewId,
+        tab: ov.querySelector('[data-community-tab].active')?.dataset.communityTab || '',
+        scrollTop: modal ? modal.scrollTop : 0
+      };
+    });
+
+    const out = fn();
+
+    previews.forEach(s=>{
+      const ov = document.querySelector('.community-preview[data-community-view-id="'+CSS.escape(s.id)+'"]');
+      const modal = ov && ov.querySelector('.community-modal');
+      if(!ov || !modal) return;
+
+      if(s.tab){
+        modal.querySelectorAll('[data-community-tab]').forEach(x=>x.classList.toggle('active', x.dataset.communityTab === s.tab));
+        modal.querySelectorAll('[data-community-panel]').forEach(x=>x.classList.toggle('active', x.dataset.communityPanel === s.tab));
+      }
+
+      modal.scrollTop = s.scrollTop;
+      requestAnimationFrame(()=>{ modal.scrollTop = s.scrollTop; });
+    });
+
+    requestAnimationFrame(()=>window.scrollTo({top:pageY, behavior:'auto'}));
+    return out;
+  }
+
+  /* Régi hard rerender loop community-t is tudott piszkálni. */
+  try{
+    if(window.__WC26_HARD_RERENDER_30S__){
+      clearInterval(window.__WC26_HARD_RERENDER_30S__);
+      window.__WC26_HARD_RERENDER_30S__ = null;
+    }
+  }catch(e){}
+
+  /* render() ne rajzolja újra a community oldalt live result miatt. */
+  const baseRenderV109 = typeof render === 'function' ? render : null;
+  if(baseRenderV109 && !render.__v109Wrapped){
+    render = function(){
+      if(S?.tab === 'community' && isCommunityMainAlready() && !window.__WC26_COMMUNITY_MANUAL_REFRESH__){
+        return false;
+      }
+      return baseRenderV109.apply(this, arguments);
+    };
+    render.__v109Wrapped = true;
+  }
+
+  /* renderCommunity() se fusson automata live tickre, ha az oldal már kint van. */
+  const baseRenderCommunityV109 = typeof renderCommunity === 'function' ? renderCommunity : null;
+  if(baseRenderCommunityV109 && !renderCommunity.__v109Wrapped){
+    renderCommunity = function(){
+      const manual = !!window.__WC26_COMMUNITY_MANUAL_REFRESH__;
+      const already = isCommunityMainAlready();
+
+      if(already && !manual){
+        return false;
+      }
+
+      return preserveCommunityScroll(()=>baseRenderCommunityV109.apply(this, arguments));
+    };
+    renderCommunity.__v109Wrapped = true;
+  }
+
+  /*
+    refreshCommunityPreviews() ne fusson minden mergeLiveResults után.
+    Csak manuális community refresh alatt engedjük.
+  */
+  const baseRefreshCommunityPreviewsV109 = typeof refreshCommunityPreviews === 'function' ? refreshCommunityPreviews : null;
+  if(baseRefreshCommunityPreviewsV109 && !refreshCommunityPreviews.__v109Wrapped){
+    refreshCommunityPreviews = function(){
+      if(!communityPreviewOpen()) return false;
+
+      if(!window.__WC26_COMMUNITY_MANUAL_REFRESH__){
+        return false;
+      }
+
+      return preserveCommunityScroll(()=>baseRefreshCommunityPreviewsV109.apply(this, arguments));
+    };
+    refreshCommunityPreviews.__v109Wrapped = true;
+  }
+
+  async function wc26ManualCommunityLoadV109(){
+    if(S?.tab !== 'community') return;
+
+    window.__WC26_COMMUNITY_MANUAL_REFRESH__ = true;
+    try{
+      if(typeof loadCommunityTips === 'function') await loadCommunityTips();
+
+      if(communityPreviewOpen()){
+        if(baseRefreshCommunityPreviewsV109) preserveCommunityScroll(()=>baseRefreshCommunityPreviewsV109());
+      }else{
+        if(baseRenderCommunityV109) preserveCommunityScroll(()=>baseRenderCommunityV109());
+      }
+    }finally{
+      window.__WC26_COMMUNITY_MANUAL_REFRESH__ = false;
+    }
+  }
+
+  document.addEventListener('click', e=>{
+    if(e.target.closest('.tab[data-tab="community"]')){
+      setTimeout(wc26ManualCommunityLoadV109, 80);
+    }
+  }, true);
+
+  /* Community realtime listener továbbra is OFF. */
+  function stopCommunityRealtimeV109(){
+    try{
+      if(wc26CommunityUnsub){
+        wc26CommunityUnsub();
+        wc26CommunityUnsub = null;
+      }
+    }catch(e){}
+  }
+
+  window.listenCommunityTips = function(){
+    stopCommunityRealtimeV109();
+    return false;
+  };
+
+  stopCommunityRealtimeV109();
+  setTimeout(stopCommunityRealtimeV109, 500);
+  setTimeout(stopCommunityRealtimeV109, 1500);
+  setTimeout(stopCommunityRealtimeV109, 3500);
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .community-preview .community-modal{
+      scroll-behavior:auto!important;
+      overflow-anchor:none!important;
+    }
+
+    .community-preview,
+    .community-preview *,
+    .community-main,
+    .community-main *{
+      transition-property:background-color,border-color,color,box-shadow,transform!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v110: keep only the bigger modal pill + KO match-card score layout = group-card layout =====
+   - Modalban csak a nagy v104 pirula marad.
+   - A régi kicsi v92/v98/v101/tip-live-clock pirulák törölve/rejtve.
+   - Mérkőzések fülön a KO kártyák valós/tipp score pozíciója visszaáll a csoportkörös alap layoutjára.
+*/
+
+(function(){
+  if(window.__WC26_V110_BIG_PILL_AND_GROUP_SCORE_LAYOUT__) return;
+  window.__WC26_V110_BIG_PILL_AND_GROUP_SCORE_LAYOUT__ = true;
+
+  function wc26KeepOnlyBigModalPillV110(){
+    const ov = document.querySelector('.tip-overlay[data-tip-id]');
+    if(!ov) return;
+
+    try{
+      if(typeof wc26EnsureModalPillV104 === 'function') wc26EnsureModalPillV104();
+    }catch(e){}
+
+    const matchBox = ov.querySelector('.tip-match');
+    if(!matchBox) return;
+
+    /* Csak a nagy v104 slot maradhat. */
+    const slots = Array.from(matchBox.querySelectorAll('.wc26-modal-pill-slot-v104'));
+    slots.forEach((slot, idx)=>{
+      if(idx > 0) slot.remove();
+    });
+
+    const bigSlot = matchBox.querySelector('.wc26-modal-pill-slot-v104');
+    if(bigSlot){
+      bigSlot.style.display = 'flex';
+      bigSlot.style.opacity = '1';
+      bigSlot.style.visibility = 'visible';
+    }
+
+    const bigPill = matchBox.querySelector('.wc26-modal-pill-v104');
+    if(bigPill){
+      bigPill.style.display = 'inline-flex';
+      bigPill.style.opacity = '1';
+      bigPill.style.visibility = 'visible';
+    }
+
+    /*
+      Ezek a korábbi kisebb pirulák/slotok.
+      Fontos: a goal event minute pill-ek NEM ezek, azok .goal-scorer-min classúak.
+    */
+    matchBox.querySelectorAll(
+      '.wc26-modal-state-slot,' +
+      '.tip-below-score > .tip-live-clock,' +
+      '.tip-below-score > .wc26-v92-modal-state,' +
+      '.tip-below-score > .wc26-v98-modal-state,' +
+      '.tip-below-score > .wc26-state-indicators,' +
+      '.tip-below-score > .wc26-primary-state-badge,' +
+      '.tip-below-score > .wc26-status-pill'
+    ).forEach(el=>el.remove());
+  }
+
+  window.wc26KeepOnlyBigModalPillV110 = wc26KeepOnlyBigModalPillV110;
+
+  function runPillCleanup(){
+    wc26KeepOnlyBigModalPillV110();
+    setTimeout(wc26KeepOnlyBigModalPillV110, 40);
+    setTimeout(wc26KeepOnlyBigModalPillV110, 160);
+  }
+
+  function wrapFunctionV110(name){
+    try{
+      const fn = eval(name);
+      if(typeof fn !== 'function' || fn.__v110Wrapped) return;
+      const wrapped = function(){
+        const out = fn.apply(this, arguments);
+        runPillCleanup();
+        return out;
+      };
+      wrapped.__v110Wrapped = true;
+      eval(name + ' = wrapped');
+    }catch(e){}
+  }
+
+  wrapFunctionV110('openTip');
+  wrapFunctionV110('openKoTip');
+  wrapFunctionV110('refreshOpenTipModal');
+  wrapFunctionV110('mergeLiveResults');
+
+  if(window.__WC26_V110_BIG_PILL_TIMER__) clearInterval(window.__WC26_V110_BIG_PILL_TIMER__);
+  window.__WC26_V110_BIG_PILL_TIMER__ = setInterval(()=>{
+    if(document.querySelector('.tip-overlay[data-tip-id]')) wc26KeepOnlyBigModalPillV110();
+  }, 600);
+
+  const st = document.createElement('style');
+  st.textContent = `
+    /* --- MODAL: only the bigger v104 pill may be visible --- */
+    .tip-overlay .wc26-modal-state-slot,
+    .tip-overlay .tip-below-score > .tip-live-clock,
+    .tip-overlay .tip-below-score > .wc26-v92-modal-state,
+    .tip-overlay .tip-below-score > .wc26-v98-modal-state,
+    .tip-overlay .tip-below-score > .wc26-state-indicators,
+    .tip-overlay .tip-below-score > .wc26-primary-state-badge,
+    .tip-overlay .tip-below-score > .wc26-status-pill{
+      display:none!important;
+    }
+
+    .tip-overlay .wc26-modal-pill-slot-v104{
+      display:flex!important;
+      opacity:1!important;
+      visibility:visible!important;
+      transition:none!important;
+      animation:none!important;
+    }
+
+    .tip-overlay .wc26-modal-pill-v104{
+      display:inline-flex!important;
+      opacity:1!important;
+      visibility:visible!important;
+      transition:none!important;
+      animation:none!important;
+    }
+
+    /*
+      --- MÉRKŐZÉSEK FÜL / KO KÁRTYÁK ---
+      Vissza a csoportkörös score layout:
+      két egyforma score oszlop, nem inline/max-content, nem széthúzott/beszűkített speciál KO layout.
+    */
+    .matches-main .match-row[data-ko-mid] .mr-scores{
+      align-items:center!important;
+      overflow:visible!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-wrap{
+      width:100%!important;
+      min-width:0!important;
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:3px!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-lines{
+      width:100%!important;
+      min-width:0!important;
+      display:flex!important;
+      flex-direction:column!important;
+      gap:clamp(6px,1.7vw,9px)!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap{
+      width:100%!important;
+      min-width:0!important;
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:stretch!important;
+      justify-content:center!important;
+      gap:clamp(6px,1.7vw,9px)!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-row{
+      min-height:1.05em!important;
+      width:100%!important;
+      min-width:0!important;
+      display:grid!important;
+      grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+      align-items:end!important;
+      justify-items:center!important;
+      justify-content:stretch!important;
+      column-gap:4px!important;
+      gap:0 4px!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-row.single,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only .mr-score-row.single,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only .mr-score-row.single{
+      grid-template-columns:minmax(0,1fr)!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-single,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-tip{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:0!important;
+      white-space:nowrap!important;
+      font-size:inherit!important;
+      font-weight:950!important;
+      line-height:.95!important;
+      gap:0!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .wc26-card-score{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:2px!important;
+      min-width:0!important;
+      white-space:nowrap!important;
+    }
+  `;
+  document.head.appendChild(st);
+
+  runPillCleanup();
+})();
+
+
+/* ===== WC26 v111: bracket scroll lock fix + real odds preservation =====
+   Válasz a konkrét hibára:
+   - KO bracket scrollLeft nem resetelhet balra render/live patch közben.
+   - Valós/piaci odds nem eshet ki, ha egy későbbi live result payload odds nélküli.
+*/
+
+(function(){
+  if(window.__WC26_V111_SCROLL_AND_ODDS__) return;
+  window.__WC26_V111_SCROLL_AND_ODDS__ = true;
+
+  /* ---------- 1) KO bracket scroll stabilizálás ---------- */
+
+  window.__WC26_KO_SCROLL_V111__ = Number.isFinite(window.__WC26_KO_SCROLL_V111__) ? window.__WC26_KO_SCROLL_V111__ : (typeof KO_SCROLL !== 'undefined' ? KO_SCROLL : 0);
+  window.__WC26_KO_SCROLL_TS_V111__ = 0;
+
+  function koBracketElV111(){
+    return document.querySelector('.ko-bracket');
+  }
+
+  function rememberKoScrollV111(br){
+    br = br || koBracketElV111();
+    if(!br) return;
+    const v = Math.max(0, Math.round(br.scrollLeft || 0));
+    window.__WC26_KO_SCROLL_V111__ = v;
+    window.__WC26_KO_SCROLL_TS_V111__ = Date.now();
+    try{ KO_SCROLL = v; }catch(e){}
+  }
+
+  function restoreKoScrollV111(pos){
+    const br = koBracketElV111();
+    if(!br) return;
+
+    const target = Math.max(0, Math.round(
+      Number.isFinite(pos) ? pos :
+      Number.isFinite(window.__WC26_KO_SCROLL_V111__) ? window.__WC26_KO_SCROLL_V111__ :
+      (typeof KO_SCROLL !== 'undefined' ? KO_SCROLL : 0)
+    ));
+
+    br.scrollLeft = target;
+    requestAnimationFrame(()=>{ br.scrollLeft = target; });
+    setTimeout(()=>{ br.scrollLeft = target; }, 60);
+    setTimeout(()=>{ br.scrollLeft = target; }, 180);
+  }
+
+  function bindKoScrollV111(){
+    const br = koBracketElV111();
+    if(!br || br.__v111ScrollBound) return;
+    br.__v111ScrollBound = true;
+
+    br.addEventListener('scroll', ()=>rememberKoScrollV111(br), {passive:true});
+    br.addEventListener('wheel', ()=>rememberKoScrollV111(br), {passive:true});
+    br.addEventListener('touchstart', ()=>rememberKoScrollV111(br), {passive:true});
+    br.addEventListener('touchmove', ()=>rememberKoScrollV111(br), {passive:true});
+    br.addEventListener('pointerdown', ()=>rememberKoScrollV111(br), {passive:true});
+    br.addEventListener('pointermove', ()=>rememberKoScrollV111(br), {passive:true});
+  }
+
+  const baseRenderKOV111 = typeof renderKO === 'function' ? renderKO : null;
+  if(baseRenderKOV111 && !renderKO.__v111Wrapped){
+    renderKO = function(){
+      const beforeEl = koBracketElV111();
+      const before = beforeEl ? beforeEl.scrollLeft : window.__WC26_KO_SCROLL_V111__;
+      if(beforeEl) rememberKoScrollV111(beforeEl);
+
+      const out = baseRenderKOV111.apply(this, arguments);
+
+      bindKoScrollV111();
+      restoreKoScrollV111(before);
+      return out;
+    };
+    renderKO.__v111Wrapped = true;
+  }
+
+  const baseRenderV111 = typeof render === 'function' ? render : null;
+  if(baseRenderV111 && !render.__v111ScrollWrapped){
+    render = function(){
+      const beforeEl = koBracketElV111();
+      const before = beforeEl ? beforeEl.scrollLeft : window.__WC26_KO_SCROLL_V111__;
+      if(beforeEl) rememberKoScrollV111(beforeEl);
+
+      const out = baseRenderV111.apply(this, arguments);
+
+      if(S?.tab === 'knockout'){
+        bindKoScrollV111();
+        restoreKoScrollV111(before);
+      }
+      return out;
+    };
+    render.__v111ScrollWrapped = true;
+  }
+
+  document.addEventListener('scroll', e=>{
+    if(e.target && e.target.classList && e.target.classList.contains('ko-bracket')){
+      rememberKoScrollV111(e.target);
+    }
+  }, true);
+
+  setTimeout(()=>{ bindKoScrollV111(); restoreKoScrollV111(); }, 0);
+  setTimeout(()=>{ bindKoScrollV111(); restoreKoScrollV111(); }, 400);
+
+  /* ---------- 2) Odds cache: piaci odds ne essen ki odds nélküli live payload miatt ---------- */
+
+  const ODDS_CACHE = window.__WC26_ODDS_CACHE_V111__ = window.__WC26_ODDS_CACHE_V111__ || {
+    byId:{},
+    byTeams:{}
+  };
+
+  function validOddsObjV111(odds){
+    try{
+      return !!(odds && validOdds(odds.h) && validOdds(odds.d) && validOdds(odds.a));
+    }catch(e){
+      return !!(odds && Number.isFinite(+odds.h) && Number.isFinite(+odds.d) && Number.isFinite(+odds.a));
+    }
+  }
+
+  function teamNameV111(x){
+    if(!x) return '';
+    if(typeof x === 'object') return String(x.team || x.name || '').trim();
+    return String(x).trim();
+  }
+
+  function teamKeyV111(h,a){
+    h = teamNameV111(h);
+    a = teamNameV111(a);
+    return h && a ? (h + '|||'+ a) : '';
+  }
+
+  function matchTeamsForIdV111(id){
+    let x = null;
+    try{ x = FX_BY_ID[id] || null; }catch(e){}
+    if(!x && String(id||'').startsWith('KO-')){
+      try{ x = findKoMatch(id) || null; }catch(e){}
+    }
+    return x;
+  }
+
+  function rememberOddsV111(id, obj){
+    if(!obj || !validOddsObjV111(obj.odds)) return;
+
+    const odds = {
+      h:+obj.odds.h,
+      d:+obj.odds.d,
+      a:+obj.odds.a
+    };
+
+    if(id) ODDS_CACHE.byId[id] = odds;
+
+    const h = obj.homeTeam || obj.h || matchTeamsForIdV111(id)?.h;
+    const a = obj.awayTeam || obj.a || matchTeamsForIdV111(id)?.a;
+    const k = teamKeyV111(h,a);
+    if(k) ODDS_CACHE.byTeams[k] = odds;
+  }
+
+  function getCachedOddsV111(id, obj, x){
+    if(id && ODDS_CACHE.byId[id]) return ODDS_CACHE.byId[id];
+
+    const k1 = teamKeyV111(obj?.homeTeam || obj?.h, obj?.awayTeam || obj?.a);
+    if(k1 && ODDS_CACHE.byTeams[k1]) return ODDS_CACHE.byTeams[k1];
+
+    const k2 = teamKeyV111(x?.h, x?.a);
+    if(k2 && ODDS_CACHE.byTeams[k2]) return ODDS_CACHE.byTeams[k2];
+
+    try{
+      const old = id ? LIVE_RESULTS[id] : null;
+      if(old && validOddsObjV111(old.odds)) return old.odds;
+    }catch(e){}
+
+    return null;
+  }
+
+  function attachOddsV111(id, obj, x){
+    if(!obj) return obj;
+
+    if(validOddsObjV111(obj.odds)){
+      rememberOddsV111(id, obj);
+      return obj;
+    }
+
+    const cached = getCachedOddsV111(id, obj, x);
+    if(cached){
+      return {...obj, odds:{h:+cached.h,d:+cached.d,a:+cached.a}};
+    }
+
+    return obj;
+  }
+
+  /* Seed cache from current LIVE_RESULTS. */
+  try{
+    Object.entries(LIVE_RESULTS || {}).forEach(([id,obj])=>rememberOddsV111(id,obj));
+  }catch(e){}
+
+  const baseMergeV111 = typeof mergeLiveResults === 'function' ? mergeLiveResults : null;
+  if(baseMergeV111 && !mergeLiveResults.__v111OddsWrapped){
+    mergeLiveResults = function(next){
+      const fixed = {};
+      Object.entries(next || {}).forEach(([id,obj])=>{
+        fixed[id] = attachOddsV111(id, obj, matchTeamsForIdV111(id));
+      });
+
+      const out = baseMergeV111.call(this, fixed);
+
+      try{
+        Object.entries(LIVE_RESULTS || {}).forEach(([id,obj])=>{
+          const withOdds = attachOddsV111(id, obj, matchTeamsForIdV111(id));
+          if(withOdds !== obj) LIVE_RESULTS[id] = withOdds;
+          rememberOddsV111(id, LIVE_RESULTS[id]);
+        });
+      }catch(e){}
+
+      try{ refreshOpenProbCardV111(); }catch(e){}
+      return out;
+    };
+    mergeLiveResults.__v111OddsWrapped = true;
+  }
+
+  const baseProbCardV111 = typeof probCard === 'function' ? probCard : null;
+  if(baseProbCardV111 && !probCard.__v111OddsWrapped){
+    probCard = function(x,r){
+      const id = x && x.id ? x.id : '';
+      const fixed = attachOddsV111(id, r || (id ? LIVE_RESULTS[id] : null), x);
+      return baseProbCardV111.call(this, x, fixed);
+    };
+    probCard.__v111OddsWrapped = true;
+  }
+
+  function refreshOpenProbCardV111(){
+    const ov = document.querySelector('.tip-overlay[data-tip-id]');
+    if(!ov) return;
+
+    const id = ov.dataset.tipId || '';
+    const kind = ov.dataset.tipKind || (String(id).startsWith('KO-') ? 'ko' : 'group');
+    const x = kind === 'ko' ? (findKoMatch(id) || matchTeamsForIdV111(id)) : FX_BY_ID[id];
+    if(!x || typeof probCard !== 'function') return;
+
+    const r = attachOddsV111(id, LIVE_RESULTS[id] || actualFor({id}), x);
+    const old = ov.querySelector('.tip-prob-card');
+    if(!old) return;
+
+    const tmp = document.createElement('div');
+    tmp.innerHTML = probCard(x, r);
+    const fresh = tmp.firstElementChild;
+    if(fresh && old.outerHTML !== fresh.outerHTML){
+      old.replaceWith(fresh);
+    }
+  }
+
+  const baseOpenTipV111 = typeof openTip === 'function' ? openTip : null;
+  if(baseOpenTipV111 && !openTip.__v111OddsWrapped){
+    openTip = function(){
+      const out = baseOpenTipV111.apply(this, arguments);
+      setTimeout(refreshOpenProbCardV111, 0);
+      setTimeout(refreshOpenProbCardV111, 120);
+      return out;
+    };
+    openTip.__v111OddsWrapped = true;
+  }
+
+  const baseOpenKoTipV111 = typeof openKoTip === 'function' ? openKoTip : null;
+  if(baseOpenKoTipV111 && !openKoTip.__v111OddsWrapped){
+    openKoTip = function(){
+      const br = koBracketElV111();
+      if(br) rememberKoScrollV111(br);
+
+      const out = baseOpenKoTipV111.apply(this, arguments);
+
+      restoreKoScrollV111();
+      setTimeout(refreshOpenProbCardV111, 0);
+      setTimeout(refreshOpenProbCardV111, 120);
+      return out;
+    };
+    openKoTip.__v111OddsWrapped = true;
+  }
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .ko-bracket{
+      overflow-x:auto!important;
+      overflow-y:visible!important;
+      overscroll-behavior-x:contain!important;
+      scroll-behavior:auto!important;
+      -webkit-overflow-scrolling:touch!important;
+      touch-action:pan-x pan-y!important;
+    }
+
+    .ko-bracket.ko-dragging{
+      cursor:grabbing!important;
+      user-select:none!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
