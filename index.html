@@ -21474,4 +21474,244 @@ wc26EnsureStableModalStatusV92 = wc26EnsureOneModalStatusPillV98;
   window.wc26UnifiedUiSync('boot');
 })();
 
+
+/* ===== WC26 v103: bracket crowded double-pen score rail tiny inward nudge =====
+   Holland–Morocco típus: valós 11-es + user tipp 11-es egyszerre.
+   Csak ezeket húzza egy ici-picivel beljebb, nem a sima bracket kártyákat.
+*/
+(function(){
+  if(window.__WC26_V103_BRACKET_TINY_INWARD__) return;
+  window.__WC26_V103_BRACKET_TINY_INWARD__ = true;
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .ko-card.has-double-pen .ko-score.v100-inline,
+    .ko-card.has-double-pen .ko-score.v90-inline,
+    .ko-card.has-double-pen .ko-score.v87-inline,
+    .ko-card.has-double-pen .ko-score.v86-stack,
+    .ko-card.has-double-pen .ko-score.v85-rail,
+    .ko-card.has-double-pen .ko-score.v84-rail{
+      transform:translateX(-5px)!important;
+      justify-content:flex-end!important;
+      transition:none!important;
+      animation:none!important;
+    }
+
+    .ko-card.has-double-pen .ko-team{
+      padding-right:8px!important;
+    }
+
+    @media(max-width:720px){
+      .ko-card.has-double-pen .ko-score.v100-inline,
+      .ko-card.has-double-pen .ko-score.v90-inline,
+      .ko-card.has-double-pen .ko-score.v87-inline,
+      .ko-card.has-double-pen .ko-score.v86-stack,
+      .ko-card.has-double-pen .ko-score.v85-rail,
+      .ko-card.has-double-pen .ko-score.v84-rail{
+        transform:translateX(-6px)!important;
+      }
+
+      .ko-card.has-double-pen .ko-team{
+        padding-right:7px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v104: restore stable match modal state pill =====
+   A pirula visszakerül és nem a régi .tip-live-clock / .wc26-status-pill logikára épül,
+   mert azokat a korábbi cleanupok néha eltüntették.
+*/
+(function(){
+  if(window.__WC26_V104_STABLE_MODAL_PILL__) return;
+  window.__WC26_V104_STABLE_MODAL_PILL__ = true;
+
+  function wc26IsPenaltyPhaseV104(r){
+    if(!r) return false;
+    const blob = String([
+      r.status, r.minute, r.period, r.shortDetail, r.detail,
+      r.displayClock, r.statusText, r.statusType, r.state,
+      r.name, r.description
+    ].filter(v=>v!=null).join(' ')).toUpperCase();
+
+    return wc26HasPenScore(r) ||
+      blob.includes('PENAL') ||
+      /\bPEN\b/.test(blob) ||
+      /\bAP\b/.test(blob) ||
+      blob.includes('SHOOTOUT');
+  }
+
+  function wc26ModalPillMetaV104(r){
+    if(!r || !r.started) return null;
+
+    const raw = String(r.status || '').toUpperCase();
+
+    if(wc26IsPenaltyPhaseV104(r) && !r.finished) return {text:'PEN', cls:'pen'};
+    if(raw === 'HT' || raw.includes('HALF') || raw.includes('INTERVAL') || raw.includes('INT')) return {text:'HT', cls:'ht'};
+    if(raw.includes('AET') || raw.includes('EXTRA')) return {text:'AET', cls:'aet'};
+    if(r.finished || raw === 'FT' || raw.includes('FULL TIME') || raw.includes('FINISHED') || raw.includes('FINAL')) return {text:'FT', cls:'ft'};
+
+    let clk = '';
+    try{ clk = liveClockLabel(r) || ''; }catch(e){}
+    if(clk) return {text:clk, cls:'live'};
+
+    return {text:'LIVE', cls:'live'};
+  }
+
+  function wc26EnsureModalPillV104(){
+    const ov = document.querySelector('.tip-overlay[data-tip-id]');
+    if(!ov) return;
+
+    const id = ov.dataset.tipId || '';
+    if(!id) return;
+
+    const r = LIVE_RESULTS[id] || actualFor({id});
+    const meta = wc26ModalPillMetaV104(r);
+
+    const matchBox = ov.querySelector('.tip-match');
+    if(!matchBox) return;
+
+    let slot = matchBox.querySelector('.wc26-modal-pill-slot-v104');
+
+    if(!meta){
+      if(slot) slot.remove();
+      return;
+    }
+
+    if(!slot){
+      slot = document.createElement('div');
+      slot.className = 'wc26-modal-pill-slot-v104';
+
+      const teams = matchBox.querySelector('.tip-teams');
+      const below = matchBox.querySelector('.tip-below-score');
+
+      if(below) matchBox.insertBefore(slot, below);
+      else if(teams && teams.nextSibling) matchBox.insertBefore(slot, teams.nextSibling);
+      else matchBox.appendChild(slot);
+    }
+
+    let pill = slot.querySelector('.wc26-modal-pill-v104');
+    if(!pill){
+      pill = document.createElement('span');
+      pill.className = 'wc26-modal-pill-v104';
+      slot.appendChild(pill);
+    }
+
+    pill.textContent = meta.text;
+    pill.dataset.state = meta.cls;
+    pill.style.display = 'inline-flex';
+    pill.style.opacity = '1';
+    pill.style.visibility = 'visible';
+
+    /* Régi inline clock/pill elemeket elrejtjük, de a v104-et nem bántjuk. */
+    matchBox.querySelectorAll('.tip-below-score .tip-live-clock, .tip-below-score .wc26-state-indicators, .tip-below-score .wc26-status-pill').forEach(el=>{
+      el.style.display = 'none';
+    });
+  }
+
+  window.wc26EnsureModalPillV104 = wc26EnsureModalPillV104;
+
+  function run(){
+    wc26EnsureModalPillV104();
+    setTimeout(wc26EnsureModalPillV104, 40);
+    setTimeout(wc26EnsureModalPillV104, 140);
+  }
+
+  function wrapGlobal(name){
+    try{
+      const fn = window[name] || eval(name);
+      if(typeof fn !== 'function' || fn.__v104Wrapped) return;
+      const wrapped = function(){
+        const out = fn.apply(this, arguments);
+        run();
+        return out;
+      };
+      wrapped.__v104Wrapped = true;
+      window[name] = wrapped;
+      try{ eval(name + ' = window[name]'); }catch(e){}
+    }catch(e){}
+  }
+
+  wrapGlobal('openTip');
+  wrapGlobal('openKoTip');
+  wrapGlobal('refreshOpenTipModal');
+  wrapGlobal('mergeLiveResults');
+  wrapGlobal('patchLiveRows');
+
+  const oldUnified = window.wc26UnifiedUiSync;
+  if(typeof oldUnified === 'function' && !oldUnified.__v104Wrapped){
+    window.wc26UnifiedUiSync = function(){
+      const out = oldUnified.apply(this, arguments);
+      run();
+      return out;
+    };
+    window.wc26UnifiedUiSync.__v104Wrapped = true;
+  }
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .wc26-modal-pill-slot-v104{
+      display:flex!important;
+      justify-content:center!important;
+      align-items:center!important;
+      margin:13px 0 9px!important;
+      min-height:31px!important;
+      opacity:1!important;
+      visibility:visible!important;
+      transition:none!important;
+      animation:none!important;
+    }
+
+    .wc26-modal-pill-v104{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:52px!important;
+      height:28px!important;
+      padding:0 13px!important;
+      border-radius:999px!important;
+      background:rgba(255,104,128,.16)!important;
+      border:1px solid rgba(255,104,128,.44)!important;
+      color:#ff7b92!important;
+      font-size:15px!important;
+      font-weight:950!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      white-space:nowrap!important;
+      opacity:1!important;
+      visibility:visible!important;
+      transition:none!important;
+      animation:none!important;
+      box-shadow:none!important;
+    }
+
+    .wc26-modal-pill-v104[data-state="pen"],
+    .wc26-modal-pill-v104[data-state="ht"],
+    .wc26-modal-pill-v104[data-state="aet"]{
+      background:rgba(255,194,90,.16)!important;
+      border-color:rgba(255,194,90,.42)!important;
+      color:#ffc25a!important;
+    }
+
+    @media(max-width:720px){
+      .wc26-modal-pill-slot-v104{
+        margin:11px 0 8px!important;
+        min-height:28px!important;
+      }
+
+      .wc26-modal-pill-v104{
+        min-width:46px!important;
+        height:26px!important;
+        padding:0 11px!important;
+        font-size:14px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+
+  run();
+})();
+
 </script></body></html>
