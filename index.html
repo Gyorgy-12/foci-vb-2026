@@ -14787,4 +14787,387 @@ function wc26EnsureHtIndicatorsInOpenModal(){
   setTimeout(wc26EnsureHtIndicatorsInOpenModal,700);
 })();
 
+
+/* ===== WC26 v63 mobile cleanup + one primary red state badge ===== */
+
+/* One source of truth: PEN / FT / HT / current minute */
+function wc26PrimaryMatchState(r){
+  if(!r) return '';
+  const blob = [
+    r.status, r.minute, r.period, r.shortDetail, r.detail,
+    r.displayClock, r.statusText, r.statusType, r.state,
+    r.name, r.description
+  ].map(v=>String(v||'')).join(' ').toUpperCase();
+
+  const minute = liveClockLabel(r);
+
+  const isHT =
+    blob === 'HT' || /\bHT\b/.test(blob) ||
+    blob.includes('HALF TIME') || blob.includes('HALF-TIME') ||
+    blob.includes('HALFTIME') || blob.includes('STATUS_HALFTIME') ||
+    blob.includes('INTERVAL') || blob.includes('SZÜNET') || blob.includes('SZUNET');
+
+  const isPEN =
+    wc26HasPenScore(r) || blob.includes('PENAL') ||
+    /\bPEN\b/.test(blob) || /\bAP\b/.test(blob) ||
+    blob.includes('SHOOTOUT');
+
+  const isAET =
+    blob.includes('AET') || blob.includes('EXTRA TIME') || /\bET\b/.test(blob);
+
+  const isFT =
+    !!r.finished || blob === 'FT' || /\bFT\b/.test(blob) ||
+    blob.includes('FULL TIME') || blob.includes('FINAL') || blob.includes('FINISHED');
+
+  if(isPEN) return 'PEN';
+  if(isFT) return 'FT';
+  if(isHT) return 'HT';
+  if(isAET) return 'AET';
+  if(minute) return minute;
+  return '';
+}
+function wc26PrimaryStateBadge(r, extraClass=''){
+  const label = wc26PrimaryMatchState(r);
+  return label ? '<span class="wc26-primary-state-badge '+extraClass+'">'+esc(label)+'</span>' : '';
+}
+
+/* Keep old call sites alive, but make them return one red primary badge only. */
+wc26StatusPills=function(r,opts={}){
+  return wc26PrimaryStateBadge(r);
+};
+wc26ModalStatusHtml=function(r){
+  const badge = wc26PrimaryStateBadge(r);
+  return badge ? '<div class="wc26-modal-status wc26-primary-modal-status">'+badge+'</div>' : '';
+};
+
+/* Score value helper: real pen red, tip pen orange. */
+function wc26CardScoreValue(score,pen){
+  return '<span class="wc26-card-score"><span>'+esc(score)+'</span>'+(validScore(pen)?'<span class="wc26-card-pen">('+esc(pen)+')</span>':'')+'</span>';
+}
+
+/* Final score renderer: no duplicate green FT, no "- after pencil", penalties don't push the card right. */
+function scoreHtml(x){
+  const isKo = x.id && String(x.id).startsWith('KO-');
+  const p = isKo ? koPred(x.id) : getPred(x.id);
+  const r = actualFor(x);
+  const hasReal = r && (r.started || r.finished || matchLockState({id:x.id}) !== 'open') && validScore(r.h) && validScore(r.a);
+  const pHasPen = wc26HasPenScore(p);
+  let lines = '';
+
+  if(p && hasReal){
+    lines='<div class="mr-score-compare">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span></div>'
+      +'</div>';
+  }else{
+    /* Future + no tip: leave the score cell empty so the dash cannot jump behind the pencil. */
+    return '';
+  }
+
+  const stateBadge = hasReal ? wc26PrimaryStateBadge(r) : '';
+  return stateBadge
+    ? '<div class="mr-score-wrap '+(p?'':'no-tip')+'"><div class="mr-clock-row">'+stateBadge+'</div><div class="mr-score-lines">'+lines+'</div></div>'
+    : lines;
+}
+
+/* Community profile score rows also use the same primary red state badge, inline with the score. */
+function communityPredScoreHtml(p,r,g){
+  const rr = wc26IsStartedOrFinishedResult(r) ? r : null;
+  const realHtml = wc26CommunityScoreHtml(rr);
+  const tipHtml = wc26CommunityScoreHtml(p);
+  const stateHtml = rr ? '<span class="community-state-inline">'+wc26PrimaryStateBadge(rr,'community-live-clock')+'</span>' : '';
+  const gradeCls=wc26CommunityGradeClass(g?.cat||'');
+  const gradeLabel=esc((rr&&g?.label)?g.label:'Várakozik');
+
+  return '<div class="community-result wc26-community-result-v63">'
+    +'<div class="community-score-col community-real-col"><span class="community-score-head">Valós</span><b class="community-real-score community-score-value"><span class="community-value-line community-real-value-line">'+stateHtml+realHtml+'</span></b></div>'
+    +'<div class="community-score-col community-tip-col"><span class="community-score-head">Tipp</span><b class="community-score-value"><span class="community-value-line community-tip-value-line">'+tipHtml+'</span></b></div>'
+    +'<small class="community-grade-note '+gradeCls+'">'+gradeLabel+'</small>'
+    +'</div>';
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Single primary state badge: always red/pink, never the old green FT. */
+    .wc26-primary-state-badge,
+    .tip-sheet .wc26-modal-status .wc26-primary-state-badge,
+    .tip-below-score .wc26-primary-state-badge,
+    .community-preview .community-live-clock.wc26-primary-state-badge{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:clamp(36px,7.2vw,46px)!important;
+      height:clamp(22px,4.8vw,28px)!important;
+      padding:0 clamp(8px,1.6vw,12px)!important;
+      border-radius:999px!important;
+      background:rgba(255,105,125,.15)!important;
+      border:1px solid rgba(255,105,125,.34)!important;
+      color:#ff8295!important;
+      font-size:clamp(10px,2.2vw,13px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      white-space:nowrap!important;
+      box-shadow:none!important;
+    }
+
+    /* Kill old green FT/extra status pill styling in modals. */
+    .tip-sheet .wc26-modal-status .wc26-status-pill,
+    .tip-sheet .wc26-state-indicators .wc26-status-pill{
+      background:rgba(255,105,125,.15)!important;
+      border-color:rgba(255,105,125,.34)!important;
+      color:#ff8295!important;
+    }
+
+    .tip-sheet .wc26-primary-modal-status{
+      display:flex!important;
+      justify-content:center!important;
+      align-items:center!important;
+      margin:12px auto 0!important;
+      width:100%!important;
+    }
+
+    /* Match cards: keep score block inside its lane, especially with penalties. */
+    .matches-main .mr-scores{
+      min-width:0!important;
+      overflow:visible!important;
+      padding-right:2px!important;
+    }
+    .matches-main .mr-score-wrap{
+      width:100%!important;
+      min-width:0!important;
+      align-items:center!important;
+    }
+    .matches-main .mr-score-lines,
+    .matches-main .mr-score-compare,
+    .matches-main .mr-score-tip-only,
+    .matches-main .mr-score-actual-only{
+      width:100%!important;
+      min-width:0!important;
+      align-items:center!important;
+    }
+    .matches-main .mr-score-row{
+      width:100%!important;
+      min-width:0!important;
+      grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+      column-gap:clamp(3px,.55vw,7px)!important;
+      justify-items:center!important;
+    }
+    .matches-main .mr-score-row.single{
+      grid-template-columns:minmax(0,1fr)!important;
+    }
+    .matches-main .wc26-card-score,
+    .matches-main .mr-score-real,
+    .matches-main .mr-score-tip,
+    .matches-main .mr-score-single{
+      min-width:0!important;
+      max-width:100%!important;
+      white-space:nowrap!important;
+    }
+    .matches-main .mr-score-real .wc26-card-pen,
+    .matches-main .mr-score-single.mr-score-real .wc26-card-pen{
+      color:#ff6f84!important;
+    }
+    .matches-main .mr-score-tip .wc26-card-pen,
+    .matches-main .mr-score-single:not(.mr-score-real) .wc26-card-pen{
+      color:#f0b85c!important;
+    }
+
+    /* Future unpredicted rows: no dash, only pencil. */
+    .matches-main .match-row:not(.predicted) .mr-scores:empty{
+      visibility:hidden!important;
+    }
+
+    /* Bracket: compact penalty + tip score rendering on mobile so cards don't balloon sideways. */
+    .ko-card .ko-score{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:2px!important;
+      min-width:0!important;
+      max-width:44%!important;
+      white-space:nowrap!important;
+    }
+    .ko-card .ko-score b{
+      font-size:.96em!important;
+      line-height:1!important;
+      min-width:0!important;
+    }
+    .ko-card .ko-score .ko-pen{
+      font-size:.70em!important;
+      line-height:1!important;
+      margin:0!important;
+      color:#ff6f84!important;
+      letter-spacing:-.04em!important;
+    }
+    .ko-card .ko-tip-ind{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      gap:1px!important;
+      margin-left:2px!important;
+      color:#d7e0e6!important;
+      font-size:.74em!important;
+      line-height:1!important;
+      font-weight:900!important;
+      white-space:nowrap!important;
+      opacity:.96!important;
+      letter-spacing:-.03em!important;
+    }
+    .ko-card .ko-tip-ind .ko-tip-pen{
+      color:#f0b85c!important;
+      font-size:.78em!important;
+      line-height:1!important;
+      letter-spacing:-.04em!important;
+    }
+
+    @media(max-width:720px){
+      .matches-main .match-row{
+        grid-template-columns:clamp(66px,17vw,88px) 1px minmax(0,1fr) clamp(40px,10.4vw,56px) clamp(20px,5.2vw,28px)!important;
+      }
+      .matches-main .mr-scores{
+        font-size:clamp(12px,3.8vw,18px)!important;
+        padding-left:1px!important;
+        padding-right:0!important;
+      }
+      .matches-main .mr-bell{
+        font-size:clamp(11px,3.3vw,15px)!important;
+        padding-right:0!important;
+      }
+      .matches-main .mr-score-row{
+        column-gap:2px!important;
+      }
+      .matches-main .wc26-card-score{
+        gap:1px!important;
+      }
+      .matches-main .wc26-card-pen{
+        font-size:.58em!important;
+        margin-left:1px!important;
+        letter-spacing:-.05em!important;
+      }
+      .matches-main .mr-clock-row{
+        margin-bottom:2px!important;
+      }
+      .matches-main .mr-clock-row .wc26-primary-state-badge{
+        min-width:31px!important;
+        height:20px!important;
+        padding:0 7px!important;
+        font-size:9.5px!important;
+      }
+
+      .ko-card .ko-score{
+        max-width:48%!important;
+        gap:1px!important;
+      }
+      .ko-card .ko-score b{
+        font-size:.90em!important;
+      }
+      .ko-card .ko-score .ko-pen{
+        font-size:.62em!important;
+      }
+      .ko-card .ko-tip-ind{
+        font-size:.66em!important;
+        margin-left:1px!important;
+        gap:1px!important;
+      }
+      .ko-card .ko-tip-ind .ko-tip-pen{
+        font-size:.72em!important;
+      }
+    }
+
+    /* Community score row stays tidy with the primary badge inline. */
+    .community-preview .community-pred .community-result .community-state-inline{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      margin-right:4px!important;
+      vertical-align:baseline!important;
+    }
+    .community-preview .community-pred .community-result .community-state-inline .wc26-primary-state-badge{
+      position:relative!important;
+      top:-2px!important;
+      min-width:34px!important;
+      height:22px!important;
+      padding:0 9px!important;
+      font-size:clamp(9.8px,.72vw,12px)!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v64 future no-tip rows: dash BEFORE pencil ===== */
+
+/* Override v63: future unpredicted rows should still render the dash in the score cell.
+   Since .mr-scores is before .mr-bell in the grid, this places "-" before the pencil. */
+function scoreHtml(x){
+  const isKo = x.id && String(x.id).startsWith('KO-');
+  const p = isKo ? koPred(x.id) : getPred(x.id);
+  const r = actualFor(x);
+  const hasReal = r && (r.started || r.finished || matchLockState({id:x.id}) !== 'open') && validScore(r.h) && validScore(r.a);
+  const pHasPen = wc26HasPenScore(p);
+  let lines = '';
+
+  if(p && hasReal){
+    lines='<div class="mr-score-compare">'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row"><span class="mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span><span class="mr-score-tip">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(p){
+    lines='<div class="mr-score-tip-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.h,pHasPen?p.pH:null)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single">'+wc26CardScoreValue(p.a,pHasPen?p.pA:null)+'</span></div>'
+      +'</div>';
+  }else if(hasReal){
+    lines='<div class="mr-score-actual-only">'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.h,r.pH)+'</span></div>'
+      +'<div class="mr-score-row single"><span class="mr-score-single mr-score-real">'+wc26CardScoreValue(r.a,r.pA)+'</span></div>'
+      +'</div>';
+  }else{
+    /* This is the important bit: score cell gets "-", then pencil comes after it. */
+    return '<div class="match-empty">-</div><div class="match-empty">-</div>';
+  }
+
+  const stateBadge = hasReal ? wc26PrimaryStateBadge(r) : '';
+  return stateBadge
+    ? '<div class="mr-score-wrap '+(p?'':'no-tip')+'"><div class="mr-clock-row">'+stateBadge+'</div><div class="mr-score-lines">'+lines+'</div></div>'
+    : lines;
+}
+
+(function(){
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Undo v63's empty-score hiding; the score cell should show "-" before the pencil. */
+    .matches-main .match-row:not(.predicted) .mr-scores:empty{
+      visibility:visible!important;
+    }
+
+    .matches-main .match-row:not(.predicted) .mr-scores .match-empty{
+      display:block!important;
+      color:#8fa1ad!important;
+      opacity:.9!important;
+      font-weight:950!important;
+      line-height:1!important;
+      text-align:center!important;
+    }
+
+    @media(max-width:720px){
+      .matches-main .match-row:not(.predicted) .mr-scores .match-empty{
+        font-size:clamp(12px,3.8vw,18px)!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
