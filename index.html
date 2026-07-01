@@ -21714,4 +21714,371 @@ wc26EnsureStableModalStatusV92 = wc26EnsureOneModalStatusPillV98;
   run();
 })();
 
+
+/* ===== WC26 v105: community tab calm refresh + modal scroll preservation =====
+   Fix:
+   - community tab ne renderelődjön agresszíven live syncre
+   - community preview modal ne ugorjon a tetejére frissítéskor
+   - active community tab + scrollTop megmarad
+   - "frissítve:" után ne tűnjön el a dátum, ha Firestore pending serverTimestamp/null jön
+*/
+(function(){
+  if(window.__WC26_V105_COMMUNITY_CALM_REFRESH__) return;
+  window.__WC26_V105_COMMUNITY_CALM_REFRESH__ = true;
+
+  const LAST_DATE_BY_ID = window.__WC26_V105_COMMUNITY_DATES__ = window.__WC26_V105_COMMUNITY_DATES__ || {};
+
+  function itemKey(item){
+    return String(item && (item.id || item.uid || item.email || item.displayName) || '');
+  }
+
+  function stableCommunityDate(item){
+    const k = itemKey(item);
+    let d = '';
+    try{ d = communityDate(item && item.updatedAt); }catch(e){ d = ''; }
+    if(d){
+      if(k) LAST_DATE_BY_ID[k] = d;
+      return d;
+    }
+    return k ? (LAST_DATE_BY_ID[k] || '') : '';
+  }
+
+  /* communityDate marad globálisan, de item nélkül nem tud kulcsolni.
+     A renderCommunity/openCommunityTips itt item-szintű stableCommunityDate-et használ. */
+  function communityRowHtmlStable(item, i){
+    let s = communitySummary(item.pred||{}, item.ko||{}), e = s.eff;
+    const date = stableCommunityDate(item);
+    return '<div class="community-row">'
+      +'<div class="community-rank">'+(i+1)+'.</div>'
+      +'<div class="community-user"><img class="community-avatar" src="'+esc(item.photoURL||'')+'" alt="">'
+        +'<div><div class="community-name">'+esc(item.displayName||'Játékos')+'</div>'
+        +'<div class="community-meta">'+communityRankMeta(e)+' · frissítve: '+esc(date || '—')+'</div></div>'
+      +'</div>'
+      +'<div><div class="community-score">'+(e.max?e.pct+'%':'-')+'</div>'
+      +'<button class="community-btn" data-community-view="'+esc(item.id||item.uid)+'">Megnézés</button></div>'
+    +'</div>';
+  }
+
+  function communityPreviewHtmlStable(item){
+    let s = communitySummary(item.pred||{}, item.ko||{});
+    const date = stableCommunityDate(item);
+    const tabs=[
+      {id:'g1',label:'1. kör',html:'<div class="community-list">'+communityMatchRows(item,1)+'</div>'},
+      {id:'g2',label:'2. kör',html:'<div class="community-list">'+communityMatchRows(item,2)+'</div>'},
+      {id:'g3',label:'3. kör',html:'<div class="community-list">'+communityMatchRows(item,3)+'</div>'},
+      {id:'r32',label:'Legjobb 32',html:'<div class="community-list">'+communityKoRows(item,'Legjobb 32')+'</div>'},
+      {id:'r16',label:'Nyolcaddöntő',html:'<div class="community-list">'+communityKoRows(item,'Nyolcaddöntő')+'</div>'},
+      {id:'qf',label:'Negyeddöntő',html:'<div class="community-list">'+communityKoRows(item,'Negyeddöntő')+'</div>'},
+      {id:'sf',label:'Elődöntő',html:'<div class="community-list">'+communityKoRows(item,'Elődöntő')+'</div>'},
+      {id:'finals',label:'Döntők',html:'<div class="community-list">'+communityKoRows(item,['Döntő','Bronzmeccs'])+'</div>'}
+    ];
+    return '<div class="community-modal">'
+      +'<div class="community-modal-head"><div>'
+        +'<h2 class="community-title" style="margin:0">'+esc(item.displayName||'Játékos')+'</h2>'
+        +'<p class="community-lead">'+communityRankMeta(s.eff)+' · frissítve: '+esc(date || '—')+'</p>'
+      +'</div><button class="community-close" type="button">Bezárás</button></div>'
+      +communityStatsHtml(s)
+      +communityTabHtml(tabs)
+    +'</div>';
+  }
+
+  function bindCommunityModal(ov){
+    if(!ov || ov.__v105Bound) return;
+    ov.__v105Bound = true;
+    ov.onclick = e => {
+      if(e.target===ov || e.target.closest('.community-close')){
+        ov.remove();
+        syncModalOpenClass();
+        return;
+      }
+      let b=e.target.closest('[data-community-tab]');
+      if(b){
+        let root=ov.querySelector('.community-modal');
+        if(!root) return;
+        root.querySelectorAll('[data-community-tab]').forEach(x=>x.classList.toggle('active',x===b));
+        root.querySelectorAll('[data-community-panel]').forEach(x=>x.classList.toggle('active',x.dataset.communityPanel===b.dataset.communityTab));
+      }
+    };
+  }
+
+  function refreshOneCommunityPreviewStable(ov){
+    const id = ov && ov.dataset.communityViewId;
+    if(!id) return;
+    const item = wc26CommunityItems.find(x=>x.id===id || x.uid===id);
+    if(!item) return;
+
+    const modal = ov.querySelector('.community-modal');
+    const activeTab = ov.querySelector('[data-community-tab].active')?.dataset.communityTab || 'g1';
+    const scrollTop = modal ? modal.scrollTop : 0;
+
+    ov.innerHTML = communityPreviewHtmlStable(item);
+
+    const newModal = ov.querySelector('.community-modal');
+    if(newModal){
+      newModal.querySelectorAll('[data-community-tab]').forEach(x=>x.classList.toggle('active',x.dataset.communityTab===activeTab));
+      newModal.querySelectorAll('[data-community-panel]').forEach(x=>x.classList.toggle('active',x.dataset.communityPanel===activeTab));
+      newModal.scrollTop = scrollTop;
+      requestAnimationFrame(()=>{ newModal.scrollTop = scrollTop; });
+    }
+
+    bindCommunityModal(ov);
+    activateCrests();
+  }
+
+  window.refreshCommunityPreviews = function(){
+    document.querySelectorAll('.community-preview[data-community-view-id]').forEach(refreshOneCommunityPreviewStable);
+  };
+
+  window.openCommunityTips = function(id){
+    let item=wc26CommunityItems.find(x=>x.id===id||x.uid===id);
+    if(!item) return;
+    document.querySelectorAll('.community-preview').forEach(x=>x.remove());
+    let ov=document.createElement('div');
+    ov.className='community-preview';
+    ov.dataset.communityViewId=id;
+    ov.innerHTML=communityPreviewHtmlStable(item);
+    document.body.appendChild(ov);
+    syncModalOpenClass();
+    bindCommunityModal(ov);
+    activateCrests();
+  };
+
+  window.renderCommunity = function(){
+    let m=document.getElementById('main');
+    if(!m) return;
+    m.className='main community-main';
+    let mine=communitySummary(), configured=wc26FirebaseConfigured(), authHtml='', setupHtml='';
+    let rows=wc26CommunityItems.slice().sort((a,b)=>{
+      let ea=communitySummary(a.pred||{},a.ko||{}).eff, eb=communitySummary(b.pred||{},b.ko||{}).eff;
+      return eb.pct-ea.pct || eb.exact-ea.exact || eb.diff-ea.diff || String(a.displayName||'').localeCompare(String(b.displayName||''));
+    });
+
+    if(!configured){
+      setupHtml='<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba. A közösségi tippek külön Firestore gyűjteménybe mennek: <b>'+WC26_COMMUNITY_COLLECTION+'</b>.</p></section>';
+    }
+
+    authHtml = wc26User
+      ? '<div class="community-user"><img class="community-avatar" src="'+esc(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(wc26User.displayName||wc26User.email||'Játékos')+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button></div>'
+      : '<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!configured?'disabled':'')+'>Belépés Google-lel</button></div>';
+
+    let listHtml=rows.length
+      ? rows.map((item,i)=>communityRowHtmlStable(item,i)).join('')
+      : '<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
+
+    m.innerHTML=setupHtml
+      +'<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+communityStatsHtml(mine)+'</section>'
+      +'<section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
+
+    m.querySelector('#wc26LoginBtn')?.addEventListener('click',wc26SignIn);
+    m.querySelector('#wc26LogoutBtn')?.addEventListener('click',wc26SignOut);
+    m.querySelector('#wc26RenameBtn')?.addEventListener('click',wc26RenameProfile);
+    m.querySelectorAll('[data-community-view]').forEach(b=>b.addEventListener('click',()=>openCommunityTips(b.dataset.communityView)));
+    activateCrests();
+    syncSpacer();
+  };
+
+  /* Rewire Firestore listener: snapshot ne rángassa a community modalt / tabot. */
+  try{
+    if(wc26CommunityUnsub){
+      wc26CommunityUnsub();
+      wc26CommunityUnsub = null;
+    }
+  }catch(e){}
+
+  window.listenCommunityTips = function(){
+    if(!wc26Db || wc26CommunityUnsub) return;
+    try{
+      wc26CommunityUnsub = wc26Db.collection(WC26_COMMUNITY_COLLECTION).orderBy('updatedAt','desc').limit(80).onSnapshot(snap=>{
+        wc26CommunityItems = snap.docs.map(d=>({id:d.id,...d.data()}));
+
+        /* Ha preview/modal nyitva van, csak azt frissítjük scroll-preserve-vel. */
+        if(document.querySelector('.community-preview[data-community-view-id]')){
+          refreshCommunityPreviews();
+          return;
+        }
+
+        /* Ha csak a közösség tab aktív, akkor oké egy sima lista-render. */
+        if(S.tab==='community') renderCommunity();
+      }, e=>{
+        wc26BackendError=e.message||String(e);
+        if(S.tab==='community' && !document.querySelector('.community-preview')) renderCommunity();
+      });
+    }catch(e){
+      wc26BackendError=e.message||String(e);
+    }
+  };
+
+  if(wc26Db) listenCommunityTips();
+
+  /* Live-result repaint ne renderelje újra a community tabot 30 mp-enként / snapshotonként. */
+  window.wc26SafeLiveRepaintV58 = function(){
+    try{
+      if(typeof patchKoCards==='function' && S?.tab==='knockout') patchKoCards();
+
+      if(S?.tab==='matches' || S?.tab==='overview' || S?.tab==='stats'){
+        if(typeof render==='function') render();
+      }
+
+      if(document.querySelector('.tip-overlay[data-tip-id]') && typeof refreshOpenTipModal==='function'){
+        refreshOpenTipModal();
+      }
+
+      if(document.querySelector('.community-preview[data-community-view-id]')){
+        refreshCommunityPreviews();
+      }
+
+      if(typeof activateCrests==='function') activateCrests();
+    }catch(e){
+      console.warn('WC26 v105 repaint failed',e);
+    }
+  };
+
+  const st=document.createElement('style');
+  st.textContent=`
+    .community-preview .community-modal{
+      scroll-behavior:auto!important;
+      overflow-anchor:none!important;
+    }
+    .community-preview,
+    .community-preview *{
+      transition-property:background-color,border-color,color,box-shadow,transform!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v108: ONLY community realtime off + KO modal background freeze =====
+   NINCS low-read mód.
+   NINCS live listener kikapcsolás.
+   NINCS Worker /results 45/120 mp-es átállítás.
+   NINCS community limit10-es erőltetés.
+   Csak:
+   - community ranking onSnapshot OFF
+   - KO modal alatt háttér bracket score freeze
+*/
+
+(function(){
+  if(window.__WC26_V108_COMMUNITY_ONLY_RT_OFF__) return;
+  window.__WC26_V108_COMMUNITY_ONLY_RT_OFF__ = true;
+
+  /* ---------- A) Csak a community realtime listenert kapcsoljuk ki ---------- */
+
+  function stopCommunityRealtimeV108(){
+    try{
+      if(wc26CommunityUnsub){
+        wc26CommunityUnsub();
+        wc26CommunityUnsub = null;
+      }
+    }catch(e){}
+  }
+
+  window.listenCommunityTips = function(){
+    stopCommunityRealtimeV108();
+    return false;
+  };
+
+  /*
+    Fontos:
+    - loadCommunityTips marad a v105-ös normál get-es frissítésen.
+    - live listener marad.
+    - own user tip listener marad.
+    - syncLiveResults / scheduleLiveSync nincs felülírva.
+  */
+
+  stopCommunityRealtimeV108();
+  setTimeout(stopCommunityRealtimeV108, 500);
+  setTimeout(stopCommunityRealtimeV108, 1500);
+  setTimeout(stopCommunityRealtimeV108, 3500);
+
+  /* ---------- B) KO modal alatt a háttér bracket score ne tűnjön el ---------- */
+
+  const KO_BG = window.__WC26_V108_KO_BG_SNAPSHOT__ = window.__WC26_V108_KO_BG_SNAPSHOT__ || {};
+
+  function koModalOpenV108(){
+    return !!document.querySelector('.tip-overlay[data-tip-kind="ko"]');
+  }
+
+  function snapshotKoBackgroundV108(){
+    if(S?.tab !== 'knockout') return;
+    document.querySelectorAll('.ko-card[data-koid]').forEach(card=>{
+      const id = card.dataset.koid;
+      if(!id) return;
+      const txt = card.textContent || '';
+      if(/\d/.test(txt)){
+        KO_BG[id] = card.innerHTML;
+      }
+    });
+  }
+
+  function restoreKoBackgroundV108(){
+    if(S?.tab !== 'knockout' || !koModalOpenV108()) return;
+    document.querySelectorAll('.ko-card[data-koid]').forEach(card=>{
+      const id = card.dataset.koid;
+      if(!id || !KO_BG[id]) return;
+
+      const now = card.textContent || '';
+      const had = KO_BG[id] || '';
+      const nowDigits = (now.match(/\d/g)||[]).length;
+      const hadDigits = (had.match(/\d/g)||[]).length;
+
+      if(hadDigits && nowDigits < hadDigits){
+        card.innerHTML = KO_BG[id];
+        try{ activateCrests(); }catch(e){}
+      }
+    });
+  }
+
+  const baseOpenKoV108 = typeof openKoTip === 'function' ? openKoTip : null;
+  if(baseOpenKoV108 && !openKoTip.__v108Wrapped){
+    openKoTip = function(){
+      snapshotKoBackgroundV108();
+      const out = baseOpenKoV108.apply(this, arguments);
+      snapshotKoBackgroundV108();
+      setTimeout(restoreKoBackgroundV108, 0);
+      setTimeout(restoreKoBackgroundV108, 80);
+      return out;
+    };
+    openKoTip.__v108Wrapped = true;
+  }
+
+  const basePatchKoCardsV108 = typeof patchKoCards === 'function' ? patchKoCards : null;
+  if(basePatchKoCardsV108 && !patchKoCards.__v108Wrapped){
+    patchKoCards = function(){
+      if(koModalOpenV108() && S?.tab === 'knockout'){
+        restoreKoBackgroundV108();
+        return false;
+      }
+      return basePatchKoCardsV108.apply(this, arguments);
+    };
+    patchKoCards.__v108Wrapped = true;
+  }
+
+  const baseRenderV108 = typeof render === 'function' ? render : null;
+  if(baseRenderV108 && !render.__v108Wrapped){
+    render = function(){
+      if(koModalOpenV108() && S?.tab === 'knockout'){
+        restoreKoBackgroundV108();
+        return false;
+      }
+      return baseRenderV108.apply(this, arguments);
+    };
+    render.__v108Wrapped = true;
+  }
+
+  const st = document.createElement('style');
+  st.textContent = `
+    body.modal-open .ko-card .ko-score,
+    body.modal-open .ko-card .ko-real-pack,
+    body.modal-open .ko-card .ko-tip-ind,
+    body.modal-open .ko-card .ko-score *{
+      opacity:1!important;
+      visibility:visible!important;
+      transition:none!important;
+      animation:none!important;
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
