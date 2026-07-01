@@ -20456,4 +20456,701 @@ function wc26EnsureOnlyOnePenBadgeV94(){
   }, 1000);
 })();
 
+
+/* ===== WC26 v97: KO no-pen match-card gap corrected =====
+   v96 túl szoros lett: 0 és 1 gyakorlatilag összeragadt.
+   Most a KO no-pen actual-vs-tip gap visszamegy a használható csoportkörös tartományba.
+   Penaltys KO gap továbbra is nagyobb marad.
+*/
+(function(){
+  if(window.__WC26_V97_KO_GOOD_GAP__) return;
+  window.__WC26_V97_KO_GOOD_GAP__ = true;
+
+  const st = document.createElement('style');
+  st.textContent = `
+    /* KO, no penalty: jó/normál gap, ne ragadjon össze a valós és tipp érték. */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare:not(.v96-pen-gap):not(.v95-has-pen) .mr-score-row{
+      display:inline-grid!important;
+      grid-template-columns:auto auto!important;
+      width:auto!important;
+      min-width:max-content!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:clamp(7px,.62vw,12px)!important;
+      column-gap:clamp(7px,.62vw,12px)!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+    }
+
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-tip,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare:not(.v96-pen-gap):not(.v95-has-pen) .mr-score-real,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare:not(.v96-pen-gap):not(.v95-has-pen) .mr-score-tip{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      min-width:max-content!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+      gap:1px!important;
+    }
+
+    /* KO, penalty: továbbra is nagyobb gap, mert ott a zárójeles 11-es számok miatt kell levegő. */
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-row{
+      gap:clamp(13px,1.25vw,22px)!important;
+      column-gap:clamp(13px,1.25vw,22px)!important;
+      min-width:max-content!important;
+    }
+
+    @media(max-width:720px){
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-no-pen-gap .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-no-pen .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-compare:not(.v96-pen-gap):not(.v95-has-pen) .mr-score-row{
+        gap:6px!important;
+        column-gap:6px!important;
+      }
+
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v96-pen-gap .mr-score-row,
+      .matches-main .match-row[data-ko-mid] .mr-score-compare.v95-has-pen .mr-score-row{
+        gap:11px!important;
+        column-gap:11px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+/* ===== WC26 v98: one penalty segment + one stable PEN/FT/HT pill =====
+   Fix:
+   - no more repeated "Valós büntetők" cards
+   - all older penalty segment renderers are redirected to this single renderer
+   - PEN/FT/HT modal pill is one persistent element and cannot blink out
+*/
+
+function wc26ModalActualResultV98(){
+  const ov = document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]');
+  if(!ov) return {ov:null,id:'',r:null};
+  const id = ov.dataset.tipId || ov.dataset.koid || ov.dataset.matchId || '';
+  const r = id ? actualFor({id}) : null;
+  return {ov,id,r};
+}
+
+function wc26PenaltyPhaseV98(r){
+  if(!r) return false;
+  const blob = String([
+    r.status, r.minute, r.period, r.shortDetail, r.detail,
+    r.displayClock, r.statusText, r.statusType, r.state,
+    r.name, r.description
+  ].filter(v=>v!=null).join(' ')).toUpperCase();
+
+  return wc26HasPenScore(r) ||
+    blob.includes('PENAL') ||
+    /\bPEN\b/.test(blob) ||
+    /\bAP\b/.test(blob) ||
+    blob.includes('SHOOTOUT');
+}
+
+function wc26ModalStatusLabelV98(r){
+  if(!r) return '';
+  if(wc26PenaltyPhaseV98(r)) return 'PEN';
+  try{
+    const v = wc26PrimaryMatchState(r);
+    if(v) return v;
+  }catch(e){}
+  if(r.finished) return 'FT';
+  try{
+    if(typeof wc26IsHalfTimeV90 === 'function' && wc26IsHalfTimeV90(r)) return 'HT';
+  }catch(e){}
+  try{return liveClockLabel(r) || '';}catch(e){return '';}
+}
+
+function wc26CleanupPenaltyDuplicatesV98(ov){
+  if(!ov) return;
+
+  /* Hide the old original box. */
+  ov.querySelectorAll('.penalty-box.locked-real-pen').forEach(el=>{
+    el.classList.add('v98-old-pen-hidden');
+    el.style.display = 'none';
+  });
+
+  /* Remove every previous custom penalty-card implementation except one v98 card. */
+  const cards = Array.from(ov.querySelectorAll('.pen-v91-card,.pen-v94-card,.pen-v98-card'));
+  let keep = null;
+  cards.forEach(card=>{
+    if(card.classList.contains('pen-v98-card') && !keep){
+      keep = card;
+    }else{
+      card.remove();
+    }
+  });
+
+  /* Remove older compact rows inside old boxes/cards. */
+  ov.querySelectorAll('.pen-compact-v86,.pen-compact-v87,.pen-v90').forEach(el=>el.remove());
+  ov.querySelectorAll('.pen-v91-live-dot,.pen-v91-penonly,.wc26-status-pill.pen').forEach(el=>el.remove());
+
+  return keep;
+}
+
+function wc26RenderSinglePenaltySegmentV98(){
+  const {ov,r} = wc26ModalActualResultV98();
+  if(!ov) return;
+
+  let card = wc26CleanupPenaltyDuplicatesV98(ov);
+  const odds = ov.querySelector('.tip-prob-card');
+
+  if(!odds){
+    if(card) card.remove();
+    return;
+  }
+
+  const hasScore = r && validScore(r.pH) && validScore(r.pA);
+  const isPen = r && wc26PenaltyPhaseV98(r);
+
+  /* If there is no penalty score yet, no separate card. PEN is shown only in the status pill. */
+  if(!isPen || !hasScore){
+    if(card) card.remove();
+    return;
+  }
+
+  if(!card){
+    card = document.createElement('div');
+    card.className = 'pen-v98-card';
+  }
+
+  if(card.parentNode !== odds.parentNode || card.nextElementSibling !== odds){
+    odds.parentNode.insertBefore(card, odds);
+  }
+
+  const live = !!(r && !r.finished && wc26PenaltyPhaseV98(r));
+  card.dataset.live = live ? '1' : '0';
+  card.innerHTML =
+    '<div class="pen-v98-inner">'
+      +'<span class="pen-v98-label">'+esc(live ? 'Tizenegyespárbaj' : 'Valós büntetők')+'</span>'
+      +'<span class="pen-v98-score"><b>'+esc(r.pH)+'</b><em>–</em><b>'+esc(r.pA)+'</b></span>'
+    +'</div>';
+}
+
+function wc26EnsureOneModalStatusPillV98(){
+  const {ov,r} = wc26ModalActualResultV98();
+  if(!ov) return;
+
+  const label = wc26ModalStatusLabelV98(r);
+  if(!label) return;
+
+  let box = ov.querySelector('.tip-below-score');
+  if(!box){
+    const match = ov.querySelector('.tip-match');
+    if(!match) return;
+    box = document.createElement('div');
+    box.className = 'tip-below-score';
+    match.appendChild(box);
+  }
+
+  /* Remove/hide all older clock/status pills, including the v92 one if it is not ours. */
+  box.querySelectorAll('.tip-live-clock,.wc26-v92-modal-state,.wc26-primary-state-badge').forEach(el=>{
+    if(!el.classList.contains('wc26-v98-modal-state')){
+      el.remove();
+    }
+  });
+
+  let pill = box.querySelector('.wc26-v98-modal-state');
+  if(!pill){
+    pill = document.createElement('span');
+    pill.className = 'tip-live-clock wc26-v98-modal-state';
+    box.insertBefore(pill, box.firstChild);
+  }else if(box.firstChild !== pill){
+    box.insertBefore(pill, box.firstChild);
+  }
+
+  pill.textContent = label;
+  pill.dataset.state = String(label).toLowerCase();
+  pill.style.display = 'inline-flex';
+  pill.style.opacity = '1';
+  pill.style.visibility = 'visible';
+}
+
+function wc26ModalPenaltyAndStatusV98(){
+  wc26RenderSinglePenaltySegmentV98();
+  wc26EnsureOneModalStatusPillV98();
+}
+
+/* Redirect older renderers so their existing timers stop creating duplicates. */
+wc26RenderPenaltySegmentV91 = wc26RenderSinglePenaltySegmentV98;
+wc26RenderPenaltySegmentV94 = wc26RenderSinglePenaltySegmentV98;
+wc26RewriteLockedPenaltySegmentV90 = wc26RenderSinglePenaltySegmentV98;
+wc26CompactLockedPenaltyV86 = wc26RenderSinglePenaltySegmentV98;
+wc26TinyPenaltySummaryV87 = wc26RenderSinglePenaltySegmentV98;
+wc26EnsureOnlyOnePenBadgeV94 = wc26EnsureOneModalStatusPillV98;
+wc26EnsureStableModalStatusV92 = wc26EnsureOneModalStatusPillV98;
+
+(function(){
+  if(window.__WC26_V98_SINGLE_PEN_SEGMENT__) return;
+  window.__WC26_V98_SINGLE_PEN_SEGMENT__ = true;
+
+  const run = () => {
+    wc26ModalPenaltyAndStatusV98();
+    setTimeout(wc26ModalPenaltyAndStatusV98, 40);
+    setTimeout(wc26ModalPenaltyAndStatusV98, 140);
+  };
+
+  const wrap = (name) => {
+    try{
+      const fn = window[name] || eval(name);
+      if(typeof fn !== 'function' || fn.__v98Wrapped) return;
+      const wrapped = function(){
+        const out = fn.apply(this, arguments);
+        run();
+        return out;
+      };
+      wrapped.__v98Wrapped = true;
+      window[name] = wrapped;
+      try{ eval(name + ' = window[name]'); }catch(e){}
+    }catch(e){}
+  };
+
+  wrap('openTip');
+  wrap('openKoTip');
+  wrap('refreshOpenTipModal');
+  wrap('mergeLiveResults');
+  wrap('patchLiveRows');
+
+  if(window.__WC26_V98_MODAL_TIMER__) clearInterval(window.__WC26_V98_MODAL_TIMER__);
+  window.__WC26_V98_MODAL_TIMER__ = setInterval(()=>{
+    if(document.querySelector('.tip-overlay[data-tip-kind="ko"], .tip-overlay[data-tip-id]')){
+      wc26ModalPenaltyAndStatusV98();
+    }
+  }, 220);
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .tip-overlay .penalty-box.locked-real-pen.v98-old-pen-hidden,
+    .tip-overlay .penalty-box.locked-real-pen,
+    .tip-overlay .pen-v91-card,
+    .tip-overlay .pen-v94-card,
+    .tip-overlay .pen-compact-v86,
+    .tip-overlay .pen-compact-v87,
+    .tip-overlay .pen-v90,
+    .tip-overlay .pen-v91-live-dot,
+    .tip-overlay .pen-v91-penonly,
+    .tip-overlay .wc26-status-pill.pen{
+      display:none!important;
+    }
+
+    .pen-v98-card{
+      display:block!important;
+      margin:clamp(12px,3.2vw,18px) clamp(16px,4vw,24px) 0!important;
+      border:1px solid rgba(255,104,128,.38)!important;
+      background:linear-gradient(90deg,rgba(255,104,128,.09),rgba(10,18,24,.98))!important;
+      border-radius:14px!important;
+      overflow:hidden!important;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.025)!important;
+    }
+
+    .pen-v98-card[data-live="1"]{
+      border-color:rgba(255,194,90,.42)!important;
+      background:linear-gradient(90deg,rgba(255,194,90,.08),rgba(10,18,24,.98))!important;
+    }
+
+    .pen-v98-inner{
+      min-height:clamp(38px,4.2vw,52px)!important;
+      padding:clamp(8px,2vw,12px) clamp(12px,3vw,18px)!important;
+      display:flex!important;
+      align-items:center!important;
+      justify-content:space-between!important;
+      gap:12px!important;
+      box-sizing:border-box!important;
+      line-height:1!important;
+    }
+
+    .pen-v98-label{
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+      color:#f2f6f8!important;
+      font-size:clamp(13px,2.9vw,16px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+    }
+
+    .pen-v98-score{
+      flex:0 0 auto!important;
+      display:inline-flex!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:7px!important;
+      white-space:nowrap!important;
+      color:#ff6f8d!important;
+      line-height:1!important;
+    }
+
+    .pen-v98-card[data-live="1"] .pen-v98-score{
+      color:#ffc25a!important;
+    }
+
+    .pen-v98-score b{
+      color:currentColor!important;
+      font-size:clamp(22px,5.2vw,30px)!important;
+      font-weight:950!important;
+      line-height:1!important;
+    }
+
+    .pen-v98-score em{
+      color:#8fa1ad!important;
+      font-size:clamp(14px,3vw,18px)!important;
+      font-style:normal!important;
+      font-weight:950!important;
+      line-height:1!important;
+    }
+
+    .tip-below-score .tip-live-clock:not(.wc26-v98-modal-state),
+    .tip-below-score .wc26-v92-modal-state:not(.wc26-v98-modal-state),
+    .tip-below-score .wc26-primary-state-badge:not(.wc26-v98-modal-state){
+      display:none!important;
+    }
+
+    .tip-below-score .wc26-v98-modal-state{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:46px!important;
+      height:26px!important;
+      padding:0 12px!important;
+      margin:0 auto 3px!important;
+      border-radius:999px!important;
+      background:rgba(255,104,128,.16)!important;
+      border:1px solid rgba(255,104,128,.44)!important;
+      color:#ff7b92!important;
+      font-size:14px!important;
+      font-weight:950!important;
+      line-height:1!important;
+      letter-spacing:.02em!important;
+      opacity:1!important;
+      visibility:visible!important;
+      white-space:nowrap!important;
+      transition:none!important;
+      animation:none!important;
+    }
+
+    .tip-below-score .wc26-v98-modal-state[data-state="ht"],
+    .tip-below-score .wc26-v98-modal-state[data-state="pen"]{
+      background:rgba(255,194,90,.16)!important;
+      border-color:rgba(255,194,90,.42)!important;
+      color:#ffc25a!important;
+    }
+
+    @media(max-width:720px){
+      .pen-v98-card{
+        margin:10px 14px 0!important;
+        border-radius:13px!important;
+      }
+      .pen-v98-inner{
+        min-height:36px!important;
+        padding:8px 10px!important;
+        gap:9px!important;
+      }
+      .pen-v98-label{font-size:12.5px!important;}
+      .pen-v98-score{gap:6px!important;}
+      .pen-v98-score b{font-size:23px!important;}
+      .pen-v98-score em{font-size:14px!important;}
+
+      .tip-below-score .wc26-v98-modal-state{
+        min-width:42px!important;
+        height:24px!important;
+        padding:0 10px!important;
+        font-size:13px!important;
+        margin-bottom:2px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+
+  run();
+})();
+
+
+/* ===== WC26 v99: slightly bigger modal status pill =====
+   FT / HT / PEN / live minute pill in the match modal: ici-picivel nagyobb.
+*/
+(function(){
+  if(window.__WC26_V99_BIGGER_MODAL_PILL__) return;
+  window.__WC26_V99_BIGGER_MODAL_PILL__ = true;
+
+  const st = document.createElement('style');
+  st.textContent = `
+    .tip-below-score .wc26-v98-modal-state,
+    .tip-below-score .wc26-v92-modal-state,
+    .tip-below-score .tip-live-clock.wc26-v98-modal-state{
+      min-width:52px!important;
+      height:29px!important;
+      padding:0 14px!important;
+      font-size:15px!important;
+      border-radius:999px!important;
+      line-height:1!important;
+    }
+
+    @media(max-width:720px){
+      .tip-below-score .wc26-v98-modal-state,
+      .tip-below-score .wc26-v92-modal-state,
+      .tip-below-score .tip-live-clock.wc26-v98-modal-state{
+        min-width:46px!important;
+        height:26px!important;
+        padding:0 11px!important;
+        font-size:14px!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
+
+
+/* ===== WC26 v100: no bracket flicker + crowded KO tips shifted inward ===== */
+(function(){
+  if(window.__WC26_V100_NO_KO_FLICKER__) return;
+  window.__WC26_V100_NO_KO_FLICKER__ = true;
+
+  const LAST_KO = window.__WC26_V100_LAST_GOOD_KO__ = window.__WC26_V100_LAST_GOOD_KO__ || {};
+  const LAST_TS = window.__WC26_V100_LAST_GOOD_KO_TS__ = window.__WC26_V100_LAST_GOOD_KO_TS__ || {};
+  const CACHE_TTL = 8000; // enough to survive refresh jitter, not enough to keep deleted tips forever
+
+  function clonePred(p){
+    if(!p || !validScore(p.h) || !validScore(p.a)) return null;
+    const out = { h:+p.h, a:+p.a };
+    if(validScore(p.pH)) out.pH = +p.pH;
+    if(validScore(p.pA)) out.pA = +p.pA;
+    out.pen = (+out.h===+out.a && validScore(out.pH) && validScore(out.pA));
+    return out;
+  }
+
+  function rememberKo(id,p){
+    const c = clonePred(p);
+    if(!id || !c) return c;
+    LAST_KO[id] = c;
+    LAST_TS[id] = Date.now();
+    return c;
+  }
+
+  function readKoStable(id){
+    let live = null;
+    try{ live = (typeof koPred === 'function') ? koPred(id) : null; }catch(e){ live = null; }
+    if(clonePred(live)) return rememberKo(id, live);
+
+    const raw = KO_PRED && KO_PRED[id] ? KO_PRED[id] : null;
+    if(clonePred(raw)) return rememberKo(id, raw);
+
+    const cached = LAST_KO[id];
+    const ts = LAST_TS[id] || 0;
+    if(clonePred(cached) && (Date.now() - ts) < CACHE_TTL) return cached;
+    return null;
+  }
+
+  window.wc26KoPredStableForBracket = readKoStable;
+
+  const baseDeleteKo = typeof wc26DeleteKoTip === 'function' ? wc26DeleteKoTip : null;
+  if(baseDeleteKo && !baseDeleteKo.__v100Wrapped){
+    wc26DeleteKoTip = async function(id){
+      delete LAST_KO[id];
+      delete LAST_TS[id];
+      return await baseDeleteKo.apply(this, arguments);
+    };
+    wc26DeleteKoTip.__v100Wrapped = true;
+  }
+
+  const basePersist = typeof wc26PersistTipsNow === 'function' ? wc26PersistTipsNow : null;
+  if(basePersist && !basePersist.__v100Wrapped){
+    wc26PersistTipsNow = async function(){
+      const res = await basePersist.apply(this, arguments);
+      try{
+        Object.keys(LAST_KO).forEach(id=>{
+          if(!KO_PRED || !KO_PRED[id]){
+            const age = Date.now() - (LAST_TS[id]||0);
+            if(age > CACHE_TTL) { delete LAST_KO[id]; delete LAST_TS[id]; }
+          }
+        });
+      }catch(e){}
+      return res;
+    };
+    wc26PersistTipsNow.__v100Wrapped = true;
+  }
+
+  // Override bracket renderers only.
+  wc26KoTipInline = function(score,pen){
+    if(!validScore(score)) return '';
+    return '<span class="ko-tip-ind v100-tip"><span class="ko-tip-main">'+esc(score)+'</span>'+(validScore(pen)?'<span class="ko-tip-pen">('+esc(pen)+')</span>':'')+'</span>';
+  };
+
+  koTeamLine = function(team,seed,score,cls,pen,tipScore,tipPen){
+    if(!team) return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';
+    const hasTip = validScore(tipScore), hasRealPen = pen!=null, hasTipPen = validScore(tipPen);
+    const crowded = hasRealPen && hasTipPen;
+    return '<div class="ko-team '+(cls||'')+' '+(crowded?'v100-crowded ':'')+'">'
+      + crest(team,'22px')
+      + '<span class="ko-name">'+esc(team)+'</span>'
+      + '<span class="ko-score v100-inline '+(hasTip?'has-tip ':'')+(hasRealPen?'has-real-pen ':'')+(hasTipPen?'has-tip-pen ':'')+(crowded?'has-double-pen ':'')+'">'
+          + '<span class="ko-real-pack"><b>'+(score==null?'-':score)+'</b>'+(hasRealPen?'<small class="ko-pen">('+pen+')</small>':'')+'</span>'
+          + wc26KoTipInline(tipScore,tipPen)
+      + '</span>'
+    + '</div>';
+  };
+
+  koCard = function(m,row){
+    var r=LIVE_RESULTS[m.id],hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),p=readKoStable(m.id);
+    var dh=hasReal?+r.h:(p?p.h:null),da=hasReal?+r.a:(p?p.a:null);
+    var dph=hasReal?(validScore(r.pH)?+r.pH:null):(p&&p.pen?p.pH:null),dpa=hasReal?(validScore(r.pA)?+r.pA:null):(p&&p.pen?p.pA:null);
+    var realHasPen=hasReal&&validScore(r.pH)&&validScore(r.pA)&&+r.h===+r.a;
+    var tipHasPen=p&&validScore(p.h)&&validScore(p.a)&&+p.h===+p.a&&validScore(p.pH)&&validScore(p.pA);
+    var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;
+    if(dh!=null&&da!=null&&m.h&&m.a){if(dh!==da)w=dh>da?m.h:m.a;else if(hasPen&&dph!==dpa)w=dph>dpa?m.h:m.a;}
+    var hw=w===m.h,aw=w===m.a,rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';
+    var sc=wc26KoCardGrade(m),cls=[];
+    if(hasReal)cls.push('live-result'); else if(p)cls.push('predicted pending-tip no-real-result');
+    if(hasReal&&sc.cat==='exact')cls.push('result-exact');
+    else if(hasReal&&sc.cat==='diff')cls.push('result-diff');
+    else if(hasReal&&sc.cat==='outcome')cls.push('result-outcome');
+    else if(hasReal&&sc.cat==='miss')cls.push('result-miss');
+    if(hasReal&&p)cls.push('has-score-compare');
+    if(hasReal&&p&&realHasPen&&tipHasPen)cls.push('has-double-pen');
+    if(m.locked)cls.push('locked');
+    const tipHome=(hasReal&&p)?p.h:null, tipAway=(hasReal&&p)?p.a:null;
+    const tipPenHome=(hasReal&&tipHasPen)?p.pH:null, tipPenAway=(hasReal&&tipHasPen)?p.pA:null;
+    return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'
+      + koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,tipHome,tipPenHome)
+      + koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,tipAway,tipPenAway)
+      + '</div>';
+  };
+
+  const st = document.createElement('style');
+  st.textContent = `
+    /* No opacity/animation jitter in bracket score rails. */
+    .ko-card .ko-team,
+    .ko-card .ko-name,
+    .ko-card .ko-score,
+    .ko-card .ko-real-pack,
+    .ko-card .ko-tip-ind,
+    .ko-card .ko-tip-ind .ko-tip-pen,
+    .ko-card .ko-score b,
+    .ko-card .ko-score small{
+      transition:none!important;
+      animation:none!important;
+      opacity:1!important;
+      visibility:visible!important;
+    }
+
+    /* Normal KO score gap: same compact feel as group-stage cards when there is NO penalty clutter. */
+    .matches-main .match-row[data-ko-mid]:not(.result-exact):not(.result-diff):not(.result-outcome):not(.result-miss) .mr-scores{gap:clamp(6px,.62vw,10px)!important;}
+    .matches-main .match-row[data-ko-mid] .mr-score-compare:not(.has-double-pen),
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only:not(.has-double-pen),
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only:not(.has-double-pen){
+      gap:clamp(5px,.52vw,8px)!important;
+    }
+    .matches-main .match-row[data-ko-mid] .mr-score-compare:not(.has-double-pen) .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-tip-only:not(.has-double-pen) .mr-score-row,
+    .matches-main .match-row[data-ko-mid] .mr-score-actual-only:not(.has-double-pen) .mr-score-row{
+      gap:clamp(6px,.55vw,10px)!important;
+      column-gap:clamp(6px,.55vw,10px)!important;
+    }
+
+    /* Bracket cards: keep everything on one line, but shift crowded penalty comparisons leftwards inside the card. */
+    .ko-card{
+      overflow:hidden!important;
+    }
+    .ko-card.has-score-compare{--ko-card-score-col:76px!important;}
+    .ko-card.has-double-pen{--ko-card-score-col:82px!important;}
+    .ko-card .ko-team{
+      grid-template-columns:var(--ko-card-crest) minmax(0,1fr) var(--ko-card-score-col)!important;
+      overflow:hidden!important;
+      gap:5px!important;
+      padding-right:6px!important;
+    }
+    .ko-card .ko-name{
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+    }
+    .ko-card .ko-score.v100-inline,
+    .ko-card .ko-score.v90-inline,
+    .ko-card .ko-score.v87-inline,
+    .ko-card .ko-score.v86-stack,
+    .ko-card .ko-score.v85-rail,
+    .ko-card .ko-score.v84-rail{
+      width:var(--ko-card-score-col)!important;
+      min-width:var(--ko-card-score-col)!important;
+      max-width:var(--ko-card-score-col)!important;
+      display:inline-flex!important;
+      flex-direction:row!important;
+      align-items:baseline!important;
+      justify-content:flex-end!important;
+      gap:0!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+      transform:none!important;
+      overflow:visible!important;
+    }
+    .ko-card .ko-real-pack,
+    .ko-card .ko-tip-ind.v100-tip{
+      display:inline-flex!important;
+      align-items:baseline!important;
+      white-space:nowrap!important;
+      line-height:1!important;
+      flex:0 0 auto!important;
+    }
+    .ko-card .ko-real-pack{gap:1px!important;justify-content:flex-end!important;}
+    .ko-card .ko-tip-ind.v100-tip{gap:1px!important;margin-left:4px!important;justify-content:flex-end!important;color:#f4f7fb!important;font-weight:950!important;}
+    .ko-card .ko-real-pack b{font-size:.98em!important;font-weight:950!important;line-height:1!important;}
+    .ko-card .ko-real-pack .ko-pen{font-size:.56em!important;margin-left:1px!important;line-height:1!important;font-weight:950!important;}
+    .ko-card .ko-tip-ind.v100-tip .ko-tip-main{font-size:.92em!important;line-height:1!important;font-weight:950!important;}
+    .ko-card .ko-tip-ind.v100-tip .ko-tip-pen{font-size:.56em!important;margin-left:1px!important;line-height:1!important;font-weight:950!important;color:#ffc15a!important;}
+
+    /* Crowded tip+real-pen cards: steal a bit more space from names and pull the score block inward. */
+    .ko-card.has-double-pen .ko-team{padding-right:9px!important;}
+    .ko-card.has-double-pen .ko-name{padding-right:2px!important;}
+    .ko-card.has-double-pen .ko-score.v100-inline,
+    .ko-card.has-double-pen .ko-score.v90-inline,
+    .ko-card.has-double-pen .ko-score.v87-inline,
+    .ko-card.has-double-pen .ko-score.v86-stack,
+    .ko-card.has-double-pen .ko-score.v85-rail,
+    .ko-card.has-double-pen .ko-score.v84-rail{
+      justify-content:flex-start!important;
+      transform:translateX(-8px)!important;
+      letter-spacing:-.04em!important;
+    }
+    .ko-card.has-double-pen .ko-tip-ind.v100-tip{margin-left:3px!important;}
+    .ko-card.has-double-pen .ko-real-pack b{font-size:.94em!important;}
+    .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-main{font-size:.88em!important;}
+    .ko-card.has-double-pen .ko-real-pack .ko-pen,
+    .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-pen{font-size:.50em!important;}
+
+    @media(max-width:720px){
+      .ko-card.has-score-compare{--ko-card-score-col:72px!important;}
+      .ko-card.has-double-pen{--ko-card-score-col:78px!important;}
+      .ko-card .ko-team{gap:4px!important;padding-right:5px!important;}
+      .ko-card .ko-tip-ind.v100-tip{margin-left:3px!important;}
+      .ko-card .ko-real-pack b{font-size:.96em!important;}
+      .ko-card .ko-real-pack .ko-pen{font-size:.52em!important;}
+      .ko-card .ko-tip-ind.v100-tip .ko-tip-main{font-size:.88em!important;}
+      .ko-card .ko-tip-ind.v100-tip .ko-tip-pen{font-size:.52em!important;}
+      .ko-card.has-double-pen .ko-team{padding-right:8px!important;}
+      .ko-card.has-double-pen .ko-score.v100-inline,
+      .ko-card.has-double-pen .ko-score.v90-inline,
+      .ko-card.has-double-pen .ko-score.v87-inline,
+      .ko-card.has-double-pen .ko-score.v86-stack,
+      .ko-card.has-double-pen .ko-score.v85-rail,
+      .ko-card.has-double-pen .ko-score.v84-rail{transform:translateX(-9px)!important;}
+      .ko-card.has-double-pen .ko-real-pack b{font-size:.92em!important;}
+      .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-main{font-size:.84em!important;}
+      .ko-card.has-double-pen .ko-real-pack .ko-pen,
+      .ko-card.has-double-pen .ko-tip-ind.v100-tip .ko-tip-pen{font-size:.48em!important;}
+    }
+  `;
+  document.head.appendChild(st);
+})();
+
 </script></body></html>
