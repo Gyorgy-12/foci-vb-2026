@@ -12113,309 +12113,674 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v135: overview top stats from every match-modal live event ===== */
+/* ===== WC26 v135 SAFE: no buildKO/calcFairPlay recursion on overview ===== */
 (function(){
-  if(window.__WC26_V135_OVERVIEW_TOP_STATS_ALL_EVENTS__) return;
-  window.__WC26_V135_OVERVIEW_TOP_STATS_ALL_EVENTS__ = true;
+  if(window.__WC26_V135_SAFE_NO_FREEZE__) return;
+  window.__WC26_V135_SAFE_NO_FREEZE__ = true;
 
-  function wc26PlainArrV135(v){
-    if(Array.isArray(v))return v;
+  function arr(v){
+    if(Array.isArray(v)) return v;
     if(typeof v==='string'){
-      try{
-        const x=JSON.parse(v);
-        return Array.isArray(x)?x:[];
-      }catch(e){return[];}
+      try{ const x=JSON.parse(v); return Array.isArray(x)?x:[]; }catch(e){ return []; }
     }
     return [];
   }
 
-  function wc26OverviewKoPoolV135(){
-    /*
-      v135 hotfix: NEM hívunk buildKO()-t az overview top statokhoz.
-      A buildKO() -> thirdRows() -> cmpTeam() -> calcFairPlay() útvonal innen
-      visszajutott ugyanide, és ettől az oldal főszála be tudott akadni.
-      Itt csak a már létező KO schedule / live result / KO tip adatokból építünk
-      könnyű, statisztikához elég match-listát.
-    */
-    const out=[],seen=new Set();
-    const safeTeam=v=>{
-      const x=String(v||'').trim();
-      if(!x||x==='TBD'||x==='null'||x==='undefined')return'';
-      try{return typeof normalizeTeamName==='function'?normalizeTeamName(x):x;}catch(e){return x;}
-    };
-    const roundTitle=id=>{
-      if(id.includes('-R32-'))return'Legjobb 32';
-      if(id.includes('-R16-'))return'Nyolcaddöntő';
-      if(id.includes('-QF-'))return'Negyeddöntő';
-      if(id.includes('-SF-'))return'Elődöntő';
-      if(id.includes('-BR-'))return'Bronzmeccs';
-      if(id.includes('-F-'))return'Döntő';
-      return'Kieséses kör';
-    };
-    const roundKey=id=>{
-      const m=String(id||'').match(/^KO-([A-Z0-9]+)-/);
-      return m?m[1]:'KO';
-    };
-    const matchIndex=id=>{
-      const m=String(id||'').match(/-(\d+)$/);
-      return m?+m[1]:'';
-    };
-    const add=(id)=>{
-      if(!id||seen.has(id))return;
-      const r=(LIVE_RESULTS&&LIVE_RESULTS[id])||{};
-      const p=(KO_PRED&&KO_PRED[id])||{};
+  function teamFromEvent(ev,m){
+    const raw=String(ev&&((ev.team!==undefined?ev.team:null)??ev.side??ev.teamSide??ev.homeAway) || '').toLowerCase();
+    if(raw==='a'||raw==='away'||raw==='visitor'||raw==='visitors'||raw==='2') return m.a;
+    if(raw==='h'||raw==='home'||raw==='1') return m.h;
+    const name=(ev&&(ev.teamName||ev.teamDisplayName||ev.country||ev.squad||ev.club))||'';
+    if(name){
+      try{
+        const n=normLiveName(name);
+        if(n && normLiveName(m.a)===n) return m.a;
+        if(n && normLiveName(m.h)===n) return m.h;
+      }catch(e){}
+    }
+    return m.h||'';
+  }
+
+  function playerName(ev){ return String((ev&&(ev.player||ev.playerName||ev.name||ev.person||ev.athlete))||'').trim(); }
+  function minuteKey(ev){ return String((ev&&(ev.minute??ev.time??ev.displayTime??ev.clock??ev.matchTime))||'').replace(/\s+/g,'').trim(); }
+  function evKey(kind,ev,m){
+    return [kind,m.id||'',teamFromEvent(ev,m)||'',playerName(ev),minuteKey(ev),ev&&ev.og?'og':'',ev&&(ev.penalty||ev.pen)?'pen':''].join('|');
+  }
+  function realEntries(){
+    const out=[];
+    (FX||[]).forEach(m=>{
+      const r=LIVE_RESULTS&&LIVE_RESULTS[m.id];
+      if(r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a)) out.push({m,r});
+    });
+    Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{
+      if(!String(id).startsWith('KO-')) return;
+      if(!r||(r.started!==true&&r.finished!==true)||!validScore(r.h)||!validScore(r.a)) return;
       const sch=(KO_SCHEDULE&&KO_SCHEDULE[id])||{};
-      const h=safeTeam(r.homeTeam||r.hTeam||r.home||p.hTeam||p.homeTeam||p.home||'');
-      const a=safeTeam(r.awayTeam||r.aTeam||r.away||p.aTeam||p.awayTeam||p.away||'');
-      if(!h&&!a&&!r.started&&!r.finished&&!(p&&validScore(p.h)&&validScore(p.a)))return;
-      seen.add(id);
       out.push({
-        id,
-        isKo:true,
-        round:roundKey(id),
-        title:roundTitle(id),
-        label:roundTitle(id)+(matchIndex(id)?' '+matchIndex(id):''),
-        h,
-        a,
-        hs:h?'':'TBD',
-        as:a?'':'TBD',
-        g:'',
-        d:r.date||sch.date||'',
-        date:r.date||sch.date||'',
-        t:r.time||sch.t||'',
-        index:matchIndex(id)
+        m:{
+          id,
+          h:r.homeTeam||r.hTeam||r.home||'TBD',
+          a:r.awayTeam||r.aTeam||r.away||'TBD',
+          g:'',
+          d:r.date||sch.date||'',
+          title:String(id).includes('-F-')?'Döntő':String(id).includes('-SF-')?'Elődöntő':String(id).includes('-QF-')?'Negyeddöntő':String(id).includes('-R16-')?'Nyolcaddöntő':String(id).includes('-R32-')?'Legjobb 32':'Kieséses kör',
+          index:''
+        },
+        r
       });
-    };
-    Object.keys(KO_SCHEDULE||{}).forEach(add);
-    Object.keys(LIVE_RESULTS||{}).filter(id=>String(id).startsWith('KO-')).forEach(add);
-    Object.keys(KO_PRED||{}).filter(id=>String(id).startsWith('KO-')).forEach(add);
+    });
     return out;
   }
 
-  function wc26OverviewMatchByIdV135(){
-    const by={};
-    FX.forEach(m=>{by[m.id]={...m,isKo:false,phase:m.r+'. kör'};});
-
-    wc26OverviewKoPoolV135().forEach(m=>{
-      if(!m||!m.id)return;
-      by[m.id]={
-        ...m,
-        isKo:true,
-        h:m.h||m.hs||m.homeTeam||'',
-        a:m.a||m.as||m.awayTeam||'',
-        g:'',
-        d:m.date||'',
-        phase:m.title||m.round||'Kieséses kör'
-      };
-    });
-
-    Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{
-      if(by[id])return;
-      if(!id.startsWith('KO-') && !r?.homeTeam && !r?.awayTeam)return;
-
-      const found=(function(){
-        try{return findKoMatch(id)||wc26FindAnyMatch(id)||null;}catch(e){return null;}
-      })();
-
-      by[id]={
-        ...(found||{}),
-        id,
-        isKo:id.startsWith('KO-'),
-        h:(found&&found.h)||r.homeTeam||r.hTeam||r.home||'',
-        a:(found&&found.a)||r.awayTeam||r.aTeam||r.away||'',
-        g:'',
-        d:r.date||found?.date||'',
-        title:(found&&found.title)||r.title||'Kieséses kör',
-        index:(found&&found.index)||''
-      };
-    });
-
-    return by;
-  }
-
-  function wc26OverviewActualEntriesV135(){
-    const by=wc26OverviewMatchByIdV135();
-    return Object.entries(LIVE_RESULTS||{})
-      .map(([id,r])=>({id,r,m:by[id]}))
-      .filter(x=>x.m&&x.r&&(x.r.started||x.r.finished)&&validScore(x.r.h)&&validScore(x.r.a));
-  }
-
-  function wc26EventTeamV135(ev,m){
-    const raw=String(ev?.team??ev?.side??ev?.teamSide??ev?.homeAway??'').toLowerCase();
-    if(raw==='a'||raw==='away'||raw==='visitor'||raw==='visitors'||raw==='2')return m.a;
-    if(raw==='h'||raw==='home'||raw==='1')return m.h;
-
-    const name=ev?.teamName||ev?.teamDisplayName||ev?.country||ev?.squad||ev?.club||'';
-    if(name){
-      const n=normLiveName(name);
-      if(n && normLiveName(m.a)===n)return m.a;
-      if(n && normLiveName(m.h)===n)return m.h;
-    }
-
-    return m.h||m.homeTeam||'';
-  }
-
-  function wc26PlayerNameV135(ev){
-    return String(ev?.player||ev?.playerName||ev?.name||ev?.person||ev?.athlete||'').trim();
-  }
-
-  function wc26EventMinuteKeyV135(ev){
-    return String(ev?.minute??ev?.time??ev?.displayTime??ev?.clock??ev?.matchTime??'').replace(/\s+/g,'').trim();
-  }
-
-  function wc26TopStatEventKeyV135(kind,ev,m){
-    return [
-      kind,
-      m.id||'',
-      wc26EventTeamV135(ev,m)||'',
-      wc26PlayerNameV135(ev)||'',
-      wc26EventMinuteKeyV135(ev),
-      ev?.og?'og':'',
-      ev?.penalty||ev?.pen?'pen':''
-    ].join('|');
-  }
-
   topScorersList=function(){
-    const counts={};
-    const seen=new Set();
-
-    wc26OverviewActualEntriesV135().forEach(({m,r})=>{
-      wc26PlainArrV135(r.scorers).forEach(ev=>{
-        if(!ev||ev.og)return;
-        const player=wc26PlayerNameV135(ev);
-        if(!player)return;
-
-        const team=wc26EventTeamV135(ev,m);
-        if(!team)return;
-
-        const evKey=wc26TopStatEventKeyV135('goal',ev,m);
-        if(seen.has(evKey))return;
-        seen.add(evKey);
-
+    const counts={},seen=new Set();
+    realEntries().forEach(({m,r})=>{
+      arr(r.scorers).forEach(ev=>{
+        if(!ev||ev.og) return;
+        const player=playerName(ev), team=teamFromEvent(ev,m);
+        if(!player||!team) return;
+        const k=evKey('goal',ev,m);
+        if(seen.has(k)) return;
+        seen.add(k);
         const key=player+'|'+team;
-        if(!counts[key])counts[key]={player,team,goals:0};
+        if(!counts[key]) counts[key]={player,team,goals:0};
         counts[key].goals++;
       });
     });
-
-    return Object.values(counts)
-      .sort((a,b)=>b.goals-a.goals||a.team.localeCompare(b.team)||a.player.localeCompare(b.player))
-      .slice(0,20);
+    return Object.values(counts).sort((a,b)=>b.goals-a.goals||a.team.localeCompare(b.team)||a.player.localeCompare(b.player)).slice(0,20);
   };
 
-  let __wc26FairPlayCacheV135={key:'',value:null};
-
   calcFairPlay=function(){
-    const cacheKey=Object.entries(LIVE_RESULTS||{}).map(([id,r])=>[id,r&&r.yellowCards,r&&r.redCards,r&&r.started,r&&r.finished,r&&r.h,r&&r.a]).join('|');
-    if(__wc26FairPlayCacheV135.value&&__wc26FairPlayCacheV135.key===cacheKey)return __wc26FairPlayCacheV135.value;
-
     const fp={};
-    ALL.forEach(n=>fp[n]={yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0});
+    (ALL||[]).forEach(n=>fp[n]={yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0});
     const seen=new Set();
-
-    wc26OverviewActualEntriesV135().forEach(({m,r})=>{
-      wc26PlainArrV135(r.yellowCards).forEach(ev=>{
-        const team=wc26EventTeamV135(ev,m);
-        if(!fp[team])return;
-        const evKey=wc26TopStatEventKeyV135('yellow',ev,m);
-        if(seen.has(evKey))return;
-        seen.add(evKey);
+    realEntries().forEach(({m,r})=>{
+      arr(r.yellowCards).forEach(ev=>{
+        const team=teamFromEvent(ev,m); if(!fp[team]) return;
+        const k=evKey('yellow',ev,m); if(seen.has(k)) return; seen.add(k);
         fp[team].yellow++;
       });
-
-      wc26PlainArrV135(r.redCards).forEach(ev=>{
-        const team=wc26EventTeamV135(ev,m);
-        if(!fp[team])return;
-
-        const raw=String(ev?.type||ev?.card||ev?.eventType||ev?.kind||ev?.name||'').toLowerCase();
-        const yellowRed=!!(ev.yellowRed||ev.secondYellow||raw.includes('second yellow')||raw.includes('yellow-red')||raw.includes('second_yellow'));
-        const yellowPlusRed=!!(ev.yellowPlusRed||ev.yellowThenRed||raw.includes('yellow+red'));
-
-        const evKey=wc26TopStatEventKeyV135(yellowRed?'yellowRed':yellowPlusRed?'yellowPlusRed':'red',ev,m);
-        if(seen.has(evKey))return;
-        seen.add(evKey);
-
-        if(yellowRed)fp[team].yellowRed++;
-        else if(yellowPlusRed)fp[team].yellowPlusRed++;
+      arr(r.redCards).forEach(ev=>{
+        const team=teamFromEvent(ev,m); if(!fp[team]) return;
+        const raw=String((ev&&(ev.type||ev.card||ev.eventType||ev.kind||ev.name))||'').toLowerCase();
+        const yellowRed=!!(ev&&(ev.yellowRed||ev.secondYellow))||raw.includes('second yellow')||raw.includes('yellow-red')||raw.includes('second_yellow');
+        const yellowPlusRed=!!(ev&&(ev.yellowPlusRed||ev.yellowThenRed))||raw.includes('yellow+red');
+        const k=evKey(yellowRed?'yellowRed':yellowPlusRed?'yellowPlusRed':'red',ev,m); if(seen.has(k)) return; seen.add(k);
+        if(yellowRed) fp[team].yellowRed++;
+        else if(yellowPlusRed) fp[team].yellowPlusRed++;
         else fp[team].red++;
       });
     });
-
-    Object.values(fp).forEach(t=>{
-      t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5);
-    });
-
-    __wc26FairPlayCacheV135={key:cacheKey,value:fp};
+    Object.values(fp).forEach(t=>{ t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5); });
     return fp;
   };
 
   topMatchesHtml=function(){
-    const actual=wc26OverviewActualEntriesV135().map(({m,r})=>({
-      m:{
-        id:m.id,
-        h:m.h||r.homeTeam||'',
-        a:m.a||r.awayTeam||'',
-        g:m.g||'',
-        d:m.d||r.date||'',
-        title:m.title||m.phase||'Kieséses kör',
-        index:m.index||''
-      },
+    const actual=realEntries().map(({m,r})=>({
+      m:{id:m.id,h:m.h||r.homeTeam||'',a:m.a||r.awayTeam||'',g:m.g||'',d:m.d||r.date||'',title:m.title||m.phase||'',index:m.index||''},
       p:{h:+r.h,a:+r.a,pH:validScore(r.pH)?+r.pH:null,pA:validScore(r.pA)?+r.pA:null},
       source:'Valós'
     }));
-
     const actualIds=new Set(actual.map(x=>x.m.id));
-
-    const tipRes=FX
-      .filter(x=>!actualIds.has(x.id))
-      .map(x=>({m:x,p:PRED[x.id],source:'Tipp'}))
-      .filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a));
-
-    const koTipRes=(function(){
-      try{
-        return wc26OverviewKoPoolV135()
-          .filter(m=>m&&m.id&&m.h&&m.a&&!actualIds.has(m.id))
-          .map(m=>({
-            m:{id:m.id,h:m.h,a:m.a,g:'',d:m.date||'',title:m.title||m.round||'Kieséses kör',index:m.index||''},
-            p:KO_PRED[m.id],
-            source:'Tipp'
-          }))
-          .filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a));
-      }catch(e){return[];}
-    })();
-
-    const res=actual.concat(tipRes,koTipRes);
-
-    const goalMatches=res.slice()
-      .sort((a,b)=>(+b.p.h + +b.p.a)-(+a.p.h + +a.p.a)||Math.abs(+b.p.h-+b.p.a)-Math.abs(+a.p.h-+a.p.a))
-      .slice(0,20);
-
-    const diffMatches=res.slice()
-      .sort((a,b)=>Math.abs(+b.p.h-+b.p.a)-Math.abs(+a.p.h-+a.p.a)||(+b.p.h + +b.p.a)-(+a.p.h + +a.p.a))
-      .slice(0,20);
-
+    const tipRes=(FX||[]).filter(x=>!actualIds.has(x.id)).map(x=>({m:x,p:PRED[x.id],source:'Tipp'})).filter(x=>x.p&&validScore(x.p.h)&&validScore(x.p.a));
+    const res=actual.concat(tipRes);
+    const goalMatches=res.slice().sort((a,b)=>(+b.p.h + +b.p.a)-(+a.p.h + +a.p.a)||Math.abs(+b.p.h-+b.p.a)-Math.abs(+a.p.h-+a.p.a)).slice(0,20);
+    const diffMatches=res.slice().sort((a,b)=>Math.abs(+b.p.h-+b.p.a)-Math.abs(+a.p.h-+a.p.a)||(+b.p.h + +b.p.a)-(+a.p.h + +a.p.a)).slice(0,20);
     return '<section class="card"><h2 class="card-title">Legg&oacute;losabb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
-      +(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'M&eacute;g nincs adat','A val&oacute;s eredm&eacute;nyek ut&aacute;n friss&uuml;l','0')).join(''))
+      +(goalMatches.length?goalMatches.map((x,i)=>matchStatRow(i+1,x,'score')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'M&eacute;g nincs adat','A val&oacute;s g&oacute;lszerz&#337;k ut&aacute;n friss&uuml;l','0')).join(''))
       +'</div></section><section class="card"><h2 class="card-title">Legegyoldal&uacute;bb meccsek - Top 20</h2><div class="wc-stat-list stat-match-list">'
       +(diffMatches.length?diffMatches.map((x,i)=>matchStatRow(i+1,x,'diff')).join(''):Array.from({length:20},(_,i)=>statRow(i+1,'M&eacute;g nincs lej&aacute;tszott m&eacute;rk&#337;z&eacute;s','G&oacute;lk&uuml;l&ouml;nbs&eacute;g: 0','0')).join(''))
       +'</div></section>';
   };
+})();
 
-  /*
-    Áttekintés live változáskor ténylegesen rendereljen, mert ott nem match-row patch kell,
-    hanem a Top 20 aggregált listák frissülése.
-  */
-  const __wc26MergeLiveResultsV135=mergeLiveResults;
+/* ===== WC26 v136: one-shot community load + modal-driven stat refresh ===== */
+(function(){
+  if(window.__WC26_V136_COMMUNITY_MODAL_REFRESH__) return;
+  window.__WC26_V136_COMMUNITY_MODAL_REFRESH__ = true;
+
+  let wc26CommunityBusyV136 = false;
+  let wc26CommunityLoadingV136 = null;
+  let wc26DirtyAfterModalV136 = false;
+  let wc26RefreshTimerV136 = null;
+
+  function v136EscName(){
+    try{return wc26User && (wc26User.displayName || wc26User.email) || 'Játékos';}
+    catch(e){return 'Játékos';}
+  }
+
+  function v136UpsertOwnCommunityCache(){
+    if(!wc26User) return;
+    const item={
+      id:wc26User.uid,
+      uid:wc26User.uid,
+      displayName:v136EscName(),
+      photoURL:wc26User.photoURL||'',
+      pred:wc26CleanTips(PRED||{}),
+      ko:wc26CleanTips(KO_PRED||{}),
+      summary:communitySummary(PRED||{},KO_PRED||{}),
+      updatedAt:new Date(),
+      version:4,
+      storage:'firebase'
+    };
+    if(!Array.isArray(wc26CommunityItems)) wc26CommunityItems=[];
+    const i=wc26CommunityItems.findIndex(x=>x && (x.id===item.id || x.uid===item.uid));
+    if(i>=0) wc26CommunityItems[i]=Object.assign({},wc26CommunityItems[i],item);
+    else wc26CommunityItems.unshift(item);
+  }
+
+  function v136SortCommunityRows(a,b){
+    const ea=communitySummary((a&&a.pred)||{},(a&&a.ko)||{}).eff;
+    const eb=communitySummary((b&&b.pred)||{},(b&&b.ko)||{}).eff;
+    return (eb.pct-ea.pct) || (eb.pts-ea.pts) || (eb.exact-ea.exact) || (eb.diff-ea.diff) || String((a&&a.displayName)||'').localeCompare(String((b&&b.displayName)||''));
+  }
+
+  /* Teljes community collection egyetlen .get()-tel. Nincs limit(40), nincs lapozgatás, nincs live listener. */
+  loadCommunityTips=async function(force){
+    if(!wc26Db){wc26CommunityItems=[];return false;}
+    if(wc26CommunityLoadingV136) return wc26CommunityLoadingV136;
+    wc26CommunityLoadingV136=(async()=>{
+      try{
+        const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).get();
+        const rows=[];
+        snap.forEach(doc=>{rows.push({id:doc.id,...doc.data()});});
+        wc26CommunityItems=rows.sort(v136SortCommunityRows);
+        v136UpsertOwnCommunityCache();
+        return true;
+      }catch(e){
+        wc26BackendError=e && e.message ? e.message : String(e||'community load error');
+        return false;
+      }finally{
+        wc26CommunityLoadingV136=null;
+      }
+    })();
+    return wc26CommunityLoadingV136;
+  };
+
+  renderCommunity=function(){
+    const m=document.getElementById('main');
+    if(!m)return;
+    v136UpsertOwnCommunityCache();
+    m.className='main community-main';
+    const mine=communitySummary(PRED||{},KO_PRED||{});
+    const configured=wc26FirebaseConfigured();
+    let setupHtml='', authHtml='';
+
+    if(!configured){
+      setupHtml='<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba. A közösségi tippek külön Firestore gyűjteménybe mennek: <b>'+WC26_COMMUNITY_COLLECTION+'</b>.</p></section>';
+    }
+
+    if(wc26User){
+      authHtml='<div class="community-user"><img class="community-avatar" src="'+esc(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(v136EscName())+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button></div>';
+    }else{
+      authHtml='<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!configured?'disabled':'')+'>Belépés Google-lel</button></div>';
+    }
+
+    const rows=(Array.isArray(wc26CommunityItems)?wc26CommunityItems.slice():[]).filter(Boolean).sort(v136SortCommunityRows);
+    let listHtml='';
+    if(wc26CommunityBusyV136){
+      listHtml='<div class="community-empty">Közösségi tippek betöltése egyben…</div>';
+    }else if(rows.length){
+      listHtml=rows.map((item,i)=>{
+        const s=communitySummary(item.pred||{},item.ko||{}), e=s.eff;
+        return '<div class="community-row"><div class="community-rank">'+(i+1)+'.</div><div class="community-user"><img class="community-avatar" src="'+esc(item.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(item.displayName||'Játékos')+'</div><div class="community-meta">'+communityRankMeta(e)+' · frissítve: '+esc(communityDate(item.updatedAt))+'</div></div></div><div><div class="community-score">'+(e.max?e.pct+'%':'-')+'</div><button class="community-btn" data-community-view="'+esc(item.id||item.uid)+'">Megnézés</button></div></div>';
+      }).join('');
+    }else{
+      listHtml='<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
+    }
+
+    const errHtml=wc26BackendError?'<div class="community-empty" style="margin-top:10px">Backend jelzés: '+esc(wc26BackendError)+'</div>':'';
+    m.innerHTML=setupHtml+'<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+communityStatsHtml(mine)+errHtml+'</section><section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
+
+    m.querySelector('#wc26LoginBtn')?.addEventListener('click',wc26SignIn);
+    m.querySelector('#wc26LogoutBtn')?.addEventListener('click',wc26SignOut);
+    m.querySelector('#wc26RenameBtn')?.addEventListener('click',wc26RenameProfile);
+    m.querySelectorAll('[data-community-view]').forEach(b=>b.addEventListener('click',()=>openCommunityTips(b.dataset.communityView)));
+    activateCrests();
+    syncSpacer();
+  };
+
+  const __wc26RenderV136=render;
+  render=function(){
+    if(S.tab==='community'){
+      renderCommunity();
+      return;
+    }
+    return __wc26RenderV136.apply(this,arguments);
+  };
+
+  async function wc26LoadCommunityTabOnceV136(){
+    if(S.tab!=='community')return;
+    wc26CommunityBusyV136=true;
+    renderCommunity();
+    await loadCommunityTips(true);
+    wc26CommunityBusyV136=false;
+    if(S.tab==='community')renderCommunity();
+  }
+
+  document.addEventListener('click',e=>{
+    if(e.target.closest('.tab[data-tab="community"]')){
+      setTimeout(wc26LoadCommunityTabOnceV136,90);
+    }
+  },true);
+
+  function wc26RefreshActiveStatsV136(reason){
+    if(document.querySelector('.tip-overlay,.community-preview')){
+      wc26DirtyAfterModalV136=true;
+      return;
+    }
+    clearTimeout(wc26RefreshTimerV136);
+    wc26RefreshTimerV136=setTimeout(()=>{
+      try{
+        if(S.tab==='overview') renderOverview();
+        else if(S.tab==='stats') renderStats();
+        else if(S.tab==='table') renderTables();
+        else if(S.tab==='matches') { renderMatches(); try{patchLiveRows(LIVE_RESULTS||{});}catch(e){} }
+        else if(S.tab==='knockout') renderKO();
+        else if(S.tab==='community') renderCommunity();
+        activateCrests();
+        syncSpacer();
+      }catch(e){console.warn('WC26 v136 refresh failed',reason,e);}
+    },80);
+  }
+
+  function wc26AfterOwnTipMutationV136(){
+    v136UpsertOwnCommunityCache();
+    if(S.tab==='community'){
+      renderCommunity();
+      loadCommunityTips(true).then(()=>{if(S.tab==='community')renderCommunity();}).catch(()=>{});
+      return;
+    }
+    wc26RefreshActiveStatsV136('own-tip');
+  }
+
+  const __wc26SaveTipV136=saveTip;
+  saveTip=async function(){
+    const out=await __wc26SaveTipV136.apply(this,arguments);
+    setTimeout(wc26AfterOwnTipMutationV136,0);
+    setTimeout(wc26AfterOwnTipMutationV136,220);
+    return out;
+  };
+
+  const __wc26SaveKoTipV136=saveKoTip;
+  saveKoTip=function(){
+    const out=__wc26SaveKoTipV136.apply(this,arguments);
+    setTimeout(wc26AfterOwnTipMutationV136,0);
+    setTimeout(wc26AfterOwnTipMutationV136,220);
+    return out;
+  };
+
+  const __wc26DeleteGroupTipV136=wc26DeleteGroupTip;
+  wc26DeleteGroupTip=async function(){
+    const out=await __wc26DeleteGroupTipV136.apply(this,arguments);
+    setTimeout(wc26AfterOwnTipMutationV136,0);
+    return out;
+  };
+
+  const __wc26DeleteKoTipV136=wc26DeleteKoTip;
+  wc26DeleteKoTip=async function(){
+    const out=await __wc26DeleteKoTipV136.apply(this,arguments);
+    setTimeout(wc26AfterOwnTipMutationV136,0);
+    return out;
+  };
+
+  const __wc26MergeLiveResultsV136=mergeLiveResults;
   mergeLiveResults=function(next){
-    const ret=__wc26MergeLiveResultsV135.apply(this,arguments);
-    if(ret && S.tab==='overview' && !document.querySelector('.tip-overlay,.community-preview')){
-      try{renderOverview();}catch(e){}
+    const ret=__wc26MergeLiveResultsV136.apply(this,arguments);
+    if(ret){
+      v136UpsertOwnCommunityCache();
+      if(S.tab==='overview'||S.tab==='stats'||S.tab==='community') wc26RefreshActiveStatsV136('live-results');
     }
     return ret;
   };
 
-  if(S.tab==='overview'){
-    try{renderOverview();}catch(e){console.warn('v135 overview top stats render failed',e);}
+  const __wc26RefreshOpenTipModalV136=refreshOpenTipModal;
+  refreshOpenTipModal=function(){
+    const out=__wc26RefreshOpenTipModalV136.apply(this,arguments);
+    if(S.tab==='overview'||S.tab==='stats'||S.tab==='community') wc26DirtyAfterModalV136=true;
+    return out;
+  };
+
+  const __wc26CloseTipV136=closeTip;
+  closeTip=function(){
+    const out=__wc26CloseTipV136.apply(this,arguments);
+    if(wc26DirtyAfterModalV136){
+      wc26DirtyAfterModalV136=false;
+      wc26RefreshActiveStatsV136('modal-close');
+    }
+    return out;
+  };
+
+  const __wc26CloseAllModalsV136=closeAllModals;
+  closeAllModals=function(){
+    const out=__wc26CloseAllModalsV136.apply(this,arguments);
+    if(wc26DirtyAfterModalV136){
+      wc26DirtyAfterModalV136=false;
+      wc26RefreshActiveStatsV136('modal-close-all');
+    }
+    return out;
+  };
+
+  if(S.tab==='community') setTimeout(wc26LoadCommunityTabOnceV136,120);
+})();
+
+
+/* ===== WC26 v137: KO live match-card exact group parity + red PEN modal pill ===== */
+(function(){
+  if(window.__WC26_V137_KO_LIVE_GROUP_PARITY_PEN_RED__) return;
+  window.__WC26_V137_KO_LIVE_GROUP_PARITY_PEN_RED__ = true;
+
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Modal: PEN indicator ugyanaz a piros pirula, mint a live/FT család */
+    .wc26-modal-pill[data-state="pen"],
+    .tip-overlay .wc26-modal-pill[data-state="pen"]{
+      background:rgba(255,104,128,.16)!important;
+      border-color:rgba(255,104,128,.44)!important;
+      color:#ff7b92!important;
+    }
+
+    /* KO match-card a Mérkőzések fülön: semmi extra/bal oldali duplikált KO-only badge */
+    .matches-main .match-row[data-ko-match-id] .wc26-ko-core-tip,
+    .matches-main .match-row[data-ko-match-id] .wc26-ko-left-clock,
+    .matches-main .match-row[data-ko-match-id] .wc26-ko-extra,
+    .matches-main .match-row[data-ko-match-id] .wc26-ko-only{display:none!important;}
+    .matches-main .match-row[data-ko-match-id]{display:grid!important;}
+  `;
+  document.head.appendChild(st);
+
+  function v137KoBase(cat){
+    cat=String(cat||'').toLowerCase();
+    if(cat==='exact'||cat==='exact-pen-exact') return 'exact';
+    if(cat==='diff'||cat==='goal-diff'||cat==='difference'||cat==='exact-pen-diff'||cat==='draw-pen-diff') return 'diff';
+    if(cat==='outcome'||cat==='winner'||cat==='result'||cat==='kimenetel'||cat==='draw'||cat==='exact-pen-outcome'||cat==='draw-pen-outcome') return 'outcome';
+    if(cat==='miss'||cat==='wrong'||cat==='incorrect'||cat==='hiba'||cat==='hibas'||cat==='missed') return 'miss';
+    return '';
+  }
+
+  function v137KoActual(m){
+    try{return actualFor({id:m.id})||LIVE_RESULTS[m.id]||null;}catch(e){return LIVE_RESULTS[m.id]||null;}
+  }
+
+  function v137KoTime(m){
+    try{
+      if(typeof wc26MatchTimeV128==='function') return wc26MatchTimeV128(m,true);
+    }catch(e){}
+    try{
+      if(typeof koMatchTime==='function') return koMatchTime(m);
+    }catch(e){}
+    try{
+      const r=LIVE_RESULTS[m.id]||null;
+      const sch=(typeof KO_SCHEDULE!=='undefined'&&KO_SCHEDULE[m.id])?KO_SCHEDULE[m.id]:{};
+      const d=(r&&r.date)||sch.date||m.date||'';
+      const t=(r&&r.time)||sch.t||m.t||'';
+      if(d&&t){
+        return new Date(d+'T'+t+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});
+      }
+      return t||'--:--';
+    }catch(e){return (m&&m.t)||'--:--';}
+  }
+
+  function v137KoRound(m){
+    try{
+      if(typeof wc26RoundLabelV128==='function') return wc26RoundLabelV128(m,true);
+    }catch(e){}
+    return (KO_ROUND_SHORT[m.title]||m.title||m.round||'Kieséses kör');
+  }
+
+  function v137KoBadge(m){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m)||{cat:''};
+    const base=v137KoBase(sc.base||sc.cat||'');
+    const r=v137KoActual(m);
+    const clk=r&&!r.finished?liveClockLabel(r):'';
+
+    /* Pontosan ugyanazok a label/pirula classok, mint a csoportkörös mrow() logikában. */
+    if(base==='exact') return '<em class="mr-live-state ok">Pontos</em>';
+    if(base==='diff') return '<em class="mr-live-state diff">G&oacute;lk&uuml;l.</em>';
+    if(base==='outcome') return '<em class="mr-live-state outcome">Kimenetel</em>';
+    if(base==='miss') return '<em class="mr-live-state bad">Hib&aacute;s</em>';
+    if(state==='finished') return '';
+    if(state==='live') return '<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
+    if(state==='open') return '<em class="mr-live-state open">Tippelhet&#337;</em>';
+    return '<em class="mr-live-state neutral">Z&aacute;rolva</em>';
+  }
+
+  function v137KoRowClass(m,p){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m)||{cat:''};
+    const base=v137KoBase(sc.base||sc.cat||'');
+    return (p?' predicted':'')+(state!=='open'?' locked':'')+(state==='live'?' live-locked':'')+
+      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
+  }
+
+  function v137FindKo(id){
+    try{ if(typeof findKoMatch==='function'){ const m=findKoMatch(id); if(m) return m; } }catch(e){}
+    try{ if(typeof wc26FindAnyMatch==='function'){ const m=wc26FindAnyMatch(id); if(m) return m; } }catch(e){}
+    try{ if(typeof findKoSafe==='function'){ const m=findKoSafe(id); if(m) return m; } }catch(e){}
+    return {id:id,h:'',a:'',title:'Kieséses kör'};
+  }
+
+  function v137KoMatchRow(m){
+    const p=koPred(m.id);
+    const state=matchLockState({id:m.id});
+    const locked=state!=='open';
+    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
+    const home=m.h||m.hs||'';
+    const away=m.a||m.as||'';
+    const cls=p?'win':'';
+
+    /* DOM-szerkezet 1:1 group mrow(): match-row → mr-date/mr-sep/mr-teams/mr-scores/edit */
+    return '<div class="match-row'+v137KoRowClass(m,p)+'" data-ko-match-id="'+esc(m.id)+'">'
+      +'<div class="mr-date">'+v137KoTime(m)+'<span>'+v137KoRound(m)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v137KoBadge(m)+'</div>'
+      +'<div class="mr-sep"></div>'
+      +'<div class="mr-teams"><div class="mr-team '+cls+'">'+crest(home)+'<span class="mr-tname">'+esc(home)+'</span></div><div class="mr-team '+cls+'">'+crest(away)+'<span class="mr-tname">'+esc(away)+'</span></div></div>'
+      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+  }
+
+  koMatchRow=function(m){ return v137KoMatchRow(m); };
+
+  function v137BindKoRows(root){
+    (root||document).querySelectorAll('.match-row[data-ko-match-id]').forEach(row=>{
+      if(row.__wc26V137Bound) return;
+      row.__wc26V137Bound=true;
+      row.addEventListener('click',e=>{
+        e.stopPropagation();
+        openKoTip(row.dataset.koMatchId);
+      });
+    });
+  }
+  window.wc26V137BindKoRows=v137BindKoRows;
+
+  const prevRenderMatchesV137=renderMatches;
+  renderMatches=function(){
+    const out=prevRenderMatchesV137.apply(this,arguments);
+    v137BindKoRows(document.getElementById('main')||document);
+    return out;
+  };
+
+  const prevRenderV137=render;
+  render=function(){
+    const out=prevRenderV137.apply(this,arguments);
+    if(S.tab==='matches') v137BindKoRows(document.getElementById('main')||document);
+    return out;
+  };
+
+  const prevPatchLiveRowsV137=patchLiveRows;
+  patchLiveRows=function(next){
+    if(S.tab!=='matches'&&S.tab!=='overview') return false;
+    let touched=0, ok=true;
+    Object.keys(next||{}).forEach(id=>{
+      const r=LIVE_RESULTS[id];
+      if(!r) return;
+      const isKo=String(id).startsWith('KO-');
+      const row=document.querySelector('[data-mid="'+id+'"],[data-ko-match-id="'+id+'"],[data-ko-parity-id="'+id+'"],[data-ko-mid="'+id+'"]');
+      if(!row){ if(!document.querySelector('.tip-overlay,.community-preview')) ok=false; return; }
+      const x=isKo?v137FindKo(id):FX_BY_ID[id];
+      if(!x){ ok=false; return; }
+      const tmp=document.createElement('div');
+      tmp.innerHTML=isKo?v137KoMatchRow(x):mrow(x);
+      const fresh=tmp.firstElementChild;
+      if(!fresh){ ok=false; return; }
+      row.className=fresh.className;
+      row.innerHTML=fresh.innerHTML;
+      if(isKo){
+        row.setAttribute('data-ko-match-id',id);
+        row.removeAttribute('data-mid');
+        v137BindKoRows(row.parentNode||document);
+      }else{
+        row.setAttribute('data-mid',id);
+      }
+      touched++;
+    });
+    if(touched>0) return ok;
+    try{return prevPatchLiveRowsV137.apply(this,arguments);}catch(e){return ok;}
+  };
+
+  if(S.tab==='matches'){
+    try{renderMatches();}catch(e){console.warn('v137 KO group parity render failed',e);}
+  }
+  try{ if(typeof refreshOpenTipModal==='function') refreshOpenTipModal(); }catch(e){}
+})();
+
+
+
+/* ===== WC26 v138: KO match-card kickoff display synced to modal ===== */
+(function(){
+  if(window.__WC26_V138_KO_CARD_TIME_MODAL_SYNC__) return;
+  window.__WC26_V138_KO_CARD_TIME_MODAL_SYNC__ = true;
+
+  function wc26KoBaseV138(cat){
+    cat=String(cat||'').toLowerCase();
+    if(cat==='exact'||cat==='exact-pen-exact') return 'exact';
+    if(cat==='diff'||cat==='goal-diff'||cat==='difference'||cat==='exact-pen-diff'||cat==='draw-pen-diff') return 'diff';
+    if(cat==='outcome'||cat==='winner'||cat==='result'||cat==='kimenetel'||cat==='draw'||cat==='exact-pen-outcome'||cat==='draw-pen-outcome') return 'outcome';
+    if(cat==='miss'||cat==='wrong'||cat==='incorrect'||cat==='hiba'||cat==='hibas'||cat==='missed') return 'miss';
+    return '';
+  }
+
+  function wc26KoCardTimeV138(m){
+    /*
+      FONTOS: ugyanazt az időformázót használjuk, mint a KO modal.
+      A korábbi meccskártya KO_SCHEDULE.t-t preferált, ami UTC-s érték volt,
+      ezért a Mérkőzések fülön -3 órát mutatott a modalhoz képest.
+    */
+    try{
+      if(typeof localMatchTime==='function') return localMatchTime(m);
+    }catch(e){}
+    return (m&&m.t)||'--:--';
+  }
+
+  function wc26KoRoundV138(m){
+    try{ if(typeof wc26RoundLabelV128==='function') return wc26RoundLabelV128(m,true); }catch(e){}
+    return (KO_ROUND_SHORT[m.title]||m.title||m.round||'Kieséses kör');
+  }
+
+  function wc26KoBadgeV138(m){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m)||{cat:''};
+    const base=wc26KoBaseV138(sc.base||sc.cat||'');
+    const r=(typeof actualFor==='function'?actualFor({id:m.id}):null)||LIVE_RESULTS[m.id]||null;
+    const clk=r&&!r.finished?liveClockLabel(r):'';
+    if(base==='exact') return '<em class="mr-live-state ok">Pontos</em>';
+    if(base==='diff') return '<em class="mr-live-state diff">G&oacute;lk&uuml;l.</em>';
+    if(base==='outcome') return '<em class="mr-live-state outcome">Kimenetel</em>';
+    if(base==='miss') return '<em class="mr-live-state bad">Hib&aacute;s</em>';
+    if(state==='finished') return '';
+    if(state==='live') return '<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
+    if(state==='open') return '<em class="mr-live-state open">Tippelhet&#337;</em>';
+    return '<em class="mr-live-state neutral">Z&aacute;rolva</em>';
+  }
+
+  function wc26KoRowClassV138(m,p){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m)||{cat:''};
+    const base=wc26KoBaseV138(sc.base||sc.cat||'');
+    return (p?' predicted':'')+(state!=='open'?' locked':'')+(state==='live'?' live-locked':'')+
+      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
+  }
+
+  function wc26FindKoV138(id){
+    try{ if(typeof findKoMatch==='function'){ const m=findKoMatch(id); if(m) return m; } }catch(e){}
+    try{ if(typeof wc26FindAnyMatch==='function'){ const m=wc26FindAnyMatch(id); if(m) return m; } }catch(e){}
+    return {id:id,h:'',a:'',title:'Kieséses kör',t:'--:--'};
+  }
+
+  function wc26KoMatchRowV138(m){
+    const p=koPred(m.id);
+    const state=matchLockState({id:m.id});
+    const locked=state!=='open';
+    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
+    const home=m.h||m.hs||'';
+    const away=m.a||m.as||'';
+    const cls=p?'win':'';
+    return '<div class="match-row'+wc26KoRowClassV138(m,p)+'" data-ko-match-id="'+esc(m.id)+'">'
+      +'<div class="mr-date">'+wc26KoCardTimeV138(m)+'<span>'+wc26KoRoundV138(m)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26KoBadgeV138(m)+'</div>'
+      +'<div class="mr-sep"></div>'
+      +'<div class="mr-teams"><div class="mr-team '+cls+'">'+crest(home)+'<span class="mr-tname">'+esc(home)+'</span></div><div class="mr-team '+cls+'">'+crest(away)+'<span class="mr-tname">'+esc(away)+'</span></div></div>'
+      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+  }
+
+  koMatchRow=function(m){ return wc26KoMatchRowV138(m); };
+
+  function wc26BindKoRowsV138(root){
+    (root||document).querySelectorAll('.match-row[data-ko-match-id]').forEach(row=>{
+      if(row.__wc26V138Bound) return;
+      row.__wc26V138Bound=true;
+      row.addEventListener('click',e=>{
+        e.stopPropagation();
+        openKoTip(row.dataset.koMatchId);
+      });
+    });
+  }
+
+  const prevRenderMatchesV138=renderMatches;
+  renderMatches=function(){
+    const out=prevRenderMatchesV138.apply(this,arguments);
+    wc26BindKoRowsV138(document.getElementById('main')||document);
+    return out;
+  };
+
+  const prevRenderV138=render;
+  render=function(){
+    const out=prevRenderV138.apply(this,arguments);
+    if(S.tab==='matches') wc26BindKoRowsV138(document.getElementById('main')||document);
+    return out;
+  };
+
+  const prevPatchLiveRowsV138=patchLiveRows;
+  patchLiveRows=function(next){
+    if(S.tab!=='matches'&&S.tab!=='overview') return false;
+    let touched=0, ok=true;
+    Object.keys(next||{}).forEach(id=>{
+      const r=LIVE_RESULTS[id];
+      if(!r) return;
+      const isKo=String(id).startsWith('KO-');
+      const row=document.querySelector('[data-mid="'+id+'"],[data-ko-match-id="'+id+'"],[data-ko-parity-id="'+id+'"],[data-ko-mid="'+id+'"]');
+      if(!row){ if(!document.querySelector('.tip-overlay,.community-preview')) ok=false; return; }
+      const x=isKo?wc26FindKoV138(id):FX_BY_ID[id];
+      if(!x){ ok=false; return; }
+      const tmp=document.createElement('div');
+      tmp.innerHTML=isKo?wc26KoMatchRowV138(x):mrow(x);
+      const fresh=tmp.firstElementChild;
+      if(!fresh){ ok=false; return; }
+      row.className=fresh.className;
+      row.innerHTML=fresh.innerHTML;
+      if(isKo){
+        row.setAttribute('data-ko-match-id',id);
+        row.removeAttribute('data-mid');
+        wc26BindKoRowsV138(row.parentNode||document);
+      }else{
+        row.setAttribute('data-mid',id);
+      }
+      touched++;
+    });
+    if(touched>0) return ok;
+    try{return prevPatchLiveRowsV138.apply(this,arguments);}catch(e){return ok;}
+  };
+
+  if(S.tab==='matches'){
+    try{ renderMatches(); }catch(e){ console.warn('v138 KO card time/modal sync render failed', e); }
   }
 })();
 
