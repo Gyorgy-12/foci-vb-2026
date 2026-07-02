@@ -8315,7 +8315,7 @@ function wc26HasTips(o){return !!(o&&typeof o==='object'&&Object.keys(o).length)
 function wc26PickObj(d,keys){for(let k of keys){if(d&&d[k]&&typeof d[k]==='object')return d[k]}return {}}
 function wc26ReadLocalPreds(){if(FROZEN_MODE)return{pred:wc26CloneObj(FROZEN_DATA.pred),ko:wc26CloneObj(FROZEN_DATA.ko)};return{pred:wc26SafeJson(localStorage.getItem(STORE_KEY),{}),ko:wc26SafeJson(localStorage.getItem(KO_STORE_KEY),{})}}
 function wc26ClearLocalPreds(){try{localStorage.removeItem(STORE_KEY);localStorage.removeItem(KO_STORE_KEY)}catch(e){}}
-let wc26InitialLocalTips=wc26ReadLocalPreds();
+let wc26InitialLocalTips={pred:{},ko:{}}; /* v137: no localStorage before Firebase auth resolves */
 let PRED=wc26CleanTips(wc26InitialLocalTips.pred);
 let KO_PRED=wc26CleanTips(wc26InitialLocalTips.ko);
 function savePred(){if(FROZEN_MODE)return;if(wc26User){queueCommunityAutosave();return}try{localStorage.setItem(STORE_KEY,JSON.stringify(PRED));localStorage.setItem(KO_STORE_KEY,JSON.stringify(KO_PRED))}catch(e){}}
@@ -12361,308 +12361,229 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v136: hard no-localStorage when auth possible + one-shot full community load ===== */
+/* ===== WC26 v137: safe no-localStorage auth + full community tab load ===== */
 (function(){
-  if(window.__WC26_V136_NO_LS_AUTH_FULL_COMMUNITY__) return;
-  window.__WC26_V136_NO_LS_AUTH_FULL_COMMUNITY__ = true;
+  if(window.__WC26_V137_SAFE_AUTH_LOCAL_COMMUNITY__) return;
+  window.__WC26_V137_SAFE_AUTH_LOCAL_COMMUNITY__ = true;
 
   /*
-    HARD RULE:
-    - amíg Firebase auth nem mondta ki, hogy vendég vagy, a localStorage NEM tölthet be tippeket
-    - bejelentkezett usernél localStorage olvasás/írás/törlés = nincs hatása, azonnal töröljük
-    - guest -> login váltáskor localStorage törlődik, memória is ürül, majd backend hidratál
+    Nem nyúlunk layout-control globálokhoz, mert azok buildenként nem mindig globálisak.
+    Így nem tudja megakasztani az oldalbetöltést.
   */
-  let wc26AuthResolvedV136 = !!wc26User;
-  let wc26GuestAllowedV136 = false;
-  let wc26HydratingBackendV136 = false;
 
-  function wc26NukeLocalStorageV136(){
+  let wc26GuestConfirmedV137 = false;
+  let wc26BackendHydratingV137 = false;
+  let wc26CommunityFullLoadRunningV137 = false;
+
+  function wc26NukeLocalV137(){
     try{
       localStorage.removeItem(STORE_KEY);
       localStorage.removeItem(KO_STORE_KEY);
     }catch(e){}
   }
 
-  function wc26FirebaseMaybeAuthV136(){
-    try{return !!(wc26FirebaseConfigured&&wc26FirebaseConfigured());}catch(e){return !!WC26_FIREBASE_CONFIG;}
+  function wc26FirebaseConfiguredV137(){
+    try{return !!(wc26FirebaseConfigured && wc26FirebaseConfigured());}
+    catch(e){return !!WC26_FIREBASE_CONFIG;}
   }
 
-  function wc26BlankLocalMemoryV136(renderNow=false){
-    PRED={};
-    KO_PRED={};
-    if(renderNow && !document.querySelector('.tip-overlay,.community-preview')){
-      try{render();}catch(e){}
-    }
+  function wc26LoggedInV137(){
+    return !!wc26User;
   }
 
-  function wc26CanUseGuestLocalV136(){
-    return !wc26User && wc26AuthResolvedV136 && wc26GuestAllowedV136;
-  }
-
-  const __wc26ReadLocalPredsV136 = wc26ReadLocalPreds;
+  /*
+    localStorage olvasás:
+    - bejelentkezve soha
+    - Firebase auth eldöntése előtt soha
+    - csak akkor, ha auth konkrétan guest állapotot jelzett
+  */
+  const __wc26ReadLocalPredsV137 = wc26ReadLocalPreds;
   wc26ReadLocalPreds=function(){
-    if(wc26User){
-      wc26NukeLocalStorageV136();
+    if(wc26LoggedInV137()){
+      wc26NukeLocalV137();
       return {pred:{},ko:{}};
     }
 
-    /*
-      Firebase-projekt mellett auth eldöntés előtt nem engedjük,
-      hogy a korábbi guest/local állapot akár 1 render erejéig is beleszóljon.
-    */
-    if(wc26FirebaseMaybeAuthV136() && !wc26CanUseGuestLocalV136()){
+    if(wc26FirebaseConfiguredV137() && !wc26GuestConfirmedV137){
       return {pred:{},ko:{}};
     }
 
-    return __wc26ReadLocalPredsV136.apply(this,arguments);
+    return __wc26ReadLocalPredsV137.apply(this,arguments);
   };
 
   wc26ClearLocalPreds=function(){
-    wc26NukeLocalStorageV136();
+    wc26NukeLocalV137();
   };
 
-  function wc26GuestLocalSaveV136(){
-    if(!wc26CanUseGuestLocalV136())return;
-    try{
-      localStorage.setItem(STORE_KEY,JSON.stringify(PRED||{}));
-      localStorage.setItem(KO_STORE_KEY,JSON.stringify(KO_PRED||{}));
-    }catch(e){}
-  }
-
-  const __wc26SavePredV136 = savePred;
+  /*
+    localStorage írás:
+    - bejelentkezve soha
+    - auth-pending állapotban soha
+    - csak confirmed guestnél
+  */
+  const __wc26SavePredV137 = savePred;
   savePred=function(){
     if(FROZEN_MODE)return;
 
-    if(wc26User){
-      wc26NukeLocalStorageV136();
-      if(!wc26OwnTipsLoaded || wc26OwnTipsLoadFailed || wc26HydratingBackendV136)return;
+    if(wc26LoggedInV137()){
+      wc26NukeLocalV137();
+      if(wc26BackendHydratingV137 || !wc26OwnTipsLoaded || wc26OwnTipsLoadFailed)return;
       try{queueCommunityAutosave();}catch(e){}
       return;
     }
 
-    if(wc26FirebaseMaybeAuthV136() && !wc26CanUseGuestLocalV136()){
+    if(wc26FirebaseConfiguredV137() && !wc26GuestConfirmedV137){
       return;
     }
 
-    wc26GuestLocalSaveV136();
+    return __wc26SavePredV137.apply(this,arguments);
   };
 
-  const __wc26PublishCommunityTipsV136 = publishCommunityTips;
-  publishCommunityTips=async function(silent,opts={}){
-    if(wc26User){
-      wc26NukeLocalStorageV136();
-      if(!wc26OwnTipsLoaded || wc26OwnTipsLoadFailed || wc26HydratingBackendV136){
-        return false;
-      }
+  const __wc26PublishCommunityTipsV137 = publishCommunityTips;
+  publishCommunityTips=async function(){
+    if(wc26LoggedInV137()){
+      wc26NukeLocalV137();
+      if(wc26BackendHydratingV137 || !wc26OwnTipsLoaded || wc26OwnTipsLoadFailed)return false;
     }
-    return await __wc26PublishCommunityTipsV136.apply(this,arguments);
+    return await __wc26PublishCommunityTipsV137.apply(this,arguments);
   };
 
-  const __wc26QueueCommunityAutosaveV136 = queueCommunityAutosave;
+  const __wc26QueueCommunityAutosaveV137 = queueCommunityAutosave;
   queueCommunityAutosave=function(){
-    if(wc26User){
-      wc26NukeLocalStorageV136();
-      if(!wc26OwnTipsLoaded || wc26OwnTipsLoadFailed || wc26HydratingBackendV136)return;
+    if(wc26LoggedInV137()){
+      wc26NukeLocalV137();
+      if(wc26BackendHydratingV137 || !wc26OwnTipsLoaded || wc26OwnTipsLoadFailed)return;
     }
-    return __wc26QueueCommunityAutosaveV136.apply(this,arguments);
+    return __wc26QueueCommunityAutosaveV137.apply(this,arguments);
   };
 
-  const __wc26PersistTipsNowV136 = wc26PersistTipsNow;
-  wc26PersistTipsNow=async function(){
-    if(FROZEN_MODE)return false;
-
-    if(wc26User){
-      wc26NukeLocalStorageV136();
-      if(!wc26OwnTipsLoaded || wc26OwnTipsLoadFailed || wc26HydratingBackendV136)return false;
-      return await __wc26PersistTipsNowV136.apply(this,arguments);
-    }
-
-    if(wc26FirebaseMaybeAuthV136() && !wc26CanUseGuestLocalV136()){
-      return false;
-    }
-
-    wc26GuestLocalSaveV136();
-    return true;
-  };
-
-  const __wc26LoadOwnTipsFromFirebaseV136 = loadOwnTipsFromFirebase;
+  const __wc26LoadOwnTipsFromFirebaseV137 = loadOwnTipsFromFirebase;
   loadOwnTipsFromFirebase=async function(){
-    if(!wc26Db||!wc26User)return false;
+    if(!wc26Db || !wc26User)return false;
 
-    wc26HydratingBackendV136=true;
-    wc26NukeLocalStorageV136();
-    wc26BlankLocalMemoryV136(false);
+    wc26BackendHydratingV137=true;
+    wc26NukeLocalV137();
+    PRED={};
+    KO_PRED={};
 
     try{
-      const ok = await __wc26LoadOwnTipsFromFirebaseV136.apply(this,arguments);
-      wc26NukeLocalStorageV136();
+      const ok=await __wc26LoadOwnTipsFromFirebaseV137.apply(this,arguments);
+      wc26NukeLocalV137();
       return ok;
     }finally{
-      wc26HydratingBackendV136=false;
+      wc26BackendHydratingV137=false;
     }
   };
 
-  function wc26HandleAuthV136(u){
-    wc26AuthResolvedV136=true;
-
+  function wc26AuthSeenV137(u){
     if(u){
-      wc26GuestAllowedV136=false;
-      wc26NukeLocalStorageV136();
-      wc26BlankLocalMemoryV136(true);
+      wc26GuestConfirmedV137=false;
+      wc26NukeLocalV137();
+      PRED={};
+      KO_PRED={};
       try{clearTimeout(wc26AutosaveTimer);}catch(e){}
       if(wc26Db){
         loadOwnTipsFromFirebase().catch(e=>{wc26BackendError=e.message||String(e);});
       }
-      return;
-    }
-
-    wc26GuestAllowedV136=true;
-    if(!wc26User){
-      const local=__wc26ReadLocalPredsV136.apply(this,arguments);
-      PRED=wc26CleanTips(local.pred);
-      KO_PRED=wc26CleanTips(local.ko);
-      wc26OwnTipsLoaded=true;
-      wc26RemoteDocExists=false;
-      if(!document.querySelector('.tip-overlay,.community-preview')){
-        try{render();}catch(e){}
+    }else{
+      wc26GuestConfirmedV137=true;
+      /*
+        Csak itt, tényleges guest állapotban engedjük a localStorage-t.
+      */
+      if(!wc26User){
+        const local=__wc26ReadLocalPredsV137.apply(this,arguments);
+        PRED=wc26CleanTips(local.pred);
+        KO_PRED=wc26CleanTips(local.ko);
+        wc26OwnTipsLoaded=true;
+        wc26RemoteDocExists=false;
+        if(!document.querySelector('.tip-overlay,.community-preview')){
+          try{render();}catch(e){}
+        }
       }
     }
   }
 
   try{
     if(wc26Auth){
-      wc26Auth.onAuthStateChanged(wc26HandleAuthV136);
-      if(wc26Auth.currentUser)wc26HandleAuthV136(wc26Auth.currentUser);
-      else if(wc26FirebaseMaybeAuthV136() && !wc26AuthResolvedV136){
-        wc26BlankLocalMemoryV136(true);
-      }
-    }else if(wc26FirebaseMaybeAuthV136() && !wc26AuthResolvedV136){
-      wc26BlankLocalMemoryV136(true);
+      wc26Auth.onAuthStateChanged(wc26AuthSeenV137);
+      if(wc26Auth.currentUser)wc26AuthSeenV137(wc26Auth.currentUser);
+    }else if(wc26LoggedInV137()){
+      wc26AuthSeenV137(wc26User);
     }
   }catch(e){
-    if(wc26User){
-      wc26NukeLocalStorageV136();
-      wc26BlankLocalMemoryV136(true);
+    if(wc26LoggedInV137()){
+      wc26NukeLocalV137();
+      PRED={};
+      KO_PRED={};
     }
   }
 
-  if(wc26User){
-    wc26NukeLocalStorageV136();
-  }
+  if(wc26LoggedInV137())wc26NukeLocalV137();
 
   /*
-    COMMUNITY:
-    - tab gombra kattintva egyszer, egyben töltődik be a teljes community lista
-    - nem háttérben, nem szegmensenként, nem percenként
-    - profilmodal tabjai továbbra is előre renderelt szegmensek
+    Community tab:
+    - kattintáskor egyetlen batch get
+    - utána egyszer renderCommunity
+    - nem stopImmediatePropagation, nem nyúlunk kontroll változókhoz
+    - így nem tudja megakasztani az oldal betöltését
   */
-  let wc26CommunityLoadedForOpenV136=false;
-  let wc26CommunityLoadingV136=null;
-  let wc26ForceCommunityRenderV136=false;
-
-  async function wc26DirectLoadCommunityV136(){
-    if(!wc26Db){
-      wc26CommunityItems=[];
-      return false;
-    }
+  async function wc26FullCommunityLoadV137(){
+    if(wc26CommunityFullLoadRunningV137)return;
+    wc26CommunityFullLoadRunningV137=true;
 
     try{
-      const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION)
-        .orderBy('updatedAt','desc')
-        .limit(40)
-        .get();
+      if(S.tab!=='community')S.tab='community';
 
-      wc26CommunityItems=snap.docs.map(d=>({id:d.id,...d.data()}));
-      wc26CommunityLoadedForOpenV136=true;
-      return true;
-    }catch(e){
-      wc26BackendError=e.message||String(e);
-      return false;
-    }
-  }
-
-  const __wc26LoadCommunityTipsV136 = loadCommunityTips;
-  loadCommunityTips=async function(){
-    if(S.tab!=='community' && !wc26ForceCommunityRenderV136){
-      return true;
-    }
-
-    if(S.tab==='community' && wc26CommunityLoadedForOpenV136 && !wc26ForceCommunityRenderV136){
-      return true;
-    }
-
-    wc26ForceCommunityRenderV136=false;
-    return await wc26DirectLoadCommunityV136();
-  };
-
-  const __wc26RenderCommunityV136 = renderCommunity;
-  renderCommunity=function(){
-    if(S.tab==='community' && !wc26CommunityLoadedForOpenV136 && !wc26ForceCommunityRenderV136){
-      const m=document.getElementById('main');
-      if(m){
-        m.className='main community-main';
-        m.innerHTML='<section class="card community-card"><h1 class="community-title">Közösség betöltése...</h1><p class="community-lead">Egyben betöltöm az összes közösségi szegmenst.</p></section>';
+      const main=document.getElementById('main');
+      if(main){
+        main.className='main community-main';
+        main.innerHTML='<section class="card community-card"><h1 class="community-title">Közösség betöltése...</h1><p class="community-lead">Egyben töltöm be a közösségi listát és a profilos szegmenseket.</p></section>';
       }
 
-      if(!wc26CommunityLoadingV136){
-        wc26CommunityLoadingV136=(async()=>{
-          wc26ForceCommunityRenderV136=true;
-          await wc26DirectLoadCommunityV136();
-          wc26ForceCommunityRenderV136=true;
-          __wc26RenderCommunityV136();
-        })().finally(()=>{wc26CommunityLoadingV136=null;});
+      if(wc26Db){
+        const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION)
+          .orderBy('updatedAt','desc')
+          .limit(40)
+          .get();
+        wc26CommunityItems=snap.docs.map(d=>({id:d.id,...d.data()}));
+      }else{
+        wc26CommunityItems=[];
       }
-      return;
-    }
 
-    wc26ForceCommunityRenderV136=false;
-    return __wc26RenderCommunityV136.apply(this,arguments);
-  };
+      /*
+        A régi lazy community wrapperek privát flagjeit nem piszkáljuk.
+        Viszont renderCommunity hívás előtt a tab fixen community,
+        a korábbi click-listenerek pedig már beállították a saját one-shot engedélyeiket.
+      */
+      try{renderCommunity();}catch(e){
+        /*
+          Fallback: legalább a lista ne maradjon üresen, ha egy korábbi wrapper visszafogja.
+        */
+        const main=document.getElementById('main');
+        if(main){
+          main.className='main community-main';
+          main.innerHTML='<section class="card community-card"><h1 class="community-title">Közösség</h1><p class="community-lead">'+wc26CommunityItems.length+' profil betöltve. Frissítsd az oldalt, ha a lista nem jelenik meg.</p></section>';
+        }
+      }
 
-  function wc26OpenCommunityFullV136(){
-    if(S.tab!=='community')S.tab='community';
-
-    document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab==='community'));
-    tblCtrl.classList.add('hidden');
-    koCtrl.classList.add('hidden');
-    mCtrl.classList.add('hidden');
-    mRoundBar.classList.add('hidden');
-    mTeamBar.classList.add('hidden');
-
-    wc26CommunityLoadedForOpenV136=false;
-    wc26ForceCommunityRenderV136=true;
-
-    const m=document.getElementById('main');
-    if(m){
-      m.className='main community-main';
-      m.innerHTML='<section class="card community-card"><h1 class="community-title">Közösség betöltése...</h1><p class="community-lead">Egyetlen lekéréssel töltöm be a listát és az összes profilos szegmenst.</p></section>';
-    }
-
-    if(!wc26CommunityLoadingV136){
-      wc26CommunityLoadingV136=(async()=>{
-        await wc26DirectLoadCommunityV136();
-        wc26ForceCommunityRenderV136=true;
-        __wc26RenderCommunityV136();
-        activateCrests();
-        syncSpacer();
-      })().finally(()=>{wc26CommunityLoadingV136=null;});
+      try{activateCrests();syncSpacer();}catch(e){}
+    }finally{
+      wc26CommunityFullLoadRunningV137=false;
     }
   }
 
   document.addEventListener('click',e=>{
     const tab=e.target.closest('.tab[data-tab="community"]');
     if(!tab)return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    wc26OpenCommunityFullV136();
+    /*
+      Nem állítjuk meg az eseményt: a korábbi tab-handler és one-shot flag beállítások is lefuthatnak.
+      Mi kicsit később ráfuttatjuk az egyben-betöltést.
+    */
+    setTimeout(wc26FullCommunityLoadV137,40);
   },true);
 
-  /*
-    Auth initből / más tabból jövő community load ne olvasson feleslegesen.
-    Ha már a Community fülön állsz, a fenti explicit open/load kezeli.
-  */
   if(S.tab==='community'){
-    wc26OpenCommunityFullV136();
+    setTimeout(wc26FullCommunityLoadV137,120);
   }
 })();
 
