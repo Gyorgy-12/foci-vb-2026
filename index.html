@@ -13855,4 +13855,638 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 })();
 
+
+/* ===== WC26 v146: Firestore query brake / duplicate load cleanup =====
+   Cél: F5/open után ne induljon több final-results, own-tip, community vagy live fallback kérés.
+   - aktív meccsnél NEM kér /results-t csak azért, mert live van; a live külön /live-results-ből jön
+   - direct Firestore results fallback letiltva, ha Worker results URL van
+   - saját Firebase tippek rövid session-cache-ből festenek, és nem olvasnak újra 90 mp-en belül
+   - community csak a Community fülön olvas Firestore-t, inflight + session cache védelemmel
+*/
+(function(){
+  if(window.__WC26_V146_FIRESTORE_QUERY_BRAKE__) return;
+  window.__WC26_V146_FIRESTORE_QUERY_BRAKE__=true;
+
+  const V146_RESULTS_KEY='wc26_v146_results_session';
+  const V146_TIPS_PREFIX='wc26_v146_own_tips_';
+  const V146_COMMUNITY_KEY='wc26_v146_community_session';
+  const RESULTS_IDLE_TTL_MS=3*60*1000;
+  const RESULTS_LIVE_TTL_MS=2*60*1000;
+  const OWN_TIPS_TTL_MS=90*1000;
+  const COMMUNITY_TTL_MS=5*60*1000;
+  const LIVE_MIN_GAP_MS=18*1000;
+  const IDLE_MIN_GAP_MS=60*1000;
+
+  let resultsInFlightV146=null;
+  let liveInFlightV146=null;
+  let ownTipsInFlightV146=null;
+  let communityInFlightV146=null;
+  let lastResultsNetworkAtV146=0;
+  let lastLiveNetworkAtV146=0;
+
+  function nowV146(){return Date.now?Date.now():+new Date();}
+  function visibleV146(){return !document.hidden && document.visibilityState!=='hidden';}
+  function sgetV146(k){try{const raw=sessionStorage.getItem(k);return raw?JSON.parse(raw):null;}catch(e){return null;}}
+  function ssetV146(k,v){try{sessionStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function freshV146(item,ttl){return !!(item&&item.ts&&nowV146()-(+item.ts)<ttl);}
+  function tabV146(){try{return S&&S.tab||'';}catch(e){return '';}}
+  function isCommunityTabV146(){return tabV146()==='community';}
+  function isMatchLikeTabV146(){return ['matches','overview','table','stats','knockout','community'].includes(tabV146());}
+  function uidV146(){try{return wc26User&&wc26User.uid?String(wc26User.uid):'';}catch(e){return '';}}
+
+  function activeLiveV146(){
+    try{if(typeof liveSyncInfo==='function'&&liveSyncInfo().active)return true;}catch(e){}
+    try{return Object.values(LIVE_RESULTS||{}).some(r=>r&&r.started&&!r.finished);}catch(e){return false;}
+  }
+  function liveUrlV146(){
+    try{if(!WC26_RESULTS_READ_URL)return'';return WC26_RESULTS_READ_URL.replace(/\/results$/,'/live-results');}catch(e){return'';}
+  }
+
+  function normalizeResultsV146(results){
+    const out={};
+    try{Object.entries(results||{}).forEach(([id,r])=>{if(id&&r)out[id]=r;});}catch(e){}
+    return out;
+  }
+  function saveResultsV146(results){
+    const map=normalizeResultsV146(results||LIVE_RESULTS||{});
+    if(Object.keys(map).length)ssetV146(V146_RESULTS_KEY,{ts:nowV146(),results:map});
+  }
+  function applyResultsCacheV146(ttl){
+    const cached=sgetV146(V146_RESULTS_KEY) || sgetV146('wc26_v145_results_cache') || sgetV146('wc26_v144_session_results');
+    if(!freshV146(cached,ttl)||!cached.results)return false;
+    try{mergeLiveResults(cached.results);}catch(e){}
+    return true;
+  }
+  function deriveKoLightV146(results){
+    try{
+      const pairs={},schedule={};
+      Object.entries(results||{}).forEach(([id,r])=>{
+        if(!String(id).startsWith('KO-')||!r)return;
+        if(r.homeTeam&&r.awayTeam)pairs[id]={home:r.homeTeam,away:r.awayTeam,espnId:r.espnId||null};
+        if((r.date||r.time)&&KO_SCHEDULE&&KO_SCHEDULE[id]){
+          if(r.date)KO_SCHEDULE[id].date=r.date;
+          if(r.time)KO_SCHEDULE[id].t=r.time;
+          schedule[id]={date:KO_SCHEDULE[id].date,time:KO_SCHEDULE[id].t,t:KO_SCHEDULE[id].t};
+        }
+      });
+      if(Object.keys(pairs).length)window.__WC26_KO_PAIRS__=Object.assign({},window.__WC26_KO_PAIRS__||{},pairs);
+      if(Object.keys(pairs).length||Object.keys(schedule).length){
+        ssetV146('wc26_v145_ko_pairs_cache',{ts:nowV146(),pairs:Object.assign({},window.__WC26_KO_PAIRS__||{}),schedule});
+      }
+    }catch(e){}
+  }
+
+  try{
+    const baseMergeV146=mergeLiveResults;
+    mergeLiveResults=function(next){
+      const out=baseMergeV146.apply(this,arguments);
+      try{if(next&&Object.keys(next||{}).length)saveResultsV146(next);}catch(e){}
+      return out;
+    };
+  }catch(e){}
+
+  // Direct Firestore fallback is the kind of expensive duplicate we do not want while the Worker exists.
+  try{
+    const baseDirectResultsV146=typeof loadMatchResultsOnceFromFirestore==='function'?loadMatchResultsOnceFromFirestore:null;
+    loadMatchResultsOnceFromFirestore=async function(){
+      if(WC26_RESULTS_READ_URL)return false;
+      return baseDirectResultsV146?await baseDirectResultsV146.apply(this,arguments):false;
+    };
+  }catch(e){}
+
+  // Final results: never re-fetch on every F5 while a fresh session payload exists.
+  // During live windows this specifically avoids /results; live data comes from /live-results.
+  try{
+    loadMatchResultsFromBackendDb=async function(bypassCache=false){
+      if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;
+      const live=activeLiveV146();
+      const ttl=live?RESULTS_LIVE_TTL_MS:RESULTS_IDLE_TTL_MS;
+      const hasFresh=applyResultsCacheV146(ttl);
+      if(!bypassCache&&hasFresh)return true;
+      if(!bypassCache&&resultsInFlightV146)return resultsInFlightV146;
+
+      const run=(async()=>{
+        // If we are live and have any recent-ish final snapshot, do not hit /results.
+        // The live poll below is enough for score/status paint.
+        if(live&&applyResultsCacheV146(10*60*1000))return true;
+        if(!bypassCache&&nowV146()-lastResultsNetworkAtV146<IDLE_MIN_GAP_MS&&applyResultsCacheV146(30*60*1000))return true;
+        lastResultsNetworkAtV146=nowV146();
+        try{
+          const data=await fetch(WC26_RESULTS_READ_URL,bypassCache?{cache:'reload'}:{cache:'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
+          if(data&&data.results){
+            deriveKoLightV146(data.results);
+            const ok=mergeLiveResults(data.results);
+            saveResultsV146(data.results);
+            return ok!==false;
+          }
+        }catch(e){}
+        return hasFresh||applyResultsCacheV146(30*60*1000);
+      })();
+      if(!bypassCache)resultsInFlightV146=run.finally(()=>{resultsInFlightV146=null;});
+      return bypassCache?run:resultsInFlightV146;
+    };
+  }catch(e){}
+
+  async function liveTickV146(force=false){
+    if(FROZEN_MODE||!WC26_RESULTS_READ_URL||!visibleV146())return false;
+    const url=liveUrlV146();
+    if(!url)return false;
+    if(!force&&nowV146()-lastLiveNetworkAtV146<LIVE_MIN_GAP_MS)return true;
+    if(liveInFlightV146&&!force)return liveInFlightV146;
+    liveInFlightV146=(async()=>{
+      lastLiveNetworkAtV146=nowV146();
+      try{
+        const data=await fetch(url+(url.includes('?')?'&':'?')+'t='+nowV146(),{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+        if(data&&data.results){
+          const ok=mergeLiveResults(data.results);
+          return ok!==false;
+        }
+      }catch(e){}
+      return false;
+    })().finally(()=>{liveInFlightV146=null;});
+    return liveInFlightV146;
+  }
+
+  try{
+    syncLiveResults=async function(opts={}){
+      if(syncLiveResults._running)return false;
+      syncLiveResults._running=true;
+      try{
+        if(activeLiveV146()){
+          const ok=await liveTickV146(!!opts.forceLive);
+          // Do not chain a /results fallback in live windows; that is exactly the read spike.
+          return ok||applyResultsCacheV146(10*60*1000);
+        }
+        return await loadMatchResultsFromBackendDb(false);
+      }finally{syncLiveResults._running=false;}
+    };
+    listenWc26LiveMatches=function(){return activeLiveV146()?liveTickV146(false):false;};
+    ensureLivePaintLoop=function(){return activeLiveV146()?liveTickV146(false):false;};
+    scheduleLiveSync=function(delay){
+      if(FROZEN_MODE)return;
+      try{clearTimeout(wc26SyncTimer);}catch(e){}
+      const live=activeLiveV146();
+      const d=delay??(function(){try{return nextLiveSyncDelay();}catch(e){return WC26_SYNC_IDLE_MS||1800000;}})();
+      const minDelay=live?Math.max(15000,LIVE_MIN_GAP_MS):Math.max(60000,IDLE_MIN_GAP_MS);
+      wc26SyncTimer=setTimeout(async()=>{
+        try{if(visibleV146())await syncLiveResults({skipRetry:true});}catch(e){}
+        finally{scheduleLiveSync();}
+      },Math.max(minDelay,d));
+    };
+  }catch(e){}
+
+  function cleanTipsV146(obj){try{return wc26CleanTips(obj||{});}catch(e){return obj||{};}}
+  function ownKeyV146(uid){return V146_TIPS_PREFIX+String(uid||'guest');}
+  function saveOwnTipsV146(uid){
+    if(!uid)return;
+    ssetV146(ownKeyV146(uid),{ts:nowV146(),pred:cleanTipsV146(PRED||{}),ko:cleanTipsV146(KO_PRED||{})});
+  }
+  function applyOwnTipsCacheV146(uid){
+    const cached=sgetV146(ownKeyV146(uid));
+    if(!freshV146(cached,OWN_TIPS_TTL_MS))return false;
+    PRED=cleanTipsV146(cached.pred||{});
+    KO_PRED=cleanTipsV146(cached.ko||{});
+    wc26OwnTipsLoaded=true;
+    wc26RemoteDocExists=true;
+    try{if(isMatchLikeTabV146())setTimeout(()=>render(),20);}catch(e){}
+    return true;
+  }
+
+  try{
+    const baseOwnV146=loadOwnTipsFromFirebase;
+    loadOwnTipsFromFirebase=async function(force=false){
+      if(!wc26Db||!wc26User)return false;
+      const uid=uidV146();
+      if(!force&&applyOwnTipsCacheV146(uid))return true;
+      if(ownTipsInFlightV146)return ownTipsInFlightV146;
+      ownTipsInFlightV146=(async()=>{
+        try{
+          const ok=await baseOwnV146.apply(this,arguments);
+          if(uidV146())saveOwnTipsV146(uidV146());
+          return ok;
+        }finally{ownTipsInFlightV146=null;}
+      })();
+      return ownTipsInFlightV146;
+    };
+  }catch(e){}
+
+  try{
+    const basePersistV146=wc26PersistTipsNow;
+    wc26PersistTipsNow=async function(){
+      const out=await basePersistV146.apply(this,arguments);
+      saveOwnTipsV146(uidV146());
+      return out;
+    };
+  }catch(e){}
+  try{
+    const basePublishV146=publishCommunityTips;
+    publishCommunityTips=async function(){
+      const out=await basePublishV146.apply(this,arguments);
+      saveOwnTipsV146(uidV146());
+      try{sessionStorage.removeItem(V146_COMMUNITY_KEY);}catch(e){}
+      return out;
+    };
+  }catch(e){}
+
+  function applyCommunityCacheV146(ttl=COMMUNITY_TTL_MS){
+    const cached=sgetV146(V146_COMMUNITY_KEY)||sgetV146('wc26_v145_community_cache');
+    if(!freshV146(cached,ttl)||!Array.isArray(cached.items))return false;
+    wc26CommunityItems=cached.items;
+    try{if(typeof v141UpsertOwn==='function')v141UpsertOwn();}catch(e){}
+    return true;
+  }
+  function saveCommunityV146(){
+    try{if(Array.isArray(wc26CommunityItems))ssetV146(V146_COMMUNITY_KEY,{ts:nowV146(),items:wc26CommunityItems});}catch(e){}
+  }
+
+  try{
+    listenCommunityTips=function(){try{if(wc26CommunityUnsub){wc26CommunityUnsub();wc26CommunityUnsub=null;}}catch(e){} return false;};
+    loadCommunityTips=async function(force=false){
+      if(!wc26Db){wc26CommunityItems=[];return false;}
+      if(!force&&applyCommunityCacheV146())return true;
+      if(!force&&!isCommunityTabV146()){
+        try{if(typeof v141UpsertOwn==='function')v141UpsertOwn();}catch(e){}
+        return true;
+      }
+      if(!force&&!visibleV146())return applyCommunityCacheV146(30*60*1000);
+      if(communityInFlightV146)return communityInFlightV146;
+      communityInFlightV146=(async()=>{
+        try{
+          const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).get();
+          const rows=[];
+          snap.forEach(doc=>rows.push({id:doc.id,...doc.data()}));
+          wc26CommunityItems=rows;
+          try{if(typeof v141UpsertOwn==='function')v141UpsertOwn();}catch(e){}
+          saveCommunityV146();
+          return true;
+        }catch(e){
+          wc26BackendError=e&&e.message?e.message:String(e||'community load error');
+          return applyCommunityCacheV146(30*60*1000);
+        }finally{communityInFlightV146=null;}
+      })();
+      return communityInFlightV146;
+    };
+  }catch(e){}
+
+  // Profile mirror write brake: avoid writing wc26_users_v1 on every single F5.
+  // The original auth hook still tries to write; this makes repeat writes a no-op client-side for 12h.
+  try{
+    const originalCollection=wc26Db&&wc26Db.collection?wc26Db.collection.bind(wc26Db):null;
+    if(originalCollection&&!wc26Db.__wc26V146CollectionWrapped){
+      wc26Db.__wc26V146CollectionWrapped=true;
+      wc26Db.collection=function(name){
+        const col=originalCollection(name);
+        if(name!==WC26_USER_COLLECTION||!col||!col.doc)return col;
+        const originalDoc=col.doc.bind(col);
+        col.doc=function(id){
+          const ref=originalDoc(id);
+          if(!ref||!ref.set)return ref;
+          const originalSet=ref.set.bind(ref);
+          ref.set=function(data,opts){
+            try{
+              const key='wc26_v146_profile_write_'+String(id||'');
+              const last=+(sessionStorage.getItem(key)||0);
+              if(nowV146()-last<12*60*60*1000)return Promise.resolve({skipped:true,reason:'profile-write-brake'});
+              sessionStorage.setItem(key,String(nowV146()));
+            }catch(e){}
+            return originalSet(data,opts);
+          };
+          return ref;
+        };
+        return col;
+      };
+    }
+  }catch(e){}
+
+  // First paint: never network. Use what we already have and let the scheduler do one controlled request later.
+  applyResultsCacheV146(30*60*1000);
+  applyCommunityCacheV146(COMMUNITY_TTL_MS);
+  if(uidV146())applyOwnTipsCacheV146(uidV146());
+})();
+
+
+/* ===== WC26 v147: REST Firebase startup brake / no Firestore WebChannel on open =====
+   Cél: oldalnyitás/F5 után ne induljon Firestore SDK Listen/Write WebChannel,
+   ne legyen profil-mirror write, és a saját tippek/community csak REST-en, inflight/cache fékkel menjen.
+*/
+(function(){
+  if(window.__WC26_V147_REST_FIREBASE_STARTUP_BRAKE__) return;
+  window.__WC26_V147_REST_FIREBASE_STARTUP_BRAKE__=true;
+
+  const V147_TIP_PREFIX='wc26_v147_own_tips_';
+  const V147_LAST_UID='wc26_v147_last_uid';
+  const V147_COMMUNITY_KEY='wc26_v147_community_rest_cache';
+  const V147_OLD_TIP_PREFIXES=['wc26_v146_own_tips_','wc26_v144_tips_'];
+  const V147_OLD_COMMUNITY_KEYS=['wc26_v146_community_session','wc26_v145_community_cache'];
+  const OWN_TTL=3*60*1000;
+  const COMMUNITY_TTL=10*60*1000;
+  const AUTH_BOOT_DELAY=90;
+  const OWN_NETWORK_DELAY=320;
+  const COMMUNITY_NETWORK_MIN_GAP=90*1000;
+
+  let authBooted=false;
+  let authStateHooked=false;
+  let ownInflight=null;
+  let communityInflight=null;
+  let publishInflight=null;
+  let manualTipMutation=false;
+  let lastCommunityNetworkAt=0;
+  let restAuthReadyPromise=null;
+
+  function n147(){return Date.now?Date.now():+new Date();}
+  function tab147(){try{return S&&S.tab||'';}catch(e){return'';}}
+  function visible147(){return !document.hidden && document.visibilityState!=='hidden';}
+  function matchLike147(){return ['matches','overview','table','stats','knockout'].includes(tab147());}
+  function communityTab147(){return tab147()==='community';}
+  function configured147(){try{return wc26FirebaseConfigured&&wc26FirebaseConfigured();}catch(e){return false;}}
+  function uid147(){try{return wc26User&&wc26User.uid?String(wc26User.uid):'';}catch(e){return'';}}
+  function sj147(k){try{const v=sessionStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
+  function ss147(k,v){try{sessionStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function sd147(k){try{sessionStorage.removeItem(k);}catch(e){}}
+  function fresh147(x,ttl){return !!(x&&x.ts&&n147()-(+x.ts)<ttl);}
+  function clean147(o){try{return wc26CleanTips(o||{});}catch(e){return o||{};}}
+  function ownKey147(uid){return V147_TIP_PREFIX+String(uid||'guest');}
+  function lastUid147(){try{return sessionStorage.getItem(V147_LAST_UID)||'';}catch(e){return'';}}
+  function setLastUid147(uid){try{if(uid)sessionStorage.setItem(V147_LAST_UID,String(uid));}catch(e){}}
+  function nukeLocal147(){try{localStorage.removeItem(STORE_KEY);localStorage.removeItem(KO_STORE_KEY);}catch(e){}}
+
+  function project147(){return (WC26_FIREBASE_CONFIG&&WC26_FIREBASE_CONFIG.projectId)||'';}
+  function baseRest147(){return 'https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(project147())+'/databases/(default)/documents/';}
+  function docUrl147(col,id){return baseRest147()+encodeURIComponent(col)+'/'+encodeURIComponent(id);}
+  function colUrl147(col){return baseRest147()+encodeURIComponent(col)+'?pageSize=300';}
+  async function token147(){try{return wc26User&&wc26User.getIdToken?await wc26User.getIdToken(false):'';}catch(e){return'';}}
+  async function restFetch147(url,opts){
+    const t=await token147();
+    const headers=Object.assign({'Accept':'application/json'},(opts&&opts.headers)||{});
+    if(t)headers.Authorization='Bearer '+t;
+    return fetch(url,Object.assign({},opts||{},{headers}));
+  }
+
+  function toFs147(v){
+    if(v===undefined)return {nullValue:null};
+    if(v===null)return {nullValue:null};
+    if(v instanceof Date)return {timestampValue:v.toISOString()};
+    if(Array.isArray(v))return {arrayValue:{values:v.map(toFs147)}};
+    const t=typeof v;
+    if(t==='string')return {stringValue:v};
+    if(t==='boolean')return {booleanValue:v};
+    if(t==='number')return Number.isInteger(v)?{integerValue:String(v)}:{doubleValue:v};
+    if(t==='object'){
+      const fields={};
+      Object.keys(v||{}).forEach(k=>{if(v[k]!==undefined)fields[k]=toFs147(v[k]);});
+      return {mapValue:{fields}};
+    }
+    return {stringValue:String(v)};
+  }
+  function fields147(obj){const f={};Object.keys(obj||{}).forEach(k=>{if(obj[k]!==undefined)f[k]=toFs147(obj[k]);});return f;}
+  function fromFs147(f){
+    if(!f||typeof f!=='object')return undefined;
+    if('stringValue'in f)return f.stringValue;
+    if('integerValue'in f)return Number(f.integerValue);
+    if('doubleValue'in f)return Number(f.doubleValue);
+    if('booleanValue'in f)return !!f.booleanValue;
+    if('timestampValue'in f)return f.timestampValue;
+    if('nullValue'in f)return null;
+    if(f.arrayValue)return (f.arrayValue.values||[]).map(fromFs147);
+    if(f.mapValue){const o={};Object.entries(f.mapValue.fields||{}).forEach(([k,v])=>{o[k]=fromFs147(v);});return o;}
+    return undefined;
+  }
+  function docData147(doc){const out={};Object.entries((doc&&doc.fields)||{}).forEach(([k,v])=>{out[k]=fromFs147(v);});return out;}
+  function docId147(doc){try{return String(doc.name||'').split('/').pop()||'';}catch(e){return'';}}
+
+  function applyOwnCache147(uid,ttl=OWN_TTL){
+    uid=uid||uid147()||lastUid147();
+    if(!uid)return false;
+    let c=sj147(ownKey147(uid));
+    if(!fresh147(c,ttl)){
+      for(const p of V147_OLD_TIP_PREFIXES){const old=sj147(p+uid);if(fresh147(old,ttl)){c=old;break;}}
+    }
+    if(!fresh147(c,ttl))return false;
+    PRED=clean147(c.pred||{});
+    KO_PRED=clean147(c.ko||{});
+    wc26OwnTipsLoaded=true;
+    wc26OwnTipsLoadFailed=false;
+    wc26RemoteDocExists=true;
+    setLastUid147(uid);
+    try{if(matchLike147()||communityTab147())setTimeout(()=>render(),10);}catch(e){}
+    return true;
+  }
+  function saveOwnCache147(uid){
+    uid=uid||uid147();
+    if(!uid)return;
+    setLastUid147(uid);
+    ss147(ownKey147(uid),{ts:n147(),pred:clean147(PRED||{}),ko:clean147(KO_PRED||{})});
+  }
+
+  function ownCommunityItem147(){
+    if(!wc26User)return null;
+    let summary={};try{summary=communitySummary(PRED||{},KO_PRED||{});}catch(e){}
+    return {id:wc26User.uid,uid:wc26User.uid,displayName:wc26User.displayName||wc26User.email||'Játékos',photoURL:wc26User.photoURL||'',pred:clean147(PRED||{}),ko:clean147(KO_PRED||{}),summary,updatedAt:new Date().toISOString(),version:7,storage:'firebase-rest-no-webchannel'};
+  }
+  function upsertOwn147(){
+    const item=ownCommunityItem147();
+    if(!item)return;
+    if(!Array.isArray(wc26CommunityItems))wc26CommunityItems=[];
+    const i=wc26CommunityItems.findIndex(x=>x&&(x.id===item.id||x.uid===item.uid));
+    if(i>=0)wc26CommunityItems[i]=Object.assign({},wc26CommunityItems[i],item);
+    else wc26CommunityItems.unshift(item);
+  }
+  function sortCommunity147(rows){
+    try{return rows.slice().sort((a,b)=>{const ea=communitySummary((a&&a.pred)||{},(a&&a.ko)||{}).eff,eb=communitySummary((b&&b.pred)||{},(b&&b.ko)||{}).eff;return (eb.pct-ea.pct)||(eb.pts-ea.pts)||(eb.exact-ea.exact)||(eb.diff-ea.diff)||String((a&&a.displayName)||'').localeCompare(String((b&&b.displayName)||''));});}catch(e){return rows||[];}
+  }
+  function applyCommunityCache147(ttl=COMMUNITY_TTL){
+    let c=sj147(V147_COMMUNITY_KEY);
+    if(!fresh147(c,ttl)||!Array.isArray(c.items)){
+      for(const k of V147_OLD_COMMUNITY_KEYS){const old=sj147(k);if(fresh147(old,ttl)&&Array.isArray(old.items)){c=old;break;}}
+    }
+    if(!fresh147(c,ttl)||!Array.isArray(c.items))return false;
+    wc26CommunityItems=sortCommunity147(c.items);
+    upsertOwn147();
+    return true;
+  }
+  function saveCommunityCache147(){try{ss147(V147_COMMUNITY_KEY,{ts:n147(),items:Array.isArray(wc26CommunityItems)?wc26CommunityItems:[]});}catch(e){}}
+
+  async function initAuthOnly147(){
+    if(authBooted)return true;
+    if(!configured147())return false;
+    if(restAuthReadyPromise)return restAuthReadyPromise;
+    restAuthReadyPromise=(async()=>{
+      try{
+        if(!window.firebase||!firebase.initializeApp){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');}
+        if(!firebase.auth){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js');}
+        const app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');
+        wc26Auth=app.auth();
+        wc26BackendReady=true;
+        authBooted=true;
+        hookAuth147();
+        return true;
+      }catch(e){wc26BackendError=e&&e.message?e.message:String(e||'firebase auth init error');return false;}
+    })();
+    return restAuthReadyPromise;
+  }
+
+  function hookAuth147(){
+    if(authStateHooked||!wc26Auth)return;
+    authStateHooked=true;
+    wc26Auth.onAuthStateChanged(u=>{
+      wc26User=u||null;
+      wc26OwnTipsLoadFailed=false;
+      wc26RemoteDocExists=false;
+      if(u){
+        nukeLocal147();
+        setLastUid147(u.uid);
+        const painted=applyOwnCache147(u.uid,30*60*1000);
+        if(!painted){PRED={};KO_PRED={};wc26OwnTipsLoaded=false;if(!matchLike147())try{render();}catch(e){}}
+        setTimeout(()=>loadOwnTipsFromFirebase(false).catch(()=>{}),OWN_NETWORK_DELAY);
+      }else{
+        nukeLocal147();
+        PRED={};KO_PRED={};wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;
+        try{render();}catch(e){}
+      }
+      if(communityTab147())setTimeout(()=>loadCommunityTips(false).then(()=>{try{renderCommunity();}catch(e){}}).catch(()=>{}),220);
+    });
+  }
+
+  loadWc26Firebase=async function(){
+    if(FROZEN_MODE||!configured147())return;
+    setTimeout(()=>initAuthOnly147().catch(()=>{}),AUTH_BOOT_DELAY);
+  };
+  initWc26Firebase=function(){hookAuth147();};
+  listenCommunityTips=function(){try{if(wc26CommunityUnsub){wc26CommunityUnsub();wc26CommunityUnsub=null;}}catch(e){}return false;};
+  listenWc26LiveMatches=function(){return false;};
+
+  loadOwnTipsFromFirebase=async function(force=false){
+    if(!wc26User)return false;
+    const uid=uid147();
+    nukeLocal147();
+    if(!force&&applyOwnCache147(uid,OWN_TTL))return true;
+    if(ownInflight)return ownInflight;
+    ownInflight=(async()=>{
+      wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;
+      try{
+        const res=await restFetch147(docUrl147(WC26_COMMUNITY_COLLECTION,uid),{method:'GET',cache:'no-store'});
+        if(res.status===404){PRED={};KO_PRED={};wc26RemoteDocExists=false;}
+        else if(!res.ok){throw new Error('own tips REST '+res.status);}
+        else{
+          const d=docData147(await res.json());
+          PRED=clean147(wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']));
+          KO_PRED=clean147(wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']));
+          wc26RemoteDocExists=true;
+        }
+        wc26OwnTipsLoaded=true;wc26OwnTipsLoadFailed=false;saveOwnCache147(uid);nukeLocal147();
+        try{if(matchLike147()||communityTab147())render();}catch(e){}
+        return wc26RemoteDocExists;
+      }catch(e){
+        wc26OwnTipsLoadFailed=true;wc26BackendError=e&&e.message?e.message:String(e||'own tips REST error');
+        applyOwnCache147(uid,30*60*1000);
+        return false;
+      }finally{ownInflight=null;}
+    })();
+    return ownInflight;
+  };
+
+  publishCommunityTips=async function(silent,opts={}){
+    if(!wc26User)return false;
+    const uid=uid147();
+    if(!wc26OwnTipsLoaded&&!applyOwnCache147(uid,30*60*1000)&&!opts.forceManual)return false;
+    if(opts.allowEmpty===false&&!wc26HasTips(PRED)&&!wc26HasTips(KO_PRED))return false;
+    if(publishInflight)return publishInflight;
+    publishInflight=(async()=>{
+      try{
+        const item=ownCommunityItem147();
+        if(!item)return false;
+        const res=await restFetch147(docUrl147(WC26_COMMUNITY_COLLECTION,uid),{
+          method:'PATCH',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields147(item)})
+        });
+        if(!res.ok)throw new Error('publish REST '+res.status);
+        wc26RemoteDocExists=true;wc26OwnTipsLoaded=true;saveOwnCache147(uid);upsertOwn147();saveCommunityCache147();nukeLocal147();
+        if(!silent&&communityTab147())try{renderCommunity();}catch(e){}
+        return true;
+      }catch(e){wc26BackendError=e&&e.message?e.message:String(e||'publish REST error');return false;}
+      finally{publishInflight=null;}
+    })();
+    return publishInflight;
+  };
+
+  loadCommunityTips=async function(force=false){
+    if(!configured147())return false;
+    await initAuthOnly147().catch(()=>{});
+    if(!force&&applyCommunityCache147(COMMUNITY_TTL))return true;
+    if(!force&&!communityTab147()){upsertOwn147();return true;}
+    if(!force&&!visible147())return applyCommunityCache147(30*60*1000);
+    if(!force&&n147()-lastCommunityNetworkAt<COMMUNITY_NETWORK_MIN_GAP&&applyCommunityCache147(30*60*1000))return true;
+    if(communityInflight)return communityInflight;
+    communityInflight=(async()=>{
+      try{
+        lastCommunityNetworkAt=n147();
+        const res=await restFetch147(colUrl147(WC26_COMMUNITY_COLLECTION),{method:'GET',cache:'no-store'});
+        if(!res.ok)throw new Error('community REST '+res.status);
+        const data=await res.json();
+        const rows=(data.documents||[]).map(doc=>Object.assign({id:docId147(doc)},docData147(doc))).filter(Boolean);
+        wc26CommunityItems=sortCommunity147(rows);upsertOwn147();saveCommunityCache147();
+        return true;
+      }catch(e){wc26BackendError=e&&e.message?e.message:String(e||'community REST error');return applyCommunityCache147(30*60*1000);}
+      finally{communityInflight=null;}
+    })();
+    return communityInflight;
+  };
+
+  queueCommunityAutosave=function(){
+    if(!wc26User||!manualTipMutation)return;
+    nukeLocal147();
+    clearTimeout(wc26AutosaveTimer);
+    wc26AutosaveTimer=setTimeout(()=>publishCommunityTips(true,{allowEmpty:true,forceManual:true}).catch(()=>{}),1200);
+  };
+  savePred=function(){
+    if(FROZEN_MODE)return;
+    if(wc26User){nukeLocal147();if(manualTipMutation)queueCommunityAutosave();return;}
+    nukeLocal147();
+  };
+  wc26PersistTipsNow=async function(){
+    if(FROZEN_MODE)return false;
+    if(!wc26User){nukeLocal147();return true;}
+    nukeLocal147();
+    return await publishCommunityTips(true,{allowEmpty:true,forceManual:true});
+  };
+
+  try{
+    const baseSaveTip=saveTip;
+    saveTip=async function(){manualTipMutation=true;try{return await baseSaveTip.apply(this,arguments);}finally{manualTipMutation=false;saveOwnCache147(uid147());}};
+  }catch(e){}
+  try{
+    const baseSaveKoTip=saveKoTip;
+    saveKoTip=function(){manualTipMutation=true;try{return baseSaveKoTip.apply(this,arguments);}finally{manualTipMutation=false;saveOwnCache147(uid147());}};
+  }catch(e){}
+  try{
+    const baseDelG=wc26DeleteGroupTip;
+    wc26DeleteGroupTip=async function(){manualTipMutation=true;try{return await baseDelG.apply(this,arguments);}finally{manualTipMutation=false;saveOwnCache147(uid147());}};
+  }catch(e){}
+  try{
+    const baseDelK=wc26DeleteKoTip;
+    wc26DeleteKoTip=async function(){manualTipMutation=true;try{return await baseDelK.apply(this,arguments);}finally{manualTipMutation=false;saveOwnCache147(uid147());}};
+  }catch(e){}
+
+  wc26SignIn=async function(){
+    await initAuthOnly147();
+    if(!wc26Auth){wc26BackendError='Firebase auth nem töltődött be.';if(communityTab147())renderCommunity();return;}
+    const provider=new firebase.auth.GoogleAuthProvider();
+    try{await wc26Auth.signInWithPopup(provider);}catch(e){wc26BackendError=e&&e.message?e.message:String(e||'login error');if(communityTab147())renderCommunity();}
+  };
+  wc26SignOut=async function(){try{await initAuthOnly147();await wc26Auth.signOut();}catch(e){}};
+  wc26RenameProfile=async function(){
+    if(!wc26User)return;
+    let current=wc26User.displayName||wc26User.email||'Játékos';
+    let name=prompt('Új közösségi név',current);
+    if(!name)return;
+    name=name.trim().slice(0,42);if(!name)return;
+    try{if(wc26User.updateProfile)await wc26User.updateProfile({displayName:name});}catch(e){}
+    await publishCommunityTips(true,{allowEmpty:true,forceManual:true});
+    if(communityTab147())renderCommunity();
+  };
+
+  // Első festés: csak session cache, semmi Firestore SDK/WebChannel.
+  try{applyOwnCache147(lastUid147(),30*60*1000);}catch(e){}
+  try{applyCommunityCache147(COMMUNITY_TTL);}catch(e){}
+})();
+
 </script></body></html>
