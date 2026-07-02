@@ -12988,6 +12988,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 (function(){
   if(window.__WC26_V148_CLEAN_STARTUP__) return;
   window.__WC26_V148_CLEAN_STARTUP__ = true;
+  window.__WC26_V151_BACKEND_FIRST__ = true;
 
   const K_RESULTS = 'wc26_v148_results';
   const K_OWN_PREFIX = 'wc26_v148_own_';
@@ -13010,6 +13011,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   let publishInFlight = null;
   let lastLiveAt = 0;
   let lastResultsAt = 0;
+  let lastOwnAt = 0;
 
   function now(){ return Date.now ? Date.now() : +new Date(); }
   function visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
@@ -13121,20 +13123,22 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
   loadMatchResultsFromBackendDb = async function(force){
     if(FROZEN_MODE || !WC26_RESULTS_READ_URL) return false;
-    if(!force && applyResultsCache(RESULTS_TTL)) return true;
+    // V151: backend-first. Session cache csak hiba/fallback, nem első render-forrás.
     if(!force && resultsInFlight) return resultsInFlight;
+    if(!force && lastResultsAt && now() - lastResultsAt < 12000) return true;
     const run = (async() => {
-      if(!force && now() - lastResultsAt < 60000 && applyResultsCache(RESULTS_STALE_TTL)) return true;
       lastResultsAt = now();
       try{
-        const data = await fetch(WC26_RESULTS_READ_URL, force ? { cache:'reload' } : { cache:'default' }).then(r => r.ok ? r.json() : null).catch(() => null);
+        const data = await fetch(WC26_RESULTS_READ_URL, force ? { cache:'reload' } : { cache:'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
         if(data && data.results){
           deriveKoFromResults(data.results);
           const ok = mergeLiveResults(data.results);
           saveResults(data.results);
+          try{ if(matchish()) render(); }catch(_e){}
           return ok !== false;
         }
       }catch(e){}
+      // Csak akkor nyúlunk sessionhöz, ha a backend nem adott használható választ.
       return applyResultsCache(RESULTS_STALE_TTL);
     })();
     if(!force) resultsInFlight = run.finally(() => { resultsInFlight = null; });
@@ -13246,11 +13250,13 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     if(!wc26User) return false;
     const id = uid();
     clearLocalTips();
-    if(!force && applyOwnCache(id, OWN_TTL)) return true;
+    // V151: saját tippeknél is backend-first. Session cache csak fallback, ha REST elhasal.
     if(!force && ownInFlight) return ownInFlight;
+    if(!force && lastOwnAt && now() - lastOwnAt < 12000) return true;
     const run = (async() => {
       wc26OwnTipsLoaded = false;
       wc26OwnTipsLoadFailed = false;
+      lastOwnAt = now();
       try{
         const res = await rest(docUrl(WC26_COMMUNITY_COLLECTION, id), { method:'GET', cache:'no-store' });
         if(res.status === 404){
@@ -13380,9 +13386,9 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
             if(u){
               clearLocalTips();
               saveLastUid(u.uid);
-              const painted = applyOwnCache(u.uid, OWN_STALE_TTL);
-              if(!painted){ PRED = {}; KO_PRED = {}; wc26OwnTipsLoaded = false; try{ if(matchish()) render(); }catch(e){} }
-              setTimeout(() => loadOwnTipsFromFirebase(false).catch(() => {}), 140);
+              PRED = {}; KO_PRED = {}; wc26OwnTipsLoaded = false;
+              try{ if(matchish()) render(); }catch(e){}
+              setTimeout(() => loadOwnTipsFromFirebase(false).catch(() => {}), 0);
             }else{
               PRED = {}; KO_PRED = {}; wc26OwnTipsLoaded = true; wc26RemoteDocExists = false; clearLocalTips();
               try{ if(matchish() || tab() === 'community') render(); }catch(e){}
@@ -13401,8 +13407,8 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   listenCommunityTips = function(){ try{ if(wc26CommunityUnsub){ wc26CommunityUnsub(); wc26CommunityUnsub=null; } }catch(e){} return false; };
 
   try{
-    applyResultsCache(RESULTS_STALE_TTL);
-    if(matchish()) setTimeout(() => { try{ render(); }catch(e){} }, 25);
+    // V151: nincs induláskori session-cache repaint. Előbb a Worker/Firebase adat jön;
+    // session csak hálózati hiba esetén fallbackel a loader függvényekben.
   }catch(e){}
   // Keep the v143 UI fix after stripping the stacked late wrappers.
   try{
@@ -13453,6 +13459,11 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 })();
 
+
+/* ===== WC26 v151: backend-first hydration, session only fallback =====
+   V151 keeps the v148/v149 cleanup, but removes session-first painting.
+   Worker/Firebase is the first source; sessionStorage is only a fallback if backend fails.
+*/
 
 /* ===== WC26 v149: community tab chrome/control sync fix =====
    V148 left one old community render short-circuit in the render chain.
