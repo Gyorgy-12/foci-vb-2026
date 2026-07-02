@@ -13693,4 +13693,240 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   if(currentTab()==='community') setTimeout(()=>{try{loadCommunityTips(true);}catch(e){}},120);
 })();
 
+
+
+/* ===== WC26 v153: community REST parser + single fast renderer =====
+   Fixes the v152 community issue where the old wc26RestDocData parser returned
+   null for Firestore map fields, so many users rendered as 0%. This block uses
+   a real recursive REST parser, paginates the collection, includes auth token
+   when available, and replaces the stacked community renderer with one direct
+   backend-first renderer. */
+(function(){
+  if(window.__WC26_V153_COMMUNITY_REST_RENDER__) return;
+  window.__WC26_V153_COMMUNITY_REST_RENDER__ = true;
+
+  let v153InFlight = null;
+  let v153LoadedAt = 0;
+  let v153Loading = false;
+  let v153Error = '';
+  const V153_MIN_RELOAD_MS = 45000;
+  const V153_PAGE_SIZE = 300;
+
+  function currentTab(){ try { return (S && S.tab) || ''; } catch(e){ return ''; } }
+  function isCommunity(){ return currentTab() === 'community'; }
+  function projectId(){ try { return (WC26_FIREBASE_CONFIG && WC26_FIREBASE_CONFIG.projectId) || ''; } catch(e){ return ''; } }
+  function apiKey(){ try { return (WC26_FIREBASE_CONFIG && WC26_FIREBASE_CONFIG.apiKey) || ''; } catch(e){ return ''; } }
+  function enc(x){ return encodeURIComponent(String(x || '')); }
+  function collectionUrl(pageToken){
+    let u = 'https://firestore.googleapis.com/v1/projects/' + enc(projectId()) + '/databases/(default)/documents/' + enc(WC26_COMMUNITY_COLLECTION) + '?pageSize=' + V153_PAGE_SIZE + '&key=' + enc(apiKey());
+    if(pageToken) u += '&pageToken=' + enc(pageToken);
+    return u;
+  }
+  async function authHeaders(){
+    const h = { 'Accept':'application/json' };
+    try{
+      if(wc26User && wc26User.getIdToken){
+        const t = await wc26User.getIdToken(false);
+        if(t) h.Authorization = 'Bearer ' + t;
+      }
+    }catch(e){}
+    return h;
+  }
+
+  function restValue(v){
+    if(!v || typeof v !== 'object') return undefined;
+    if('stringValue' in v) return v.stringValue;
+    if('integerValue' in v) return Number(v.integerValue);
+    if('doubleValue' in v) return Number(v.doubleValue);
+    if('booleanValue' in v) return !!v.booleanValue;
+    if('timestampValue' in v) return v.timestampValue;
+    if('nullValue' in v) return null;
+    if(v.arrayValue) return ((v.arrayValue && v.arrayValue.values) || []).map(restValue);
+    if(v.mapValue){
+      const out = {};
+      Object.entries((v.mapValue && v.mapValue.fields) || {}).forEach(([k,x]) => { out[k] = restValue(x); });
+      return out;
+    }
+    return undefined;
+  }
+  function restDoc(doc){
+    const out = {};
+    Object.entries((doc && doc.fields) || {}).forEach(([k,v]) => { out[k] = restValue(v); });
+    return out;
+  }
+  function docId(doc){ try { return String((doc && doc.name) || '').split('/').pop() || ''; } catch(e){ return ''; } }
+  function pickObj(d, keys){
+    for(const k of keys){
+      const v = d && d[k];
+      if(v && typeof v === 'object' && !Array.isArray(v)) return v;
+    }
+    return {};
+  }
+  function cleanTipsSafe(o){ try { return wc26CleanTips(o || {}); } catch(e){ return {}; } }
+  function summarizeItem(item){
+    try { return communitySummary(item.pred || {}, item.ko || {}); }
+    catch(e){ return { groupCount:0, koCount:0, total:0, goals:0, eff:{ pct:0, pts:0, max:0, exact:0, diff:0, outcome:0, miss:0 } }; }
+  }
+  function effOf(item){
+    const s = item && item.__summary ? item.__summary : summarizeItem(item || {});
+    return (s && s.eff) || { pct:0, pts:0, max:0, exact:0, diff:0, outcome:0, miss:0 };
+  }
+  function normalizeDoc(doc){
+    const d = restDoc(doc) || {};
+    const id = String(d.uid || docId(doc) || '');
+    const item = Object.assign({}, d, {
+      id,
+      uid: id,
+      displayName: d.displayName || d.name || d.email || 'Játékos',
+      photoURL: d.photoURL || d.avatar || '',
+      pred: cleanTipsSafe(pickObj(d, ['pred','predictions','tips','groupPred','groupPredictions','PRED'])),
+      ko: cleanTipsSafe(pickObj(d, ['ko','knockout','knockoutPredictions','koPred','KO_PRED']))
+    });
+    item.__summary = summarizeItem(item);
+    return item;
+  }
+  function ownItem(){
+    try{
+      if(!wc26User) return null;
+      const item = {
+        id: wc26User.uid,
+        uid: wc26User.uid,
+        displayName: wc26User.displayName || wc26User.email || 'Játékos',
+        photoURL: wc26User.photoURL || '',
+        pred: cleanTipsSafe(PRED),
+        ko: cleanTipsSafe(KO_PRED),
+        updatedAt: new Date().toISOString(),
+        storage: 'local-current-user-v153'
+      };
+      item.__summary = summarizeItem(item);
+      return item;
+    }catch(e){ return null; }
+  }
+  function upsertOwn(list){
+    list = Array.isArray(list) ? list.slice() : [];
+    const own = ownItem();
+    if(!own) return list;
+    const idx = list.findIndex(x => x && (x.id === own.id || x.uid === own.uid));
+    if(idx >= 0) list[idx] = Object.assign({}, list[idx], own);
+    else list.unshift(own);
+    return list;
+  }
+  function sortList(list){
+    return (Array.isArray(list) ? list : []).slice().sort((a,b) => {
+      const ea = effOf(a), eb = effOf(b);
+      return (eb.pct - ea.pct) || (eb.pts - ea.pts) || ((eb.exact||0) - (ea.exact||0)) || ((eb.diff||0) - (ea.diff||0)) || ((eb.outcome||0) - (ea.outcome||0)) || String(a.displayName || '').localeCompare(String(b.displayName || ''));
+    });
+  }
+
+  async function fetchCommunityDocs(){
+    if(!projectId() || !apiKey()) throw new Error('Firebase config missing');
+    const headers = await authHeaders();
+    const docs = [];
+    let pageToken = '';
+    let guard = 0;
+    do{
+      const res = await fetch(collectionUrl(pageToken), { method:'GET', cache:'no-store', headers });
+      if(!res.ok){
+        let body = '';
+        try { body = await res.text(); } catch(e){}
+        throw new Error('community REST ' + res.status + (body ? ': ' + body.slice(0,120) : ''));
+      }
+      const data = await res.json();
+      docs.push(...((data && data.documents) || []));
+      pageToken = (data && data.nextPageToken) || '';
+      guard++;
+    }while(pageToken && guard < 8);
+    return docs;
+  }
+
+  loadCommunityTips = async function(force){
+    if(!force && !isCommunity()) return true;
+    const age = Date.now() - v153LoadedAt;
+    if(v153InFlight) return v153InFlight;
+    if(!force && v153LoadedAt && age < V153_MIN_RELOAD_MS) return true;
+
+    v153Loading = true;
+    v153Error = '';
+    if(isCommunity()) setTimeout(() => { try { renderCommunity(); } catch(e){} }, 0);
+
+    v153InFlight = (async() => {
+      try{
+        const docs = await fetchCommunityDocs();
+        const list = docs.map(normalizeDoc).filter(x => x && x.id);
+        wc26CommunityItems = sortList(upsertOwn(list));
+        v153LoadedAt = Date.now();
+        v153Loading = false;
+        v153Error = '';
+        return true;
+      }catch(e){
+        v153Error = e && e.message ? e.message : String(e || 'community load error');
+        wc26BackendError = v153Error;
+        wc26CommunityItems = sortList(upsertOwn(Array.isArray(wc26CommunityItems) ? wc26CommunityItems : []));
+        v153Loading = false;
+        return false;
+      }finally{
+        v153InFlight = null;
+        if(isCommunity()) setTimeout(() => { try { renderCommunity(); } catch(e){} }, 0);
+      }
+    })();
+    return v153InFlight;
+  };
+
+  function communityStatusHtml(){
+    const fresh = v153LoadedAt ? Math.round((Date.now() - v153LoadedAt) / 1000) : null;
+    const txt = v153Loading ? 'Közösségi rangsor betöltése Firebase REST-ből…' : (v153Error ? ('Firebase közösségi betöltés hiba: ' + v153Error) : (fresh !== null ? ('Firebase frissítve: ' + fresh + ' mp') : 'Közösségi adatok még nem töltődtek be.'));
+    return '<div data-v153-community-state="1" style="margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#101922;color:#9fb0bd;font-size:12px;font-weight:750;line-height:1.35">'+esc(txt)+'</div>';
+  }
+  function renderSkeleton(){
+    return '<div class="community-empty">Közösségi rangsor betöltése…</div>';
+  }
+
+  renderCommunity = function(){
+    const m = document.getElementById('main');
+    if(!m) return;
+    m.className = 'main community-main';
+
+    const configured = (typeof wc26FirebaseConfigured === 'function') ? wc26FirebaseConfigured() : !!projectId();
+    const mine = communitySummary(PRED || {}, KO_PRED || {});
+    const authHtml = wc26User
+      ? '<div class="community-user"><img class="community-avatar" src="'+esc(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(wc26User.displayName||wc26User.email||'Játékos')+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>'
+      : '<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!configured?'disabled':'')+'>Belépés Google-lel</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>';
+    const setupHtml = configured ? '' : '<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba.</p></section>';
+
+    const rows = sortList(upsertOwn(wc26CommunityItems || []));
+    let listHtml = '';
+    if(v153Loading && !rows.length) listHtml = renderSkeleton();
+    else if(rows.length){
+      listHtml = rows.map((item,i) => {
+        const s = item.__summary || summarizeItem(item);
+        const e = (s && s.eff) || { pct:0, pts:0, max:0 };
+        const score = e.max ? (e.pct + '%') : '0%';
+        return '<div class="community-row"><div class="community-rank">'+(i+1)+'.</div><div class="community-user"><img class="community-avatar" src="'+esc(item.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(item.displayName||'Játékos')+'</div><div class="community-meta">'+esc(communityRankMeta(e))+' · frissítve: '+esc(communityDate(item.updatedAt))+'</div></div></div><div><div class="community-score">'+esc(score)+'</div><button class="community-btn" data-community-view="'+esc(item.id||item.uid)+'">Megnézés</button></div></div>';
+      }).join('');
+    }else{
+      listHtml = '<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
+    }
+
+    m.innerHTML = setupHtml + '<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+communityStatsHtml(mine)+communityStatusHtml()+'</section><section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
+    m.querySelector('#wc26LoginBtn')?.addEventListener('click', wc26SignIn);
+    m.querySelector('#wc26LogoutBtn')?.addEventListener('click', wc26SignOut);
+    m.querySelector('#wc26RenameBtn')?.addEventListener('click', wc26RenameProfile);
+    m.querySelector('#wc26CommunityRefreshBtn')?.addEventListener('click', () => loadCommunityTips(true));
+    m.querySelectorAll('[data-community-view]').forEach(b => b.addEventListener('click', () => openCommunityTips(b.dataset.communityView)));
+    try{ activateCrests(); }catch(e){}
+    try{ syncSpacer(); }catch(e){}
+    if(isCommunity() && !v153Loading && !v153LoadedAt) setTimeout(() => loadCommunityTips(false), 50);
+  };
+
+  window.wc26CommunityHardRefresh = function(){ v153LoadedAt = 0; return loadCommunityTips(true); };
+
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest && e.target.closest('#tabs .tab[data-tab="community"]');
+    if(!btn) return;
+    setTimeout(() => { try { loadCommunityTips(false); } catch(_e){} }, 80);
+  }, true);
+
+  if(isCommunity()) setTimeout(() => { try { loadCommunityTips(true); } catch(e){} }, 80);
+})();
+
 </script></body></html>
