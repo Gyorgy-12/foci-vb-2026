@@ -12130,12 +12130,65 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 
   function wc26OverviewKoPoolV135(){
-    const out=[];
-    try{
-      const rounds=buildKO();
-      const bronze=buildBronze(rounds);
-      rounds.flatMap(r=>r.matches).concat([bronze]).filter(Boolean).forEach(m=>out.push(m));
-    }catch(e){}
+    /*
+      v135 hotfix: NEM hívunk buildKO()-t az overview top statokhoz.
+      A buildKO() -> thirdRows() -> cmpTeam() -> calcFairPlay() útvonal innen
+      visszajutott ugyanide, és ettől az oldal főszála be tudott akadni.
+      Itt csak a már létező KO schedule / live result / KO tip adatokból építünk
+      könnyű, statisztikához elég match-listát.
+    */
+    const out=[],seen=new Set();
+    const safeTeam=v=>{
+      const x=String(v||'').trim();
+      if(!x||x==='TBD'||x==='null'||x==='undefined')return'';
+      try{return typeof normalizeTeamName==='function'?normalizeTeamName(x):x;}catch(e){return x;}
+    };
+    const roundTitle=id=>{
+      if(id.includes('-R32-'))return'Legjobb 32';
+      if(id.includes('-R16-'))return'Nyolcaddöntő';
+      if(id.includes('-QF-'))return'Negyeddöntő';
+      if(id.includes('-SF-'))return'Elődöntő';
+      if(id.includes('-BR-'))return'Bronzmeccs';
+      if(id.includes('-F-'))return'Döntő';
+      return'Kieséses kör';
+    };
+    const roundKey=id=>{
+      const m=String(id||'').match(/^KO-([A-Z0-9]+)-/);
+      return m?m[1]:'KO';
+    };
+    const matchIndex=id=>{
+      const m=String(id||'').match(/-(\d+)$/);
+      return m?+m[1]:'';
+    };
+    const add=(id)=>{
+      if(!id||seen.has(id))return;
+      const r=(LIVE_RESULTS&&LIVE_RESULTS[id])||{};
+      const p=(KO_PRED&&KO_PRED[id])||{};
+      const sch=(KO_SCHEDULE&&KO_SCHEDULE[id])||{};
+      const h=safeTeam(r.homeTeam||r.hTeam||r.home||p.hTeam||p.homeTeam||p.home||'');
+      const a=safeTeam(r.awayTeam||r.aTeam||r.away||p.aTeam||p.awayTeam||p.away||'');
+      if(!h&&!a&&!r.started&&!r.finished&&!(p&&validScore(p.h)&&validScore(p.a)))return;
+      seen.add(id);
+      out.push({
+        id,
+        isKo:true,
+        round:roundKey(id),
+        title:roundTitle(id),
+        label:roundTitle(id)+(matchIndex(id)?' '+matchIndex(id):''),
+        h,
+        a,
+        hs:h?'':'TBD',
+        as:a?'':'TBD',
+        g:'',
+        d:r.date||sch.date||'',
+        date:r.date||sch.date||'',
+        t:r.time||sch.t||'',
+        index:matchIndex(id)
+      });
+    };
+    Object.keys(KO_SCHEDULE||{}).forEach(add);
+    Object.keys(LIVE_RESULTS||{}).filter(id=>String(id).startsWith('KO-')).forEach(add);
+    Object.keys(KO_PRED||{}).filter(id=>String(id).startsWith('KO-')).forEach(add);
     return out;
   }
 
@@ -12250,7 +12303,12 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       .slice(0,20);
   };
 
+  let __wc26FairPlayCacheV135={key:'',value:null};
+
   calcFairPlay=function(){
+    const cacheKey=Object.entries(LIVE_RESULTS||{}).map(([id,r])=>[id,r&&r.yellowCards,r&&r.redCards,r&&r.started,r&&r.finished,r&&r.h,r&&r.a]).join('|');
+    if(__wc26FairPlayCacheV135.value&&__wc26FairPlayCacheV135.key===cacheKey)return __wc26FairPlayCacheV135.value;
+
     const fp={};
     ALL.forEach(n=>fp[n]={yellow:0,yellowRed:0,red:0,yellowPlusRed:0,score:0});
     const seen=new Set();
@@ -12287,6 +12345,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       t.score=-(t.yellow*1+t.yellowRed*3+t.red*4+t.yellowPlusRed*5);
     });
 
+    __wc26FairPlayCacheV135={key:cacheKey,value:fp};
     return fp;
   };
 
