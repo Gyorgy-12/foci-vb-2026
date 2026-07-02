@@ -10664,4 +10664,196 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   document.head.appendChild(st);
 })();
 
+
+/* ===== WC26 v121: KO rows real group-card pixel clone ===== */
+(function(){
+  if(window.__WC26_V121_KO_PIXEL_GROUP_CLONE__) return;
+  window.__WC26_V121_KO_PIXEL_GROUP_CLONE__ = true;
+
+  function v121BaseCat(cat){
+    cat=String(cat||'');
+    if(!cat)return'';
+    if(cat==='miss')return'miss';
+    if(cat.indexOf('exact')===0)return'exact';
+    if(cat==='draw-pen-outcome')return'outcome';
+    if(cat.indexOf('draw')===0)return'diff';
+    if(cat.indexOf('diff')>=0)return'diff';
+    if(cat.indexOf('outcome')>=0)return'outcome';
+    return cat;
+  }
+
+  function v121KoTime(m){
+    const lr=LIVE_RESULTS[m.id]||null;
+    const sch=(typeof KO_SCHEDULE!=='undefined'&&KO_SCHEDULE[m.id])?KO_SCHEDULE[m.id]:{};
+    const md=(lr&&lr.date)||sch.date||m.date||'';
+    const mt=(lr&&lr.time)||sch.t||m.t||'';
+    if(md&&mt){
+      try{
+        return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{
+          hour:'2-digit',
+          minute:'2-digit',
+          timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone
+        });
+      }catch(e){return mt;}
+    }
+    return '--:--';
+  }
+
+  function v121KoBadge(m){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m);
+    const base=sc.base||v121BaseCat(sc.cat);
+    const r=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null;
+    const clk=r&&!r.finished?liveClockLabel(r):'';
+
+    if(base==='exact')return'<em class="mr-live-state ok">'+esc(sc.label||'Pontos')+'</em>';
+    if(base==='diff')return'<em class="mr-live-state diff">'+esc(sc.label||'G&oacute;lk&uuml;l.')+'</em>';
+    if(base==='outcome')return'<em class="mr-live-state outcome">'+esc(sc.label||'Kimenetel')+'</em>';
+    if(base==='miss')return'<em class="mr-live-state bad">'+esc(sc.label||'Hib&aacute;s')+'</em>';
+    if(state==='finished')return'';
+    if(state==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
+    if(state==='open')return'<em class="mr-live-state open">Tippelhet&#337;</em>';
+    return'<em class="mr-live-state neutral">Z&aacute;rolva</em>';
+  }
+
+  /*
+    Pixel-perfect route:
+    - same .match-row skeleton as mrow()
+    - NO data-ko-mid, NO ko-as-group-card class
+    - only neutral data-ko-card-id hook for JS click/update
+    This lets the same group-match CSS apply without KO-specific overrides.
+  */
+  koMatchRow=function(m){
+    const p=koPred(m.id);
+    const cls=p?'win':'';
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m);
+    const base=sc.base||v121BaseCat(sc.cat);
+    const locked=state!=='open';
+    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
+    const rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
+
+    return '<div class="match-row'+rowCls+'" data-ko-card-id="'+m.id+'">'
+      +'<div class="mr-date">'+v121KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v121KoBadge(m)+'</div>'
+      +'<div class="mr-sep"></div>'
+      +'<div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div>'
+      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+  };
+
+  function bindKoPixelRows(root){
+    (root||document).querySelectorAll('.match-row[data-ko-card-id]').forEach(row=>{
+      if(row.__v121KoBound)return;
+      row.__v121KoBound=true;
+      row.addEventListener('click',e=>{
+        e.stopPropagation();
+        openKoTip(row.dataset.koCardId);
+      });
+    });
+  }
+
+  const baseRenderMatchesV121=renderMatches;
+  renderMatches=function(){
+    const out=baseRenderMatchesV121.apply(this,arguments);
+    bindKoPixelRows(document.getElementById('main')||document);
+    return out;
+  };
+
+  const baseRenderV121=render;
+  render=function(){
+    const out=baseRenderV121.apply(this,arguments);
+    if(S.tab==='matches')bindKoPixelRows(document.getElementById('main')||document);
+    return out;
+  };
+
+  patchLiveRows=function(next){
+    if(S.tab!=='matches'&&S.tab!=='overview')return false;
+    let touched=0, ok=true;
+    Object.keys(next||{}).forEach(id=>{
+      const r=LIVE_RESULTS[id];
+      if(!r)return;
+
+      const row=document.querySelector('[data-mid="'+id+'"],[data-ko-card-id="'+id+'"],[data-ko-group-id="'+id+'"],[data-ko-mid="'+id+'"]');
+      if(!row){
+        if(!document.querySelector('.tip-overlay'))ok=false;
+        return;
+      }
+
+      const m=FX_BY_ID[id]||(()=>{try{return findKoMatch(id)||null}catch(e){return null}})();
+      if(!m){ok=false;return;}
+
+      const scWrap=row.querySelector('.mr-scores');
+      if(!scWrap){ok=false;return;}
+
+      const newScore=scoreHtml(m);
+      if(scWrap.innerHTML!==newScore)scWrap.innerHTML=newScore;
+
+      row.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked','predicted','ko-as-group-card');
+      const isKo=String(id).startsWith('KO-');
+      const p=isKo?koPred(id):getPred(id);
+      const sc=isKo?koTipScore(m):tipScore(m);
+      const base=isKo?(sc.base||v121BaseCat(sc.cat)):sc.cat;
+
+      if(base==='exact')row.classList.add('result-exact');
+      else if(base==='diff')row.classList.add('result-diff');
+      else if(base==='outcome')row.classList.add('result-outcome');
+      else if(base==='miss')row.classList.add('result-miss');
+
+      if(r.started&&!r.finished)row.classList.add('live-locked');
+      if(p)row.classList.add('predicted');
+      row.classList.toggle('locked',matchLockState({id})!=='open');
+
+      const date=row.querySelector('.mr-date');
+      if(date&&isKo){
+        date.innerHTML=v121KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v121KoBadge(m);
+      }else if(date){
+        const oldBadge=row.querySelector('.mr-live-state');
+        const nb=matchStateBadge(m);
+        if(oldBadge&&nb!==oldBadge.outerHTML){
+          const tmp=document.createElement('div');tmp.innerHTML=nb;if(tmp.firstChild)oldBadge.replaceWith(tmp.firstChild);
+        }else if(!oldBadge&&nb){
+          date.insertAdjacentHTML('beforeend',nb);
+        }
+      }
+
+      bindKoPixelRows(row.parentNode||document);
+      touched++;
+    });
+    return touched>0&&ok;
+  };
+
+  /*
+    Neutralize previous KO-row-only visual hacks in case an old row survives during live patch.
+    Current rows use data-ko-card-id and no special class, so they naturally use group CSS.
+  */
+  const st=document.createElement('style');
+  st.textContent=`
+    .matches-main .match-row[data-ko-card-id]{
+      display:grid!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-date,
+    .matches-main .match-row[data-ko-card-id] .mr-sep,
+    .matches-main .match-row[data-ko-card-id] .mr-teams,
+    .matches-main .match-row[data-ko-card-id] .mr-scores,
+    .matches-main .match-row[data-ko-card-id] .mr-bell{
+      position:relative!important;
+      z-index:1!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-actual,
+    .matches-main .match-row[data-ko-card-id] .mr-score-real,
+    .matches-main .match-row[data-ko-card-id] .mr-score-pair .mr-actual{
+      color:#ff6470!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .wc26-ko-core-tip,
+    .matches-main .match-row[data-ko-card-id] .wc26-ko-left-clock{
+      display:none!important;
+    }
+  `;
+  document.head.appendChild(st);
+
+  if(S.tab==='matches'){
+    try{renderMatches();}catch(e){console.warn('v121 ko pixel render failed',e);}
+  }
+})();
+
 </script></body></html>
