@@ -12975,4 +12975,498 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 })();
 
+
+/* ===== WC26 v141: single live poller + cached community render/read =====
+   Cél: refresh/open után ne induljon több régi timer egymásra, és a Community tab
+   ne számolja újra 40-100 user teljes pontosságát 8x ugyanabban a frame-ben.
+*/
+(function(){
+  if(window.__WC26_V141_SINGLE_POLL_COMMUNITY_CACHE__) return;
+  window.__WC26_V141_SINGLE_POLL_COMMUNITY_CACHE__ = true;
+
+  const COMMUNITY_TTL_MS = 2 * 60 * 1000;
+  const RESULTS_TTL_MS = 20 * 1000;
+  let communityLoadedAtV141 = 0;
+  let communityInflightV141 = null;
+  let communityRenderTickV141 = 0;
+  let resultsLoadedAtV141 = 0;
+  let resultsInflightV141 = null;
+  let liveTickInFlightV141 = false;
+  let resultsRevV141 = 1;
+
+  function v141Now(){ return Date.now ? Date.now() : +new Date(); }
+  function v141Visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
+  function v141ActiveLive(){ try{return !!liveSyncInfo().active;}catch(e){return false;} }
+  function v141LiveUrl(){
+    if(!WC26_RESULTS_READ_URL) return '';
+    return WC26_RESULTS_READ_URL.replace(/\/results$/,'/live-results')+'?t='+Date.now();
+  }
+  function v141SameResult(a,b){
+    if(!a || !b) return false;
+    return a.h===b.h && a.a===b.a && a.pH===b.pH && a.pA===b.pA && a.started===b.started && a.finished===b.finished && String(a.minute||'')===String(b.minute||'') && String(a.status||'')===String(b.status||'');
+  }
+
+  const __mergeLiveResultsV141 = mergeLiveResults;
+  mergeLiveResults = function(next){
+    let changed = false;
+    try{
+      Object.entries(next||{}).forEach(([id,r])=>{ if(!v141SameResult(LIVE_RESULTS && LIVE_RESULTS[id], r)) changed = true; });
+    }catch(e){ changed = true; }
+    const out = __mergeLiveResultsV141.apply(this, arguments);
+    if(changed || out) resultsRevV141++;
+    return out;
+  };
+
+  const __loadResultsV141 = loadMatchResultsFromBackendDb;
+  loadMatchResultsFromBackendDb = async function(bypassCache){
+    if(FROZEN_MODE || !WC26_RESULTS_READ_URL) return false;
+    const now=v141Now();
+    if(!bypassCache && resultsLoadedAtV141 && now-resultsLoadedAtV141<RESULTS_TTL_MS) return true;
+    if(resultsInflightV141) return resultsInflightV141;
+    resultsInflightV141 = Promise.resolve(__loadResultsV141.apply(this, arguments))
+      .then(ok=>{ resultsLoadedAtV141=v141Now(); return ok; })
+      .finally(()=>{ resultsInflightV141=null; });
+    return resultsInflightV141;
+  };
+
+  async function v141LiveTick(){
+    if(FROZEN_MODE || liveTickInFlightV141 || !v141Visible() || !v141ActiveLive()) return false;
+    const url=v141LiveUrl();
+    if(!url) return false;
+    liveTickInFlightV141 = true;
+    try{
+      const data = await fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+      if(data && data.results) return mergeLiveResults(data.results);
+      return false;
+    }finally{
+      liveTickInFlightV141 = false;
+    }
+  }
+
+  function v141StopOldLiveLoops(){
+    try{ if(wc26LiveMatchesUnsub){ wc26LiveMatchesUnsub(); wc26LiveMatchesUnsub=null; } }catch(e){ try{wc26LiveMatchesUnsub=null;}catch(_){} }
+    try{ if(wc26LiveFallbackTimer){ clearInterval(wc26LiveFallbackTimer); wc26LiveFallbackTimer=null; } }catch(e){ try{wc26LiveFallbackTimer=null;}catch(_){} }
+    try{ if(wc26LivePaintLoopTimer){ clearInterval(wc26LivePaintLoopTimer); wc26LivePaintLoopTimer=null; } }catch(e){ try{wc26LivePaintLoopTimer=null;}catch(_){} }
+  }
+
+  function v141EnsureSingleLiveLoop(){
+    if(FROZEN_MODE || !WC26_RESULTS_READ_URL || !v141Visible()) return false;
+    if(!v141ActiveLive()) return false;
+    if(wc26LiveFallbackTimer) return true;
+    v141LiveTick();
+    wc26LiveFallbackTimer = setInterval(v141LiveTick, WC26_SYNC_LIVE_MS || 30000);
+    return true;
+  }
+
+  listenWc26LiveMatches = function(){ return v141EnsureSingleLiveLoop(); };
+  ensureLivePaintLoop = function(){ return v141EnsureSingleLiveLoop(); };
+  syncLiveResults = async function(opts={}){
+    if(opts && opts.force) return await loadMatchResultsFromBackendDb(true);
+    if(v141ActiveLive()) return await v141LiveTick();
+    return await loadMatchResultsFromBackendDb(false);
+  };
+  scheduleLiveSync = function(delay){
+    if(FROZEN_MODE) return;
+    try{ clearTimeout(wc26SyncTimer); }catch(e){}
+    const d = delay ?? (function(){ try{return nextLiveSyncDelay();}catch(e){return WC26_SYNC_IDLE_MS||1800000;} })();
+    wc26SyncTimer = setTimeout(async()=>{
+      try{
+        if(v141ActiveLive()) await v141LiveTick();
+        else await loadMatchResultsFromBackendDb(false);
+      }catch(e){}
+      finally{ scheduleLiveSync(); }
+    }, Math.max(15000, d));
+  };
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){ v141StopOldLiveLoops(); return; }
+    setTimeout(()=>{ v141EnsureSingleLiveLoop(); scheduleLiveSync(); },160);
+  });
+  setTimeout(()=>{ v141StopOldLiveLoops(); v141EnsureSingleLiveLoop(); },1200);
+
+  function v141ActualGroupRows(){
+    const rows=[];
+    try{ (FX||[]).forEach(m=>{ const r=actualFor(m); if(r && (r.started||r.finished) && validScore(r.h) && validScore(r.a)) rows.push([m.id,r]); }); }catch(e){}
+    return rows;
+  }
+  function v141ActualKoRows(){
+    const rows=[];
+    try{ Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{ if(String(id).startsWith('KO-') && r && (r.started||r.finished) && validScore(r.h) && validScore(r.a)) rows.push([id,r]); }); }catch(e){}
+    return rows;
+  }
+
+  communityEfficiency = function(pred=PRED, ko=KO_PRED){
+    const out={pts:0,max:0,pct:0,exact:0,diff:0,outcome:0,miss:0,played:0,groupPlayed:0,koPlayed:0};
+    const p=pred||{}, k=ko||{};
+    v141ActualGroupRows().forEach(([id,r])=>{
+      out.max++; out.groupPlayed++;
+      const g=gradeTip(p[id],r);
+      out.pts+=g.pts; out[g.cat]=(out[g.cat]||0)+1;
+    });
+    v141ActualKoRows().forEach(([id,r])=>{
+      out.max++; out.koPlayed++;
+      const g=gradeKoTip(k[id],r);
+      out.pts+=g.pts;
+      const bucket=g.cat && g.cat.indexOf('exact')===0 ? 'exact' : (g.cat && g.cat.indexOf('draw')===0 ? 'diff' : g.cat);
+      out[bucket||'miss']=(out[bucket||'miss']||0)+1;
+    });
+    out.played=out.max;
+    out.pct=out.max?+(out.pts/out.max*100).toFixed(2):0;
+    return out;
+  };
+
+  communitySummary = function(pred=PRED, ko=KO_PRED){
+    const p=pred||{}, k=ko||{};
+    const groupCount=Object.keys(p).length;
+    const koCount=Object.keys(k).length;
+    const eff=communityEfficiency(p,k);
+    return {groupCount,koCount,total:groupCount+koCount,goals:communityGoalSum(p)+communityGoalSum(k),completedGroup:groupCount>=72,completedKo:koCount>=31,eff};
+  };
+
+  function v141OwnCommunityItem(){
+    if(!wc26User) return null;
+    return {
+      id:wc26User.uid, uid:wc26User.uid,
+      displayName:wc26User.displayName||wc26User.email||'Játékos',
+      photoURL:wc26User.photoURL||'',
+      pred:wc26CleanTips(PRED||{}), ko:wc26CleanTips(KO_PRED||{}),
+      updatedAt:new Date(), version:6, storage:'firebase-v141-cache'
+    };
+  }
+
+  function v141UpsertOwn(){
+    const own=v141OwnCommunityItem();
+    if(!own) return;
+    if(!Array.isArray(wc26CommunityItems)) wc26CommunityItems=[];
+    const i=wc26CommunityItems.findIndex(x=>x && (x.id===own.id || x.uid===own.uid));
+    if(i>=0) wc26CommunityItems[i]=Object.assign({},wc26CommunityItems[i],own);
+    else wc26CommunityItems.unshift(own);
+  }
+
+  function v141DecorateRows(rows){
+    return (rows||[]).filter(Boolean).map(item=>{
+      const s=communitySummary(item.pred||{},item.ko||{});
+      return {item,summary:s,eff:s.eff};
+    }).sort((a,b)=>(b.eff.pct-a.eff.pct)||(b.eff.pts-a.eff.pts)||(b.eff.exact-a.eff.exact)||(b.eff.diff-a.eff.diff)||String(a.item.displayName||'').localeCompare(String(b.item.displayName||'')));
+  }
+
+  loadCommunityTips = async function(force=false){
+    if(!wc26Db){ wc26CommunityItems=[]; return false; }
+    const now=v141Now();
+    if(!force && communityLoadedAtV141 && now-communityLoadedAtV141<COMMUNITY_TTL_MS){ v141UpsertOwn(); return true; }
+    if(communityInflightV141) return communityInflightV141;
+    communityInflightV141 = (async()=>{
+      try{
+        const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).get();
+        const rows=[];
+        snap.forEach(doc=>rows.push({id:doc.id,...doc.data()}));
+        wc26CommunityItems=rows;
+        v141UpsertOwn();
+        communityLoadedAtV141=v141Now();
+        return true;
+      }catch(e){
+        wc26BackendError=e&&e.message?e.message:String(e||'community load error');
+        return false;
+      }finally{ communityInflightV141=null; }
+    })();
+    return communityInflightV141;
+  };
+
+  renderCommunity = function(){
+    if(S.tab!=='community') return;
+    const now=v141Now();
+    if(now-communityRenderTickV141<120) return;
+    communityRenderTickV141=now;
+    const m=document.getElementById('main'); if(!m) return;
+    v141UpsertOwn();
+    m.className='main community-main';
+    const mine=communitySummary(PRED||{},KO_PRED||{});
+    const configured=wc26FirebaseConfigured();
+    const rows=v141DecorateRows(wc26CommunityItems||[]);
+    let setupHtml='',authHtml='';
+    if(!configured){
+      setupHtml='<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba.</p></section>';
+    }
+    if(wc26User){
+      const nm=wc26User.displayName||wc26User.email||'Játékos';
+      authHtml='<div class="community-user"><img class="community-avatar" src="'+esc(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(nm)+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button></div>';
+    }else{
+      authHtml='<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!configured?'disabled':'')+'>Belépés Google-lel</button></div>';
+    }
+    let listHtml='';
+    if(communityInflightV141 && !rows.length){
+      listHtml='<div class="community-empty">Közösségi tippek betöltése…</div>';
+    }else if(rows.length){
+      listHtml=rows.map((row,i)=>{
+        const item=row.item,e=row.eff;
+        return '<div class="community-row"><div class="community-rank">'+(i+1)+'.</div><div class="community-user"><img class="community-avatar" src="'+esc(item.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(item.displayName||'Játékos')+'</div><div class="community-meta">'+communityRankMeta(e)+' · frissítve: '+esc(communityDate(item.updatedAt))+'</div></div></div><div><div class="community-score">'+(e.max?e.pct+'%':'-')+'</div><button class="community-btn" data-community-view="'+esc(item.id||item.uid)+'">Megnézés</button></div></div>';
+      }).join('');
+    }else{
+      listHtml='<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
+    }
+    const errHtml=wc26BackendError?'<div class="community-empty" style="margin-top:10px">Backend jelzés: '+esc(wc26BackendError)+'</div>':'';
+    m.innerHTML=setupHtml+'<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+communityStatsHtml(mine)+errHtml+'</section><section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
+    m.querySelector('#wc26LoginBtn')?.addEventListener('click',wc26SignIn);
+    m.querySelector('#wc26LogoutBtn')?.addEventListener('click',wc26SignOut);
+    m.querySelector('#wc26RenameBtn')?.addEventListener('click',wc26RenameProfile);
+    m.querySelectorAll('[data-community-view]').forEach(b=>b.addEventListener('click',()=>openCommunityTips(b.dataset.communityView)));
+    activateCrests(); syncSpacer();
+  };
+
+  function v141OpenCommunity(){
+    if(S.tab!=='community') return;
+    renderCommunity();
+    loadCommunityTips(false).then(()=>{ if(S.tab==='community') renderCommunity(); }).catch(()=>{});
+  }
+  document.addEventListener('click',e=>{
+    if(e.target.closest('.tab[data-tab="community"]')) setTimeout(v141OpenCommunity,120);
+  },true);
+
+  const __renderV141=render;
+  render=function(){
+    if(S.tab==='community'){ v141OpenCommunity(); return; }
+    return __renderV141.apply(this,arguments);
+  };
+})();
+
+
+/* ===== WC26 v142: hard localStorage tip quarantine (no stale local tips after refresh/auth) ===== */
+(function(){
+  if(window.__WC26_V142_NO_LOCALSTORAGE_TIP_JUNK__) return;
+  window.__WC26_V142_NO_LOCALSTORAGE_TIP_JUNK__=true;
+
+  const WC26_TIP_LS_RE=/^(wc26_predictions|wc26_knockout_predictions|wc26_ko_deleted_clean_)/;
+
+  function wc26PurgeTipLocalStorageV142(){
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return;
+    try{
+      const keys=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && WC26_TIP_LS_RE.test(k)) keys.push(k);
+      }
+      keys.forEach(k=>localStorage.removeItem(k));
+      try{ localStorage.removeItem(typeof STORE_KEY!=='undefined'?STORE_KEY:'wc26_predictions_v1'); }catch(_e){}
+      try{ localStorage.removeItem(typeof KO_STORE_KEY!=='undefined'?KO_STORE_KEY:'wc26_knockout_predictions_v1'); }catch(_e){}
+    }catch(e){}
+  }
+
+  function wc26ClearLastKoMemoryV142(){
+    try{
+      if(window.__WC26_LAST_GOOD_KO__ && typeof window.__WC26_LAST_GOOD_KO__==='object'){
+        Object.keys(window.__WC26_LAST_GOOD_KO__).forEach(k=>delete window.__WC26_LAST_GOOD_KO__[k]);
+      }
+    }catch(e){}
+  }
+
+  function wc26ClearLocalTipJunkV142(){
+    wc26PurgeTipLocalStorageV142();
+    wc26ClearLastKoMemoryV142();
+  }
+
+  function wc26AuthUserV142(){
+    try{return !!(wc26User || (wc26Auth && wc26Auth.currentUser));}catch(e){return !!(typeof wc26User!=='undefined' && wc26User);}
+  }
+
+  function wc26CleanKoTipV142(p){
+    if(!p || !validScore(p.h) || !validScore(p.a)) return null;
+    const h=+p.h,a=+p.a;
+    const pH=validScore(p.pH)?+p.pH:null;
+    const pA=validScore(p.pA)?+p.pA:null;
+    if(h===a && (pH==null || pA==null || pH===pA)) return null;
+    return {h,a,pH,pA,pen:h===a};
+  }
+
+  // From v142 on, localStorage is never a prediction source of truth.
+  // Signed-in users come from Firebase; guests are memory-only in this tab.
+  try{
+    wc26ReadLocalPreds=function(){
+      wc26ClearLocalTipJunkV142();
+      return {pred:{},ko:{}};
+    };
+  }catch(e){}
+
+  try{
+    wc26ClearLocalPreds=function(){
+      wc26ClearLocalTipJunkV142();
+    };
+  }catch(e){}
+
+  // Kill the older LAST_GOOD_KO fallback. That fallback was useful for bracket rebuilds,
+  // but it also resurrected old localStorage KO tips after auth hydration.
+  try{
+    koPred=function(id){
+      return wc26CleanKoTipV142((KO_PRED||{})[id]);
+    };
+  }catch(e){}
+
+  try{
+    const __savePredV142=savePred;
+    savePred=function(){
+      wc26ClearLocalTipJunkV142();
+      const out=__savePredV142.apply(this,arguments);
+      wc26ClearLocalTipJunkV142();
+      return out;
+    };
+  }catch(e){}
+
+  try{
+    const __persistV142=wc26PersistTipsNow;
+    wc26PersistTipsNow=async function(){
+      wc26ClearLocalTipJunkV142();
+      const out=await __persistV142.apply(this,arguments);
+      wc26ClearLocalTipJunkV142();
+      return out;
+    };
+  }catch(e){}
+
+  try{
+    const __loadOwnV142=loadOwnTipsFromFirebase;
+    loadOwnTipsFromFirebase=async function(){
+      wc26ClearLocalTipJunkV142();
+      const out=await __loadOwnV142.apply(this,arguments);
+      wc26ClearLocalTipJunkV142();
+      PRED=wc26CleanTips(PRED||{});
+      KO_PRED=wc26CleanTips(KO_PRED||{});
+      return out;
+    };
+  }catch(e){}
+
+  try{
+    const __signOutV142=wc26SignOut;
+    wc26SignOut=async function(){
+      wc26ClearLocalTipJunkV142();
+      PRED={};
+      KO_PRED={};
+      const out=await __signOutV142.apply(this,arguments);
+      wc26ClearLocalTipJunkV142();
+      PRED={};
+      KO_PRED={};
+      render();
+      return out;
+    };
+  }catch(e){}
+
+  function wc26RenderAfterLocalPurgeV142(){
+    try{
+      wc26ClearLocalTipJunkV142();
+      // If auth has not hydrated yet, do not show old guest/local tips in the meantime.
+      if(!wc26AuthUserV142()){
+        PRED={};
+        KO_PRED={};
+      }
+      if(typeof render==='function') render();
+      if(typeof renderCommunity==='function' && S && S.tab==='community') renderCommunity();
+    }catch(e){}
+  }
+
+  try{
+    if(wc26Auth && !window.__WC26_V142_AUTH_PURGE_HOOKED__){
+      window.__WC26_V142_AUTH_PURGE_HOOKED__=true;
+      wc26Auth.onAuthStateChanged(u=>{
+        wc26ClearLocalTipJunkV142();
+        if(u){
+          PRED={};
+          KO_PRED={};
+          wc26RenderAfterLocalPurgeV142();
+          if(wc26Db) loadOwnTipsFromFirebase().then(()=>wc26RenderAfterLocalPurgeV142()).catch(()=>wc26RenderAfterLocalPurgeV142());
+        }else{
+          PRED={};
+          KO_PRED={};
+          wc26RenderAfterLocalPurgeV142();
+        }
+      });
+    }
+  }catch(e){}
+
+  wc26ClearLocalTipJunkV142();
+  PRED={};
+  KO_PRED={};
+  setTimeout(wc26RenderAfterLocalPurgeV142,0);
+  setTimeout(wc26RenderAfterLocalPurgeV142,700);
+})();
+
+
+/* ===== WC26 v143: modal pill red states + no background card shift on modal open ===== */
+(function(){
+  if(window.__WC26_V143_MODAL_PILLS_SCROLL_LOCK__) return;
+  window.__WC26_V143_MODAL_PILLS_SCROLL_LOCK__=true;
+
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Meccsmodal állapotpirulák: LIVE / HT / PEN / AET egységes piros család */
+    .tip-overlay .wc26-modal-pill,
+    .tip-overlay .wc26-modal-pill[data-state="live"],
+    .tip-overlay .wc26-modal-pill[data-state="ht"],
+    .tip-overlay .wc26-modal-pill[data-state="pen"],
+    .tip-overlay .wc26-modal-pill[data-state="aet"],
+    .tip-overlay .wc26-status-pill.ht,
+    .tip-overlay .wc26-status-pill.pen,
+    .tip-overlay .wc26-status-pill.aet{
+      background:rgba(255,104,128,.16)!important;
+      border-color:rgba(255,104,128,.44)!important;
+      color:#ff7b92!important;
+    }
+
+    /* Modalnyitáskor a háttérben levő Mérkőzések-kártyák ne mozduljanak lejjebb */
+    html.modal-open{
+      overflow:hidden!important;
+      scrollbar-gutter:stable;
+    }
+    body.modal-open{
+      position:static!important;
+      top:auto!important;
+      left:auto!important;
+      right:auto!important;
+      width:auto!important;
+      overflow:hidden!important;
+    }
+    .overlay.tip-overlay{
+      overscroll-behavior:contain;
+      touch-action:none;
+    }
+    .overlay.tip-overlay .sheet{
+      touch-action:auto;
+    }
+  `;
+  document.head.appendChild(st);
+
+  // A régi lock body{position:fixed; top:-scrollY}px meg tudta billenteni a háttérben
+  // levő kártyákat. Itt nincs body-fix, csak overflow lock + scrollpozíció visszaőrzés.
+  const modalSelector='.tip-overlay,.community-preview';
+  const originalSync=typeof syncModalOpenClass==='function'?syncModalOpenClass:null;
+  syncModalOpenClass=function(){
+    const open=!!document.querySelector(modalSelector);
+    const body=document.body,html=document.documentElement;
+    const wasOpen=body.classList.contains('modal-open');
+    if(open){
+      if(!wasOpen){
+        body.dataset.scrollY=String(window.scrollY||html.scrollTop||0);
+      }
+      body.style.top='';
+      body.style.left='';
+      body.style.right='';
+      body.style.width='';
+      html.classList.add('modal-open');
+      body.classList.add('modal-open');
+      return;
+    }
+    if(wasOpen){
+      const y=+(body.dataset.scrollY||0);
+      body.classList.remove('modal-open');
+      html.classList.remove('modal-open');
+      body.style.top='';
+      body.style.left='';
+      body.style.right='';
+      body.style.width='';
+      delete body.dataset.scrollY;
+      requestAnimationFrame(()=>window.scrollTo(0,y));
+      return;
+    }
+    if(originalSync){
+      try{originalSync();}catch(e){}
+    }
+  };
+})();
+
 </script></body></html>
