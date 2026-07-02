@@ -10582,14 +10582,14 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
     Object.entries(next||{}).forEach(([id,o])=>{
       const x=FX_BY_ID[id]||(()=>{try{return findKoMatch(id)||null}catch(e){return null}})();
-      let r=normalizeLiveResult(id, attachOdds ? attachOdds(id,o,x) : o);
+      let r=normalizeLiveResult(id, (typeof attachOdds==='function') ? attachOdds(id,o,x) : o);
       if(!r)return;
 
       const old=LIVE_RESULTS[id];
       if(typeof wc26IncomingIsStale==='function' && wc26IncomingIsStale(id,r,old))return;
       if(old&&old.finished&&!r.finished)return;
 
-      r = attachOdds ? attachOdds(id,r,x) : r;
+      r = (typeof attachOdds==='function') ? attachOdds(id,r,x) : r;
 
       if(JSON.stringify(old)!==JSON.stringify(r)){
         LIVE_RESULTS[id]=r;
@@ -10628,6 +10628,12 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
     return true;
   };
+})();
+
+
+/* ===== WC26 v127: safe attachOdds guard ===== */
+(function(){
+  window.__WC26_V127_SAFE_ATTACH_ODDS_GUARD__ = true;
 })();
 
 </script></body></html>
