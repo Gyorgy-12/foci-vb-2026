@@ -8313,12 +8313,13 @@ function wc26CloneObj(o){try{return JSON.parse(JSON.stringify(o||{}))}catch(e){r
 function wc26CleanTips(o){let out={};if(!o||typeof o!=='object')return out;Object.entries(o).forEach(([id,p])=>{if(p&&typeof p==='object'&&validScore(p.h)&&validScore(p.a))out[id]={...p,h:+p.h,a:+p.a}});return out}
 function wc26HasTips(o){return !!(o&&typeof o==='object'&&Object.keys(o).length)}
 function wc26PickObj(d,keys){for(let k of keys){if(d&&d[k]&&typeof d[k]==='object')return d[k]}return {}}
-function wc26ReadLocalPreds(){if(FROZEN_MODE)return{pred:wc26CloneObj(FROZEN_DATA.pred),ko:wc26CloneObj(FROZEN_DATA.ko)};return{pred:wc26SafeJson(localStorage.getItem(STORE_KEY),{}),ko:wc26SafeJson(localStorage.getItem(KO_STORE_KEY),{})}}
+function wc26AuthLocalPresent(){try{for(let i=0;i<localStorage.length;i++){let k=localStorage.key(i)||'';if(k.indexOf('firebase:authUser:')===0||k.indexOf('firebase:authUser')>=0)return true}}catch(e){}return false}
+function wc26ReadLocalPreds(){if(FROZEN_MODE)return{pred:wc26CloneObj(FROZEN_DATA.pred),ko:wc26CloneObj(FROZEN_DATA.ko)};if(wc26AuthLocalPresent()){try{localStorage.removeItem(STORE_KEY);localStorage.removeItem(KO_STORE_KEY)}catch(e){}return{pred:{},ko:{}}}return{pred:wc26SafeJson(localStorage.getItem(STORE_KEY),{}),ko:wc26SafeJson(localStorage.getItem(KO_STORE_KEY),{})}}
 function wc26ClearLocalPreds(){try{localStorage.removeItem(STORE_KEY);localStorage.removeItem(KO_STORE_KEY)}catch(e){}}
-let wc26InitialLocalTips={pred:{},ko:{}}; /* v137: no localStorage before Firebase auth resolves */
+let wc26InitialLocalTips=wc26ReadLocalPreds();
 let PRED=wc26CleanTips(wc26InitialLocalTips.pred);
 let KO_PRED=wc26CleanTips(wc26InitialLocalTips.ko);
-function savePred(){if(FROZEN_MODE)return;if(wc26User){queueCommunityAutosave();return}try{localStorage.setItem(STORE_KEY,JSON.stringify(PRED));localStorage.setItem(KO_STORE_KEY,JSON.stringify(KO_PRED))}catch(e){}}
+function savePred(){if(FROZEN_MODE)return;if(wc26User){wc26ClearLocalPreds();queueCommunityAutosave();return}if(wc26AuthLocalPresent()){wc26ClearLocalPreds();return}try{localStorage.setItem(STORE_KEY,JSON.stringify(PRED));localStorage.setItem(KO_STORE_KEY,JSON.stringify(KO_PRED))}catch(e){}}
 async function wc26PersistTipsNow(){savePred();if(wc26Db&&wc26User){clearTimeout(wc26AutosaveTimer);try{await publishCommunityTips(true,{allowEmpty:true,force:true});await loadCommunityTips()}catch(e){wc26BackendError=e.message||String(e)}}}
 async function wc26DeleteGroupTip(id){delete PRED[id];await wc26PersistTipsNow()}
 async function wc26DeleteKoTip(id){delete KO_PRED[id];await wc26PersistTipsNow()}
@@ -12361,230 +12362,113 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v137: safe no-localStorage auth + full community tab load ===== */
+/* ===== WC26 v138 FIREBREAK: stable rollback + safe auth-local guard + community full-load trigger ===== */
 (function(){
-  if(window.__WC26_V137_SAFE_AUTH_LOCAL_COMMUNITY__) return;
-  window.__WC26_V137_SAFE_AUTH_LOCAL_COMMUNITY__ = true;
+  if(window.__WC26_V138_FIREBREAK_STABLE__) return;
+  window.__WC26_V138_FIREBREAK_STABLE__ = true;
 
   /*
-    Nem nyúlunk layout-control globálokhoz, mert azok buildenként nem mindig globálisak.
-    Így nem tudja megakasztani az oldalbetöltést.
+    Tűzoltás:
+    - v136/v137 agresszív tab/auth wrapper NINCS benne ebben a buildben
+    - első localStorage olvasás már fizikailag auth-local guardos
+    - logged-in Firebase auth local key mellett STORE_KEY/KO_STORE_KEY törlődik és nem seedel tippeket
   */
 
-  let wc26GuestConfirmedV137 = false;
-  let wc26BackendHydratingV137 = false;
-  let wc26CommunityFullLoadRunningV137 = false;
-
-  function wc26NukeLocalV137(){
+  function wc26NukePredictionLocalV138(){
     try{
       localStorage.removeItem(STORE_KEY);
       localStorage.removeItem(KO_STORE_KEY);
     }catch(e){}
   }
 
-  function wc26FirebaseConfiguredV137(){
-    try{return !!(wc26FirebaseConfigured && wc26FirebaseConfigured());}
-    catch(e){return !!WC26_FIREBASE_CONFIG;}
+  function wc26AuthLocalPresentV138(){
+    try{
+      if(typeof wc26AuthLocalPresent==='function' && wc26AuthLocalPresent())return true;
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i)||'';
+        if(k.indexOf('firebase:authUser:')===0 || k.indexOf('firebase:authUser')>=0)return true;
+      }
+    }catch(e){}
+    return false;
   }
 
-  function wc26LoggedInV137(){
-    return !!wc26User;
+  if(wc26User || wc26AuthLocalPresentV138()){
+    wc26NukePredictionLocalV138();
   }
 
-  /*
-    localStorage olvasás:
-    - bejelentkezve soha
-    - Firebase auth eldöntése előtt soha
-    - csak akkor, ha auth konkrétan guest állapotot jelzett
-  */
-  const __wc26ReadLocalPredsV137 = wc26ReadLocalPreds;
-  wc26ReadLocalPreds=function(){
-    if(wc26LoggedInV137()){
-      wc26NukeLocalV137();
-      return {pred:{},ko:{}};
-    }
-
-    if(wc26FirebaseConfiguredV137() && !wc26GuestConfirmedV137){
-      return {pred:{},ko:{}};
-    }
-
-    return __wc26ReadLocalPredsV137.apply(this,arguments);
-  };
-
-  wc26ClearLocalPreds=function(){
-    wc26NukeLocalV137();
-  };
-
-  /*
-    localStorage írás:
-    - bejelentkezve soha
-    - auth-pending állapotban soha
-    - csak confirmed guestnél
-  */
-  const __wc26SavePredV137 = savePred;
+  const __wc26SavePredV138 = savePred;
   savePred=function(){
     if(FROZEN_MODE)return;
 
-    if(wc26LoggedInV137()){
-      wc26NukeLocalV137();
-      if(wc26BackendHydratingV137 || !wc26OwnTipsLoaded || wc26OwnTipsLoadFailed)return;
-      try{queueCommunityAutosave();}catch(e){}
+    if(wc26User || wc26AuthLocalPresentV138()){
+      wc26NukePredictionLocalV138();
+      if(wc26User){
+        try{queueCommunityAutosave();}catch(e){}
+      }
       return;
     }
 
-    if(wc26FirebaseConfiguredV137() && !wc26GuestConfirmedV137){
-      return;
-    }
-
-    return __wc26SavePredV137.apply(this,arguments);
+    return __wc26SavePredV138.apply(this,arguments);
   };
 
-  const __wc26PublishCommunityTipsV137 = publishCommunityTips;
-  publishCommunityTips=async function(){
-    if(wc26LoggedInV137()){
-      wc26NukeLocalV137();
-      if(wc26BackendHydratingV137 || !wc26OwnTipsLoaded || wc26OwnTipsLoadFailed)return false;
-    }
-    return await __wc26PublishCommunityTipsV137.apply(this,arguments);
-  };
-
-  const __wc26QueueCommunityAutosaveV137 = queueCommunityAutosave;
-  queueCommunityAutosave=function(){
-    if(wc26LoggedInV137()){
-      wc26NukeLocalV137();
-      if(wc26BackendHydratingV137 || !wc26OwnTipsLoaded || wc26OwnTipsLoadFailed)return;
-    }
-    return __wc26QueueCommunityAutosaveV137.apply(this,arguments);
-  };
-
-  const __wc26LoadOwnTipsFromFirebaseV137 = loadOwnTipsFromFirebase;
+  const __wc26LoadOwnTipsFromFirebaseV138 = loadOwnTipsFromFirebase;
   loadOwnTipsFromFirebase=async function(){
-    if(!wc26Db || !wc26User)return false;
-
-    wc26BackendHydratingV137=true;
-    wc26NukeLocalV137();
-    PRED={};
-    KO_PRED={};
-
-    try{
-      const ok=await __wc26LoadOwnTipsFromFirebaseV137.apply(this,arguments);
-      wc26NukeLocalV137();
-      return ok;
-    }finally{
-      wc26BackendHydratingV137=false;
-    }
+    if(wc26User)wc26NukePredictionLocalV138();
+    const out=await __wc26LoadOwnTipsFromFirebaseV138.apply(this,arguments);
+    if(wc26User)wc26NukePredictionLocalV138();
+    return out;
   };
-
-  function wc26AuthSeenV137(u){
-    if(u){
-      wc26GuestConfirmedV137=false;
-      wc26NukeLocalV137();
-      PRED={};
-      KO_PRED={};
-      try{clearTimeout(wc26AutosaveTimer);}catch(e){}
-      if(wc26Db){
-        loadOwnTipsFromFirebase().catch(e=>{wc26BackendError=e.message||String(e);});
-      }
-    }else{
-      wc26GuestConfirmedV137=true;
-      /*
-        Csak itt, tényleges guest állapotban engedjük a localStorage-t.
-      */
-      if(!wc26User){
-        const local=__wc26ReadLocalPredsV137.apply(this,arguments);
-        PRED=wc26CleanTips(local.pred);
-        KO_PRED=wc26CleanTips(local.ko);
-        wc26OwnTipsLoaded=true;
-        wc26RemoteDocExists=false;
-        if(!document.querySelector('.tip-overlay,.community-preview')){
-          try{render();}catch(e){}
-        }
-      }
-    }
-  }
-
-  try{
-    if(wc26Auth){
-      wc26Auth.onAuthStateChanged(wc26AuthSeenV137);
-      if(wc26Auth.currentUser)wc26AuthSeenV137(wc26Auth.currentUser);
-    }else if(wc26LoggedInV137()){
-      wc26AuthSeenV137(wc26User);
-    }
-  }catch(e){
-    if(wc26LoggedInV137()){
-      wc26NukeLocalV137();
-      PRED={};
-      KO_PRED={};
-    }
-  }
-
-  if(wc26LoggedInV137())wc26NukeLocalV137();
 
   /*
     Community tab:
-    - kattintáskor egyetlen batch get
-    - utána egyszer renderCommunity
-    - nem stopImmediatePropagation, nem nyúlunk kontroll változókhoz
-    - így nem tudja megakasztani az oldal betöltését
+    nem interceptáljuk / nem blokkoljuk a régi tab eventeket.
+    Rákattintás után direkt egyetlen Firestore gettel feltöltjük a teljes community listát,
+    majd renderCommunity; a profilmodal szegmensei a renderCommunity/openCommunityTips logikából jönnek.
   */
-  async function wc26FullCommunityLoadV137(){
-    if(wc26CommunityFullLoadRunningV137)return;
-    wc26CommunityFullLoadRunningV137=true;
+  let wc26CommunityFullLoadV138Running=false;
 
+  async function wc26CommunityFullLoadV138(){
+    if(wc26CommunityFullLoadV138Running)return;
+    if(S.tab!=='community')return;
+
+    wc26CommunityFullLoadV138Running=true;
     try{
-      if(S.tab!=='community')S.tab='community';
-
-      const main=document.getElementById('main');
-      if(main){
-        main.className='main community-main';
-        main.innerHTML='<section class="card community-card"><h1 class="community-title">Közösség betöltése...</h1><p class="community-lead">Egyben töltöm be a közösségi listát és a profilos szegmenseket.</p></section>';
-      }
-
       if(wc26Db){
-        const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION)
-          .orderBy('updatedAt','desc')
-          .limit(40)
-          .get();
+        const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).orderBy('updatedAt','desc').limit(40).get();
         wc26CommunityItems=snap.docs.map(d=>({id:d.id,...d.data()}));
-      }else{
-        wc26CommunityItems=[];
       }
-
-      /*
-        A régi lazy community wrapperek privát flagjeit nem piszkáljuk.
-        Viszont renderCommunity hívás előtt a tab fixen community,
-        a korábbi click-listenerek pedig már beállították a saját one-shot engedélyeiket.
-      */
-      try{renderCommunity();}catch(e){
-        /*
-          Fallback: legalább a lista ne maradjon üresen, ha egy korábbi wrapper visszafogja.
-        */
-        const main=document.getElementById('main');
-        if(main){
-          main.className='main community-main';
-          main.innerHTML='<section class="card community-card"><h1 class="community-title">Közösség</h1><p class="community-lead">'+wc26CommunityItems.length+' profil betöltve. Frissítsd az oldalt, ha a lista nem jelenik meg.</p></section>';
-        }
-      }
-
+      try{renderCommunity();}catch(e){console.warn('v138 community render failed',e);}
       try{activateCrests();syncSpacer();}catch(e){}
+    }catch(e){
+      wc26BackendError=e.message||String(e);
+      try{renderCommunity();}catch(_){}
     }finally{
-      wc26CommunityFullLoadRunningV137=false;
+      wc26CommunityFullLoadV138Running=false;
     }
   }
 
   document.addEventListener('click',e=>{
-    const tab=e.target.closest('.tab[data-tab="community"]');
-    if(!tab)return;
-    /*
-      Nem állítjuk meg az eseményt: a korábbi tab-handler és one-shot flag beállítások is lefuthatnak.
-      Mi kicsit később ráfuttatjuk az egyben-betöltést.
-    */
-    setTimeout(wc26FullCommunityLoadV137,40);
+    if(e.target.closest('.tab[data-tab="community"]')){
+      setTimeout(wc26CommunityFullLoadV138,120);
+    }
   },true);
 
   if(S.tab==='community'){
-    setTimeout(wc26FullCommunityLoadV137,120);
+    setTimeout(wc26CommunityFullLoadV138,200);
   }
+
+  /*
+    Biztonsági első render: ha valami korábbi async wrapper megfogta volna a main-t,
+    következő tickben normalizálunk, de csak ha nincs modal.
+  */
+  setTimeout(()=>{
+    if(!document.querySelector('.tip-overlay,.community-preview')){
+      try{
+        const main=document.getElementById('main');
+        if(main && !main.children.length)render();
+      }catch(e){}
+    }
+  },250);
 })();
 
 </script></body></html>
