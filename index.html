@@ -13526,4 +13526,171 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   syncChrome();
 })();
 
+
+
+/* ===== WC26 v152: community backend-first single loader =====
+   Community had the same lasagne problem: older click hooks/timers could call
+   loadCommunityTips several times, and v151 could still render stale session data
+   before the REST answer. This final override makes Community backend-first,
+   one in-flight request only, no automatic background warmup outside the tab. */
+(function(){
+  if(window.__WC26_V152_COMMUNITY_SINGLE_LOADER__) return;
+  window.__WC26_V152_COMMUNITY_SINGLE_LOADER__=true;
+
+  let communityInFlightV152=null;
+  let communityLoadedAtV152=0;
+  let communityLoadingV152=false;
+  let communityLastErrorV152='';
+  const COMMUNITY_MIN_RELOAD_MS_V152=45000;
+
+  function currentTab(){try{return (S&&S.tab)||'';}catch(e){return '';}}
+  function projectId(){try{return WC26_FIREBASE_CONFIG&&WC26_FIREBASE_CONFIG.projectId;}catch(e){return '';}}
+  function apiKey(){try{return WC26_FIREBASE_CONFIG&&WC26_FIREBASE_CONFIG.apiKey;}catch(e){return '';}}
+  function colRestUrl(col){return 'https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(projectId())+'/databases/(default)/documents/'+encodeURIComponent(col)+'?pageSize=300&key='+encodeURIComponent(apiKey());}
+  function getDocId(doc){return String(doc&&doc.name||'').split('/').pop();}
+  function cleanTipsSafe(o){try{return wc26CleanTips(o||{});}catch(e){return {};}}
+  function pickObjSafe(d,keys){try{return wc26PickObj(d,keys);}catch(e){for(const k of keys){if(d&&d[k]&&typeof d[k]==='object')return d[k];}return {};}}
+  function docPlain(doc){try{return wc26RestDocData(doc);}catch(e){
+    const out={};
+    const val=function(v){
+      if(!v||typeof v!=='object')return null;
+      if('stringValue' in v)return v.stringValue;
+      if('integerValue' in v)return Number(v.integerValue);
+      if('doubleValue' in v)return Number(v.doubleValue);
+      if('booleanValue' in v)return !!v.booleanValue;
+      if('timestampValue' in v)return v.timestampValue;
+      if('nullValue' in v)return null;
+      if('mapValue' in v){const m={};Object.entries((v.mapValue&&v.mapValue.fields)||{}).forEach(([k,x])=>m[k]=val(x));return m;}
+      if('arrayValue' in v)return (((v.arrayValue||{}).values)||[]).map(val);
+      return null;
+    };
+    Object.entries((doc&&doc.fields)||{}).forEach(([k,v])=>out[k]=val(v));
+    return out;
+  }}
+  function ownCommunityItemV152(){
+    try{
+      if(!wc26User) return null;
+      return {
+        id:wc26User.uid,
+        uid:wc26User.uid,
+        displayName:wc26User.displayName||wc26User.email||'Játékos',
+        photoURL:wc26User.photoURL||'',
+        pred:cleanTipsSafe(PRED),
+        ko:cleanTipsSafe(KO_PRED),
+        summary:typeof communitySummary==='function'?communitySummary(PRED||{},KO_PRED||{}):{},
+        updatedAt:new Date().toISOString(),
+        version:9,
+        storage:'firebase-rest-v152-local-merge'
+      };
+    }catch(e){return null;}
+  }
+  function upsertOwnV152(list){
+    list=Array.isArray(list)?list.slice():[];
+    const own=ownCommunityItemV152();
+    if(!own) return list;
+    const idx=list.findIndex(x=>x&&(x.id===own.id||x.uid===own.uid));
+    if(idx>=0) list[idx]=Object.assign({},list[idx],own);
+    else list.unshift(own);
+    return list;
+  }
+  function rankScoreV152(item){
+    try{
+      const s=communitySummary((item&&item.pred)||{},(item&&item.ko)||{});
+      return s&&s.eff?s.eff:{pct:0,pts:0,exact:0,diff:0,outcome:0};
+    }catch(e){return {pct:0,pts:0,exact:0,diff:0,outcome:0};}
+  }
+  function sortCommunityV152(list){
+    try{
+      return (Array.isArray(list)?list:[]).slice().sort((a,b)=>{
+        const ea=rankScoreV152(a), eb=rankScoreV152(b);
+        return (eb.pct-ea.pct)||(eb.pts-ea.pts)||(eb.exact-ea.exact)||(eb.diff-ea.diff)||String((a&&a.displayName)||'').localeCompare(String((b&&b.displayName)||''));
+      });
+    }catch(e){return Array.isArray(list)?list:[];}
+  }
+  function normalizeCommunityDocV152(doc){
+    const d=docPlain(doc)||{};
+    const id=d.uid||getDocId(doc);
+    return Object.assign({id:id,uid:id},d,{
+      id:id,
+      uid:id,
+      pred:cleanTipsSafe(pickObjSafe(d,['pred','predictions','tips','groupPred','groupPredictions','PRED'])),
+      ko:cleanTipsSafe(pickObjSafe(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']))
+    });
+  }
+
+  window.wc26CommunityHardRefresh=function(){
+    communityLoadedAtV152=0;
+    return loadCommunityTips(true).then(()=>{try{if(currentTab()==='community')renderCommunity();}catch(e){}});
+  };
+
+  loadCommunityTips=async function(force){
+    if(currentTab()!=='community'&&!force) return true;
+    const age=Date.now()-communityLoadedAtV152;
+    if(communityInFlightV152) return communityInFlightV152;
+    if(!force && communityLoadedAtV152 && age<COMMUNITY_MIN_RELOAD_MS_V152) return true;
+
+    communityLoadingV152=true;
+    communityLastErrorV152='';
+    try{ if(currentTab()==='community' && typeof renderCommunity==='function') setTimeout(()=>{try{renderCommunity();}catch(e){}},0); }catch(e){}
+
+    communityInFlightV152=(async()=>{
+      try{
+        if(!projectId()||!apiKey()) throw new Error('Firebase config missing');
+        const res=await fetch(colRestUrl(WC26_COMMUNITY_COLLECTION),{method:'GET',cache:'no-store'});
+        if(!res.ok) throw new Error('community REST '+res.status);
+        const data=await res.json();
+        const docs=(data&&data.documents)||[];
+        wc26CommunityItems=sortCommunityV152(upsertOwnV152(docs.map(normalizeCommunityDocV152)));
+        communityLoadedAtV152=Date.now();
+        communityLoadingV152=false;
+        return true;
+      }catch(e){
+        communityLastErrorV152=e&&e.message?e.message:String(e||'community load error');
+        wc26BackendError=communityLastErrorV152;
+        wc26CommunityItems=sortCommunityV152(upsertOwnV152(Array.isArray(wc26CommunityItems)?wc26CommunityItems:[]));
+        communityLoadingV152=false;
+        return false;
+      }finally{
+        communityInFlightV152=null;
+        if(currentTab()==='community') setTimeout(()=>{try{renderCommunity();}catch(e){}},0);
+      }
+    })();
+    return communityInFlightV152;
+  };
+
+  const prevRenderCommunityV152=typeof renderCommunity==='function'?renderCommunity:null;
+  if(prevRenderCommunityV152){
+    renderCommunity=function(){
+      const out=prevRenderCommunityV152.apply(this,arguments);
+      try{
+        const main=document.getElementById('main');
+        if(main&&currentTab()==='community'){
+          let card=main.querySelector('.community-card');
+          let old=main.querySelector('[data-v152-community-state]');
+          if(old) old.remove();
+          const fresh=communityLoadedAtV152?Math.round((Date.now()-communityLoadedAtV152)/1000):null;
+          const txt=communityLoadingV152?'Közösségi rangsor betöltése Firebase REST-ből…':(communityLastErrorV152?'Firebase közösségi betöltés hiba: '+communityLastErrorV152:(fresh!==null?'Firebase frissítve: '+fresh+' mp':'Közösségi adatok még nem töltődtek be.'));
+          const state=document.createElement('div');
+          state.dataset.v152CommunityState='1';
+          state.style.cssText='margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#101922;color:#9fb0bd;font-size:12px;font-weight:750;line-height:1.35';
+          state.textContent=txt;
+          if(card) card.appendChild(state);
+          if(!communityLoadingV152 && (!communityLoadedAtV152 || communityLastErrorV152)){
+            setTimeout(()=>{try{loadCommunityTips(false);}catch(e){}},60);
+          }
+        }
+      }catch(e){}
+      return out;
+    };
+  }
+
+  document.addEventListener('click',function(e){
+    const btn=e.target&&e.target.closest&&e.target.closest('#tabs .tab[data-tab="community"]');
+    if(!btn) return;
+    setTimeout(()=>{try{loadCommunityTips(false);}catch(e){}},120);
+  },true);
+
+  if(currentTab()==='community') setTimeout(()=>{try{loadCommunityTips(true);}catch(e){}},120);
+})();
+
 </script></body></html>
