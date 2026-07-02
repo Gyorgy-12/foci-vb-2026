@@ -9945,7 +9945,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   const baseRenderKO=renderKO;renderKO=function(){const before=getKoScroll();const out=baseRenderKO.apply(this,arguments);const br=document.querySelector('.ko-bracket');if(br){br.addEventListener('scroll',()=>{window.__WC26_KO_SCROLL=br.scrollLeft;KO_SCROLL=br.scrollLeft},{passive:true});setKoScroll(before||window.__WC26_KO_SCROLL||KO_SCROLL||0)}return out};
 
   /* modal */
-  function modalMeta(r){if(!r||!r.started)return null;const raw=String(r.status||'').toUpperCase();if(isPenPhase(r)&&!r.finished)return{text:'PEN',cls:'pen'};if(isHT(r))return{text:'HT',cls:'ht'};if(raw.includes('AET')||raw.includes('EXTRA'))return{text:'AET',cls:'aet'};if(r.finished||raw==='FT'||raw.includes('FULL TIME')||raw.includes('FINISHED')||raw.includes('FINAL'))return{text:'FT',cls:'ft'};const clk=liveClockLabel(r);return{text:clk||'LIVE',cls:'live'}}
+  function modalMeta(r){if(!r||!r.started)return null;const raw=String(r.status||'').toUpperCase();if(isPenPhase(r)||hasPen(r)||raw.includes('PEN'))return{text:'PEN',cls:'pen'};if(isHT(r))return{text:'HT',cls:'ht'};if(raw.includes('AET')||raw.includes('EXTRA'))return{text:'AET',cls:'aet'};if(r.finished||raw==='FT'||raw.includes('FULL TIME')||raw.includes('FINISHED')||raw.includes('FINAL'))return{text:'FT',cls:'ft'};const clk=liveClockLabel(r);return{text:clk||'LIVE',cls:'live'}}
   function ensurePill(ov,r){const match=ov?.querySelector('.tip-match');if(!match)return;let meta=modalMeta(r),slot=match.querySelector('.wc26-modal-pill-slot');if(!meta){if(slot)slot.remove();return}if(!slot){slot=document.createElement('div');slot.className='wc26-modal-pill-slot';const below=match.querySelector('.tip-below-score'),teams=match.querySelector('.tip-teams');if(below)match.insertBefore(slot,below);else if(teams&&teams.nextSibling)match.insertBefore(slot,teams.nextSibling);else match.appendChild(slot)}slot.innerHTML='<span class="wc26-modal-pill" data-state="'+esc(meta.cls)+'">'+esc(meta.text)+'</span>';match.querySelectorAll('.tip-below-score > .tip-live-clock,.tip-below-score > .wc26-state-indicators,.tip-below-score > .wc26-status-pill,.tip-below-score > .wc26-primary-state-badge').forEach(el=>el.remove())}
   function renderPenSegment(ov,r){if(!ov)return;ov.querySelectorAll('.penalty-box.locked-real-pen,.pen-v91-card,.pen-v94-card,.pen-v98-card,.pen-compact-v86,.pen-compact-v87,.pen-v90,.pen-clean-card').forEach(el=>el.remove());if(!r||!isPenPhase(r)||!hasPen(r))return;const odds=ov.querySelector('.tip-prob-card');if(!odds)return;const card=document.createElement('div');card.className='pen-clean-card';card.dataset.live=!r.finished?'1':'0';card.innerHTML='<div class="pen-clean-inner"><span class="pen-clean-label">'+esc(!r.finished?'Tizenegyespárbaj':'Valós büntetők')+'</span><span class="pen-clean-score"><b>'+esc(r.pH)+'</b><em>–</em><b>'+esc(r.pA)+'</b></span></div>';odds.parentNode.insertBefore(card,odds)}
   function refreshModal(){const ov=document.querySelector('.tip-overlay[data-tip-id]');if(!ov)return;const id=ov.dataset.tipId,kind=ov.dataset.tipKind||(String(id).startsWith('KO-')?'ko':'group'),x=kind==='ko'?(findKoSafe(id)||{id}):FX_BY_ID[id];if(!x)return;const r=attachOdds(id,LIVE_RESULTS[id]||actualFor({id}),x);if(!r)return;const realH=ov.querySelector('.tip-real-h'),realA=ov.querySelector('.tip-real-a');if(realH&&validScore(r.h))realH.textContent=r.h;if(realA&&validScore(r.a))realA.textContent=r.a;ensurePill(ov,r);renderPenSegment(ov,r);const below=ov.querySelector('.tip-below-score');if(below&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a)){const html=goalScorersHtml(r,kind==='ko'?{h:x.h,a:x.a}:x)+redCardsHtml(r,kind==='ko'?{h:x.h,a:x.a}:x);if(below.innerHTML!==html){below.innerHTML=html;activateCrests()}below.querySelectorAll(':scope > .tip-live-clock,:scope > .wc26-state-indicators,:scope > .wc26-status-pill').forEach(el=>el.remove())}const sc=kind==='ko'?koTipScore(x):tipScore(x),banner=ov.querySelector('.tip-your-tip-banner');if(banner){banner.classList.remove('grade-exact','grade-diff','grade-outcome','grade-miss');if(sc&&sc.cat)banner.classList.add('grade-'+sc.cat)}const prob=ov.querySelector('.tip-prob-card');if(prob&&typeof probCard==='function'){const tmp=document.createElement('div');tmp.innerHTML=probCard(x,r);if(tmp.firstElementChild&&tmp.firstElementChild.outerHTML!==prob.outerHTML)prob.replaceWith(tmp.firstElementChild)}}
@@ -11491,6 +11491,247 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   },true);
 
   if(S.tab==='matches')setTimeout(()=>scrollToCurrentMatch(true),250);
+})();
+
+
+/* ===== WC26 v132: instant own-tip render + community no background rerender ===== */
+(function(){
+  if(window.__WC26_V132_TIP_RENDER_COMMUNITY_STATIC__) return;
+  window.__WC26_V132_TIP_RENDER_COMMUNITY_STATIC__ = true;
+
+  /*
+    Community fül:
+    - csak tab megnyitáskor kap egy teljes render/load ciklust
+    - utána sem timer, sem live merge nem rendereli újra a listát
+    - nyitott profilmodalban viszont a live eredmény/pirula célzottan frissül
+  */
+  let wc26CommunityAllowOneRenderV132=false;
+  let wc26CommunityRenderedOnceV132=false;
+  let wc26CommunityAllowOneLoadV132=false;
+
+  const __wc26LoadCommunityTipsV132=loadCommunityTips;
+  loadCommunityTips=async function(){
+    if(S.tab==='community' && wc26CommunityRenderedOnceV132 && !wc26CommunityAllowOneLoadV132){
+      return true;
+    }
+    wc26CommunityAllowOneLoadV132=false;
+    return await __wc26LoadCommunityTipsV132.apply(this,arguments);
+  };
+
+  const __wc26RenderCommunityV132=renderCommunity;
+  renderCommunity=function(){
+    if(S.tab==='community' && wc26CommunityRenderedOnceV132 && !wc26CommunityAllowOneRenderV132){
+      return;
+    }
+    wc26CommunityAllowOneRenderV132=false;
+    const out=__wc26RenderCommunityV132.apply(this,arguments);
+    if(S.tab==='community')wc26CommunityRenderedOnceV132=true;
+    return out;
+  };
+
+  function wc26OpenCommunityOnceV132(){
+    wc26CommunityAllowOneLoadV132=true;
+    wc26CommunityAllowOneRenderV132=true;
+  }
+
+  document.addEventListener('click',e=>{
+    if(e.target.closest('.tab[data-tab="community"]')){
+      wc26OpenCommunityOnceV132();
+    }
+  },true);
+
+  const __wc26RenderV132=render;
+  render=function(){
+    if(S.tab==='community' && wc26CommunityRenderedOnceV132 && !wc26CommunityAllowOneRenderV132){
+      return;
+    }
+    return __wc26RenderV132.apply(this,arguments);
+  };
+
+  /*
+    Community modal sorok kapjanak stabil match-id hookot, hogy live patch tudja
+    a Valós/Tipp/pill részt frissíteni teljes modal újranyitás nélkül.
+  */
+  const __wc26CommunityMatchRowV132=communityMatchRow;
+  communityMatchRow=function(x,p){
+    const html=__wc26CommunityMatchRowV132.apply(this,arguments);
+    if(!x||!x.id)return html;
+    return html.replace('<div class="community-pred', '<div data-community-mid="'+esc(x.id)+'" data-community-kind="group" class="community-pred');
+  };
+
+  const __wc26CommunityKoRowsV132=communityKoRows;
+  communityKoRows=function(item,rounds){
+    rounds=Array.isArray(rounds)?rounds:[rounds];
+    let ms=communityKoAll(item)
+      .filter(m=>!rounds[0]||rounds.includes(m.title)||rounds.includes(m.round))
+      .sort((a,b)=>(koMatchKickoff(a)||0)-(koMatchKickoff(b)||0));
+
+    const rows=ms.map(m=>{
+      const p=(item.ko||{})[m.id];
+      const r=actualFor({id:m.id});
+      const g=r&&(r.finished||r.started)&&validScore(r.h)&&validScore(r.a)
+        ? gradeKoTip(p,r)
+        : {cat:'pending',pts:0,label:'Várakozik'};
+      const home=m.h||m.hs;
+      const away=m.a||m.as;
+      return '<div data-community-mid="'+esc(m.id)+'" data-community-kind="ko" class="community-pred'+communityPredGradeClass(g)+'">'
+        +'<div class="community-teams"><div class="community-match-line">'
+        +'<div class="community-team">'+(m.h?crest(m.h,'24px'):'')+'<span>'+esc(home||'')+'</span></div>'
+        +'<span class="community-vs">-</span>'
+        +'<div class="community-team">'+(m.a?crest(m.a,'24px'):'')+'<span>'+esc(away||'')+'</span></div>'
+        +'</div><small>'+esc(m.title||m.round||'Kieséses kör')+'</small></div>'
+        +communityPredScoreHtml(p,r,g)
+      +'</div>';
+    }).join('');
+
+    return rows||'<div class="community-empty">Még nincs ilyen körhöz megjeleníthető tipp.</div>';
+  };
+
+  function wc26PatchOneCommunityRowV132(row,item){
+    const id=row.dataset.communityMid;
+    const kind=row.dataset.communityKind||'group';
+    if(!id||!item)return;
+
+    const isKo=kind==='ko'||String(id).startsWith('KO-');
+    const p=isKo?(item.ko||{})[id]:(item.pred||{})[id];
+    const r=actualFor({id});
+    const x=isKo
+      ? (function(){try{return findKoMatch(id)||wc26FindAnyMatch(id)||{id}}catch(e){return {id}}})()
+      : (FX_BY_ID[id]||{id});
+
+    const g=r&&(r.finished||r.started)&&validScore(r.h)&&validScore(r.a)
+      ? (isKo?gradeKoTip(p,r):gradeTip(p,r))
+      : {cat:'pending',pts:0,label:'Várakozik'};
+
+    row.classList.remove('grade-exact','grade-diff','grade-outcome','grade-miss','grade-pending');
+    const gc=communityPredGradeClass(g);
+    if(gc)gc.trim().split(/\s+/).forEach(c=>c&&row.classList.add(c));
+
+    const old=row.querySelector('.community-result');
+    const tmp=document.createElement('div');
+    tmp.innerHTML=communityPredScoreHtml(p,r,g);
+    const fresh=tmp.firstElementChild;
+    if(old&&fresh)old.replaceWith(fresh);
+  }
+
+  function wc26PatchCommunityPreviewLiveV132(){
+    document.querySelectorAll('.community-preview[data-community-view-id]').forEach(ov=>{
+      const id=ov.dataset.communityViewId;
+      const item=wc26CommunityItems.find(x=>x.id===id||x.uid===id);
+      if(!item)return;
+      ov.querySelectorAll('.community-pred[data-community-mid]').forEach(row=>wc26PatchOneCommunityRowV132(row,item));
+    });
+  }
+
+  refreshCommunityPreviews=function(){
+    /*
+      Korábbi működés: modal bezár, újranyit, teljes community újrarender.
+      Új működés: csak élő eredmény/pirula/Valós mező patch a profilmodalban.
+    */
+    wc26PatchCommunityPreviewLiveV132();
+  };
+
+  /*
+    Tipp mentése/törlése után minden nem-community nézet azonnal újrarenderelődik.
+    Community fül listája nem frissül háttérben; majd amikor megnyitod, egyszer renderel.
+  */
+  function wc26AfterOwnTipMutationRenderV132(){
+    if(S.tab==='community'){
+      wc26CommunityRenderedOnceV132=false;
+      return;
+    }
+    try{render();}catch(e){}
+    try{patchLiveRows(LIVE_RESULTS||{});}catch(e){}
+    try{refreshOpenTipModal();}catch(e){}
+  }
+
+  const __wc26SaveTipV132=saveTip;
+  saveTip=async function(){
+    const out=await __wc26SaveTipV132.apply(this,arguments);
+    wc26AfterOwnTipMutationRenderV132();
+    return out;
+  };
+
+  const __wc26SaveKoTipV132=saveKoTip;
+  saveKoTip=function(){
+    const out=__wc26SaveKoTipV132.apply(this,arguments);
+    wc26AfterOwnTipMutationRenderV132();
+    return out;
+  };
+
+  const __wc26DeleteGroupTipV132=wc26DeleteGroupTip;
+  wc26DeleteGroupTip=async function(){
+    const out=await __wc26DeleteGroupTipV132.apply(this,arguments);
+    wc26AfterOwnTipMutationRenderV132();
+    return out;
+  };
+
+  const __wc26DeleteKoTipV132=wc26DeleteKoTip;
+  wc26DeleteKoTip=async function(){
+    const out=await __wc26DeleteKoTipV132.apply(this,arguments);
+    wc26AfterOwnTipMutationRenderV132();
+    return out;
+  };
+
+  /*
+    Live merge:
+    - Matches/Overview célzott patch modal alatt is
+    - Knockout/table/stats csak modal nélkül
+    - Community lista SOHA nem renderelődik live miatt
+    - Community profilmodal csak live sorokat patch-el
+  */
+  mergeLiveResults=function(next){
+    let changed=false, prune=false, fixed={};
+
+    Object.entries(next||{}).forEach(([id,o])=>{
+      const x=FX_BY_ID[id]||(()=>{try{return findKoMatch(id)||null}catch(e){return null}})();
+      let r=normalizeLiveResult(id,(typeof attachOdds==='function')?attachOdds(id,o,x):o);
+      if(!r)return;
+
+      const old=LIVE_RESULTS[id];
+      if(typeof wc26IncomingIsStale==='function'&&wc26IncomingIsStale(id,r,old))return;
+      if(old&&old.finished&&!r.finished)return;
+
+      r=(typeof attachOdds==='function')?attachOdds(id,r,x):r;
+
+      if(JSON.stringify(old)!==JSON.stringify(r)){
+        LIVE_RESULTS[id]=r;
+        fixed[id]=r;
+        changed=true;
+        if(r.finished&&(!old||!old.finished||old.h!==r.h||old.a!==r.a||old.pH!==r.pH||old.pA!==r.pA))prune=true;
+      }
+    });
+
+    if(!changed)return false;
+    if(prune)pruneStaleKoPred(true);
+
+    const modalOpen=!!document.querySelector('.tip-overlay,.community-preview');
+
+    if(S.tab==='matches'||S.tab==='overview'){
+      const patched=patchLiveRows(fixed);
+      if(!modalOpen && (!patched||prune))render();
+    }else if(S.tab==='knockout'){
+      if(!modalOpen){
+        patchKoCards();
+        if(prune)render();
+      }
+    }else if(['table','stats'].includes(S.tab)){
+      if(!modalOpen)render();
+    }else if(S.tab==='community'){
+      /* direkt nincs render */
+    }
+
+    try{refreshOpenTipModal();}catch(e){}
+    try{if(typeof refreshModal==='function')refreshModal();}catch(e){}
+    wc26PatchCommunityPreviewLiveV132();
+
+    return true;
+  };
+
+  /* A community fül megnyitásának első renderére engedélyt adunk, ha már ott vagyunk. */
+  if(S.tab==='community'){
+    wc26OpenCommunityOnceV132();
+  }
 })();
 
 </script></body></html>
