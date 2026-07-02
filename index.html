@@ -10856,4 +10856,131 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 })();
 
+
+/* ===== WC26 v122: AET red + wider long-minute pills + live KO row parity ===== */
+(function(){
+  if(window.__WC26_V122_AET_LONG_MIN_KO_PARITY__) return;
+  window.__WC26_V122_AET_LONG_MIN_KO_PARITY__ = true;
+
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Modal: AET legyen ugyanaz a piros család, mint az FT/live állapot */
+    .wc26-modal-pill[data-state="aet"],
+    .tip-overlay .wc26-modal-pill[data-state="aet"]{
+      background:rgba(255,104,128,.16)!important;
+      border-color:rgba(255,104,128,.44)!important;
+      color:#ff7b92!important;
+    }
+
+    /* Góllövő/event perc-pirula: 120+5' és hasonlók ne törjenek, ne lógjanak ki */
+    .goal-scorer-min{
+      min-width:clamp(46px,10.8vw,58px)!important;
+      width:auto!important;
+      padding-left:clamp(7px,1.8vw,10px)!important;
+      padding-right:clamp(7px,1.8vw,10px)!important;
+      white-space:nowrap!important;
+      box-sizing:border-box!important;
+      flex:0 0 auto!important;
+    }
+    .tip-below-score .goal-scorer-min{
+      min-width:clamp(48px,11.4vw,62px)!important;
+    }
+    @media (max-width:430px){
+      .goal-scorer-row{
+        grid-template-columns:minmax(0,1fr) minmax(48px,auto) minmax(0,1fr)!important;
+      }
+      .goal-scorer-min{
+        min-width:48px!important;
+        padding-left:7px!important;
+        padding-right:7px!important;
+        font-size:clamp(11px,2.9vw,12.5px)!important;
+      }
+      .tip-below-score .goal-scorer-min{
+        min-width:50px!important;
+      }
+    }
+
+    /*
+      Élő KO sorok a Mérkőzések fülön: ugyanaz a grid/score viselkedés,
+      mint a csoportkörös .match-row. Csak a data hook más.
+    */
+    .matches-main .match-row[data-ko-card-id]{
+      display:grid!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-score-wrap{
+      display:grid!important;
+      grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
+      align-items:center!important;
+      justify-content:end!important;
+      gap:clamp(5px,.85vw,10px)!important;
+      width:auto!important;
+      min-width:0!important;
+      transform:none!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-score-wrap.no-tip{
+      grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
+      gap:clamp(5px,.85vw,10px)!important;
+      transform:none!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-clock-row{
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:5px!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-clock,
+    .matches-main .match-row[data-ko-card-id] .mr-int-badge{
+      min-width:clamp(24px,2.35vw,48px)!important;
+      padding:clamp(2px,.35vw,6px) clamp(5px,.8vw,13px)!important;
+      font-size:clamp(10px,calc(0.22vw + 12px),16px)!important;
+      line-height:1!important;
+      transform:none!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-score-lines{
+      display:flex!important;
+      flex-direction:column!important;
+      gap:inherit!important;
+      min-width:clamp(34px,5vw,56px)!important;
+      width:auto!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-score-compare,
+    .matches-main .match-row[data-ko-card-id] .mr-score-actual-only,
+    .matches-main .match-row[data-ko-card-id] .mr-score-tip-only{
+      width:auto!important;
+      min-width:0!important;
+      display:flex!important;
+      flex-direction:column!important;
+      gap:inherit!important;
+      align-items:stretch!important;
+      justify-content:center!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-score-row{
+      display:grid!important;
+      grid-template-columns:minmax(12px,1fr) minmax(12px,1fr)!important;
+      align-items:end!important;
+      justify-items:center!important;
+      column-gap:clamp(6px,.8vw,11px)!important;
+      line-height:1!important;
+      white-space:nowrap!important;
+      min-height:0!important;
+      width:auto!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-score-row.single{
+      grid-template-columns:minmax(12px,1fr)!important;
+    }
+    .matches-main .match-row[data-ko-card-id] .mr-score-real,
+    .matches-main .match-row[data-ko-card-id] .mr-score-single.mr-score-real,
+    .matches-main .match-row[data-ko-card-id] .mr-score-pair .mr-actual{
+      color:#ff6470!important;
+    }
+  `;
+  document.head.appendChild(st);
+
+  if(S.tab==='matches'){
+    try{renderMatches();}catch(e){console.warn('v122 ko parity render failed',e);}
+  }else{
+    try{refreshOpenTipModal();}catch(e){}
+  }
+})();
+
 </script></body></html>
