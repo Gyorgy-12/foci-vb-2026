@@ -10571,4 +10571,63 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 })();
 
+
+/* ===== WC26 v126: patch background match rows even while modal is open ===== */
+(function(){
+  if(window.__WC26_V126_PATCH_ROWS_WITH_MODAL__) return;
+  window.__WC26_V126_PATCH_ROWS_WITH_MODAL__ = true;
+
+  mergeLiveResults=function(next){
+    let changed=false, prune=false, fixed={};
+
+    Object.entries(next||{}).forEach(([id,o])=>{
+      const x=FX_BY_ID[id]||(()=>{try{return findKoMatch(id)||null}catch(e){return null}})();
+      let r=normalizeLiveResult(id, attachOdds ? attachOdds(id,o,x) : o);
+      if(!r)return;
+
+      const old=LIVE_RESULTS[id];
+      if(typeof wc26IncomingIsStale==='function' && wc26IncomingIsStale(id,r,old))return;
+      if(old&&old.finished&&!r.finished)return;
+
+      r = attachOdds ? attachOdds(id,r,x) : r;
+
+      if(JSON.stringify(old)!==JSON.stringify(r)){
+        LIVE_RESULTS[id]=r;
+        fixed[id]=r;
+        changed=true;
+        if(r.finished&&(!old||!old.finished||old.h!==r.h||old.a!==r.a||old.pH!==r.pH||old.pA!==r.pA))prune=true;
+      }
+    });
+
+    if(!changed)return false;
+
+    if(prune)pruneStaleKoPred(true);
+
+    const modalOpen=!!document.querySelector('.tip-overlay');
+
+    /*
+      Ez a fix lényege:
+      modal nyitva is patch-elünk a háttérben látható Mérkőzések/Áttekintés sorokra.
+      Render() továbbra sem fut modal alatt, csak célzott DOM patch.
+    */
+    if(S.tab==='matches'||S.tab==='overview'){
+      const patched=patchLiveRows(fixed);
+      if(!modalOpen && (!patched||prune))render();
+    }else if(S.tab==='knockout'){
+      if(!modalOpen){
+        patchKoCards();
+        if(prune)render();
+      }
+    }else if(['table','stats','community'].includes(S.tab)){
+      if(!modalOpen)render();
+    }
+
+    try{refreshOpenTipModal();}catch(e){}
+    try{if(typeof refreshModal==='function')refreshModal();}catch(e){}
+    try{refreshCommunityPreviews();}catch(e){}
+
+    return true;
+  };
+})();
+
 </script></body></html>
