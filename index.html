@@ -9775,7 +9775,7 @@ function scoreHtml(x){
 }
 function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),sc=koTipScore(m),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'||sc.cat==='exact-pen-exact'?' result-exact':sc.cat==='diff'||sc.cat==='exact-pen-diff'||sc.cat==='draw-pen-diff'?' result-diff':sc.cat==='outcome'||sc.cat==='exact-pen-outcome'||sc.cat==='draw-pen-outcome'||sc.cat==='draw'?' result-outcome':sc.cat==='miss'?' result-miss':''),sch=KO_SCHEDULE[m.id]||{},md=sch.date||m.date||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].date)||'',mt=sch.t||m.t||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].time)||'',timeStr=md&&mt?(()=>{try{return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){return mt}})():'--:--';return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26MatchStateBadgeAny(m)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>'}
 function koWinner(match){if(!match.h||!match.a)return null;let r=actualFor({id:match.id});if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pen==='h'?match.h:p.pen==='a'?match.a:null;if(validScore(p.h)&&validScore(p.a)){if(+p.h>+p.a)return match.h;if(+p.a>+p.h)return match.a;if(validScore(p.pH)&&validScore(p.pA)&&+p.pH!==+p.pA)return +p.pH>+p.pA?match.h:match.a;}return null}
-tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);loadWc26Firebase();applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();loadMatchResultsFromBackendDb(true).finally(()=>{wc26LoadKoPairsFromWorker(true).catch(()=>{});scheduleLiveSync();ensureLivePaintLoop();});syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();
+tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();setTimeout(()=>{loadWc26Firebase();loadMatchResultsFromBackendDb(false).finally(()=>{wc26LoadKoPairsFromWorker(false).catch(()=>{});scheduleLiveSync();ensureLivePaintLoop();});},0);syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();
 
 /* ===== WC26 v114 CLEAN REBASE: current-state audit pass ===== */
 (function(){
@@ -13467,6 +13467,392 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       try{originalSync();}catch(e){}
     }
   };
+})();
+
+
+/* ===== WC26 v144: faster Match tab hydration for Firebase tips + results =====
+   - defers the first Firebase/results boot until all safety wrappers are installed
+   - uses short sessionStorage caches (NOT localStorage) for instant F5 repaint
+   - loads own Firebase tip doc before the non-critical wc26_users profile write
+   - avoids extra Match-tab blank renders while auth is still hydrating
+*/
+(function(){
+  if(window.__WC26_V144_MATCH_FAST_FIREBASE__) return;
+  window.__WC26_V144_MATCH_FAST_FIREBASE__=true;
+
+  const RESULTS_KEY='wc26_v144_session_results';
+  const TIP_PREFIX='wc26_v144_session_tips_';
+  const RESULTS_TTL_MS=2*60*1000;
+  const TIP_TTL_MS=10*60*1000;
+  let ownLoadInFlightV144=null;
+  let authHookedV144=false;
+  let bootRenderTimerV144=null;
+
+  function nowV144(){return Date.now?Date.now():+new Date();}
+  function uidV144(){try{return (wc26User&&wc26User.uid)||(wc26Auth&&wc26Auth.currentUser&&wc26Auth.currentUser.uid)||'';}catch(e){return'';}}
+  function sgetV144(k){try{const raw=sessionStorage.getItem(k);return raw?JSON.parse(raw):null;}catch(e){return null;}}
+  function ssetV144(k,v){try{sessionStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function sdelPrefixV144(prefix){try{for(let i=sessionStorage.length-1;i>=0;i--){const k=sessionStorage.key(i);if(k&&k.indexOf(prefix)===0)sessionStorage.removeItem(k);}}catch(e){}}
+  function cleanTipsV144(obj){try{return wc26CleanTips(obj||{});}catch(e){return obj||{};}}
+  function renderMatchLikeSoonV144(){
+    clearTimeout(bootRenderTimerV144);
+    bootRenderTimerV144=setTimeout(()=>{try{ if(S.tab==='matches'||S.tab==='overview'||S.tab==='table'||S.tab==='stats'||S.tab==='knockout') render(); }catch(e){}},40);
+  }
+
+  function writeResultsSessionV144(){
+    try{
+      const out={};
+      Object.entries(LIVE_RESULTS||{}).forEach(([id,r])=>{
+        if(!r) return;
+        // Session cache is only a paint accelerator. Keep enough fields for cards/modals,
+        // but do not keep random transient UI state forever.
+        out[id]={...r};
+      });
+      if(Object.keys(out).length) ssetV144(RESULTS_KEY,{ts:nowV144(),results:out});
+    }catch(e){}
+  }
+
+  function applyResultsSessionV144(){
+    try{
+      const cached=sgetV144(RESULTS_KEY);
+      if(!cached||!cached.results||nowV144()-(+cached.ts||0)>RESULTS_TTL_MS) return false;
+      const ok=mergeLiveResults(cached.results);
+      if(S.tab==='matches'||S.tab==='overview'||S.tab==='table'||S.tab==='stats'||S.tab==='knockout') renderMatchLikeSoonV144();
+      return ok!==false;
+    }catch(e){return false;}
+  }
+
+  function tipKeyV144(uid){return TIP_PREFIX+String(uid||'guest');}
+  function readTipsSessionV144(uid){
+    try{
+      if(!uid) return null;
+      const cached=sgetV144(tipKeyV144(uid));
+      if(!cached||nowV144()-(+cached.ts||0)>TIP_TTL_MS) return null;
+      return cached;
+    }catch(e){return null;}
+  }
+  function writeTipsSessionV144(uid){
+    try{
+      if(!uid) uid=uidV144();
+      if(!uid) return;
+      ssetV144(tipKeyV144(uid),{ts:nowV144(),pred:cleanTipsV144(PRED||{}),ko:cleanTipsV144(KO_PRED||{})});
+    }catch(e){}
+  }
+  function applyTipsSessionV144(uid){
+    try{
+      const cached=readTipsSessionV144(uid);
+      if(!cached) return false;
+      PRED=cleanTipsV144(cached.pred||{});
+      KO_PRED=cleanTipsV144(cached.ko||{});
+      wc26OwnTipsLoaded=true;
+      wc26RemoteDocExists=true;
+      if(S.tab==='matches'||S.tab==='overview'||S.tab==='stats'||S.tab==='community'||S.tab==='knockout') renderMatchLikeSoonV144();
+      return true;
+    }catch(e){return false;}
+  }
+
+  // Results wrapper: store last good final/results payload in sessionStorage so F5 paints instantly.
+  try{
+    const __mergeV144=mergeLiveResults;
+    mergeLiveResults=function(next){
+      const out=__mergeV144.apply(this,arguments);
+      try{ if(next&&Object.keys(next||{}).length) writeResultsSessionV144(); }catch(e){}
+      return out;
+    };
+  }catch(e){}
+
+  try{
+    const __loadResultsV144=loadMatchResultsFromBackendDb;
+    let inflightResultsV144=null;
+    loadMatchResultsFromBackendDb=async function(bypassCache=false){
+      if(inflightResultsV144 && !bypassCache) return inflightResultsV144;
+      const run=Promise.resolve(__loadResultsV144.apply(this,arguments)).then(ok=>{try{if(ok)writeResultsSessionV144();}catch(e){} return ok;});
+      if(!bypassCache) inflightResultsV144=run.finally(()=>{inflightResultsV144=null;});
+      return bypassCache?run:inflightResultsV144;
+    };
+  }catch(e){}
+
+  // Own tips wrapper: immediate session paint + single in-flight Firebase doc get.
+  try{
+    const __loadOwnV144=loadOwnTipsFromFirebase;
+    loadOwnTipsFromFirebase=async function(){
+      const uid=uidV144();
+      if(uid && !wc26OwnTipsLoaded) applyTipsSessionV144(uid);
+      if(ownLoadInFlightV144) return ownLoadInFlightV144;
+      ownLoadInFlightV144=(async()=>{
+        try{
+          const ok=await __loadOwnV144.apply(this,arguments);
+          if(uidV144()) writeTipsSessionV144(uidV144());
+          return ok;
+        }finally{ownLoadInFlightV144=null;}
+      })();
+      return ownLoadInFlightV144;
+    };
+  }catch(e){}
+
+  try{
+    const __persistV144=wc26PersistTipsNow;
+    wc26PersistTipsNow=async function(){
+      const out=await __persistV144.apply(this,arguments);
+      writeTipsSessionV144(uidV144());
+      return out;
+    };
+  }catch(e){}
+
+  try{
+    const __publishV144=publishCommunityTips;
+    publishCommunityTips=async function(){
+      const out=await __publishV144.apply(this,arguments);
+      writeTipsSessionV144(uidV144());
+      return out;
+    };
+  }catch(e){}
+
+  function installFastAuthV144(){
+    if(authHookedV144||!wc26Auth||!wc26Db) return false;
+    authHookedV144=true;
+    wc26Auth.onAuthStateChanged(async u=>{
+      wc26User=u||null;
+      wc26OwnTipsLoadFailed=false;
+      wc26RemoteDocExists=false;
+      if(u){
+        wc26ClearLocalPreds();
+        const hadSession=applyTipsSessionV144(u.uid);
+        if(!hadSession){
+          PRED={}; KO_PRED={}; wc26OwnTipsLoaded=false;
+          // Matches tab should not repaint 3x blank while Firebase auth/doc hydrates.
+          if(S.tab!=='matches') render();
+        }
+        // Non-critical profile mirror. Do NOT block tip loading on this write.
+        try{
+          wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({
+            uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+          },{merge:true}).catch(()=>{});
+        }catch(e){}
+        await loadOwnTipsFromFirebase().catch(e=>{wc26OwnTipsLoadFailed=true;wc26BackendError=e&&e.message?e.message:String(e||'own tips load error')});
+        writeTipsSessionV144(u.uid);
+        if(S.tab==='matches'||S.tab==='overview'||S.tab==='stats'||S.tab==='knockout') render();
+      }else{
+        sdelPrefixV144(TIP_PREFIX);
+        wc26ClearLocalPreds();
+        PRED={}; KO_PRED={}; wc26OwnTipsLoaded=true; wc26RemoteDocExists=false;
+        render();
+      }
+      if(S.tab==='community'){
+        loadCommunityTips(false).then(()=>{try{renderCommunity();}catch(e){}}).catch(()=>{});
+      }else{
+        // Community cache can warm quietly, but no blocking of Match tab.
+        setTimeout(()=>loadCommunityTips(false).catch(()=>{}),300);
+      }
+    });
+    return true;
+  }
+
+  // Replace the original init before the deferred loadWc26Firebase() calls it.
+  try{
+    initWc26Firebase=function(){
+      try{
+        let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');
+        wc26Auth=app.auth();
+        wc26Db=app.firestore();
+        wc26BackendReady=true;
+        try{listenCommunityTips();}catch(e){}
+        try{listenWc26LiveMatches();}catch(e){}
+        installFastAuthV144();
+      }catch(e){
+        wc26BackendError=e&&e.message?e.message:String(e||'firebase init error');
+        if(S.tab==='community')renderCommunity();
+      }
+    };
+  }catch(e){}
+
+  // If Firebase already initialized by an older cached path, still install the fast hook.
+  const hookTimer=setInterval(()=>{if(installFastAuthV144())clearInterval(hookTimer);},120);
+  setTimeout(()=>clearInterval(hookTimer),5000);
+
+  // Instant F5 paint from session cache; remote result still refreshes right after boot.
+  applyResultsSessionV144();
+})();
+
+/* ===== WC26 v145: Firestore read brake for F5 / Match tab / Community =====
+   - no community Firestore warmup on refresh unless Community tab is actually open
+   - no /ko-pairs fetch on every startup; KO pairs/schedule are derived from /results when possible
+   - /results uses session paint + short TTL, so repeated F5 does not hammer Worker/Firestore
+*/
+(function(){
+  if(window.__WC26_V145_FIRESTORE_READ_BRAKE__) return;
+  window.__WC26_V145_FIRESTORE_READ_BRAKE__=true;
+
+  const V145_RESULTS_KEY='wc26_v145_results_cache';
+  const V145_OLD_RESULTS_KEYS=['wc26_v144_session_results'];
+  const V145_KO_KEY='wc26_v145_ko_pairs_cache';
+  const V145_COMMUNITY_KEY='wc26_v145_community_cache';
+  const V145_RESULTS_TTL_MS=2*60*1000;
+  const V145_KO_TTL_MS=10*60*1000;
+  const V145_COMMUNITY_TTL_MS=5*60*1000;
+  let v145ResultsInFlight=null;
+  let v145KoInFlight=null;
+  let v145CommunityInFlight=null;
+
+  function v145Now(){return Date.now?Date.now():+new Date();}
+  function v145Sget(k){try{const raw=sessionStorage.getItem(k);return raw?JSON.parse(raw):null;}catch(e){return null;}}
+  function v145Sset(k,v){try{sessionStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function v145IsCommunityTab(){try{return S&&S.tab==='community';}catch(e){return false;}}
+  function v145IsKnockoutTab(){try{return S&&S.tab==='knockout';}catch(e){return false;}}
+  function v145IsMatchLikeTab(){try{return ['matches','overview','table','stats','knockout'].includes(S&&S.tab);}catch(e){return false;}}
+  function v145HasActiveLive(){
+    try{if(typeof liveSyncInfo==='function'&&liveSyncInfo().active)return true;}catch(e){}
+    try{return Object.values(LIVE_RESULTS||{}).some(r=>r&&r.started&&!r.finished);}catch(e){return false;}
+  }
+  function v145CacheFresh(item,ttl){return !!(item&&item.ts&&v145Now()-(+item.ts)<ttl);}
+
+  function v145NormalizeResultsMap(results){
+    const out={};
+    try{Object.entries(results||{}).forEach(([id,r])=>{if(id&&r)out[id]=r;});}catch(e){}
+    return out;
+  }
+
+  function v145SaveResults(results){
+    const map=v145NormalizeResultsMap(results||LIVE_RESULTS||{});
+    if(Object.keys(map).length) v145Sset(V145_RESULTS_KEY,{ts:v145Now(),results:map});
+  }
+
+  function v145ReadResultsCache(){
+    let best=v145Sget(V145_RESULTS_KEY);
+    if(v145CacheFresh(best,V145_RESULTS_TTL_MS)) return best;
+    for(const k of V145_OLD_RESULTS_KEYS){
+      const old=v145Sget(k);
+      if(v145CacheFresh(old,V145_RESULTS_TTL_MS)&&old.results) return old;
+    }
+    return null;
+  }
+
+  function v145ApplyResultsCache(){
+    const cached=v145ReadResultsCache();
+    if(!cached||!cached.results)return false;
+    try{mergeLiveResults(cached.results);}catch(e){}
+    return true;
+  }
+
+  function v145ApplyKoCache(){
+    const cached=v145Sget(V145_KO_KEY);
+    if(!v145CacheFresh(cached,V145_KO_TTL_MS)) return false;
+    try{
+      if(cached.schedule){
+        Object.entries(cached.schedule).forEach(([id,sch])=>{if(KO_SCHEDULE[id]&&sch){KO_SCHEDULE[id].date=sch.date||KO_SCHEDULE[id].date;KO_SCHEDULE[id].t=sch.t||sch.time||KO_SCHEDULE[id].t;}});
+      }
+      if(cached.pairs) window.__WC26_KO_PAIRS__=cached.pairs;
+      return true;
+    }catch(e){return false;}
+  }
+
+  function v145DeriveKoFromResults(results){
+    const pairs={};
+    const schedule={};
+    try{
+      Object.entries(results||{}).forEach(([id,r])=>{
+        if(!String(id).startsWith('KO-')||!r)return;
+        if(r.homeTeam&&r.awayTeam)pairs[id]={home:r.homeTeam,away:r.awayTeam,espnId:r.espnId||null};
+        if((r.date||r.time)&&KO_SCHEDULE[id]){
+          if(r.date)KO_SCHEDULE[id].date=r.date;
+          if(r.time)KO_SCHEDULE[id].t=r.time;
+        }
+        if(r.date||r.time)schedule[id]={date:r.date||KO_SCHEDULE[id]?.date,time:r.time||KO_SCHEDULE[id]?.t,t:r.time||KO_SCHEDULE[id]?.t};
+      });
+      if(Object.keys(pairs).length) window.__WC26_KO_PAIRS__=Object.assign({},window.__WC26_KO_PAIRS__||{},pairs);
+      if(Object.keys(pairs).length||Object.keys(schedule).length){
+        v145Sset(V145_KO_KEY,{ts:v145Now(),pairs:Object.assign({},window.__WC26_KO_PAIRS__||{}),schedule});
+      }
+    }catch(e){}
+  }
+
+  // KO pairs route is expensive because the Worker builds it from stored results.
+  // Do not hit it on startup/refresh. Only use it on the KO tab or when explicitly forced.
+  try{
+    wc26LoadKoPairsFromWorker=async function(force=false){
+      if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;
+      if(!force&&v145ApplyKoCache())return true;
+      if(!force&&!v145IsKnockoutTab())return false;
+      if(v145KoInFlight)return v145KoInFlight;
+      v145KoInFlight=(async()=>{
+        try{
+          const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs');
+          const koData=await fetch(url,force?{cache:'reload'}:{cache:'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
+          if(koData&&koData.schedule){
+            Object.entries(koData.schedule).forEach(([id,sch])=>{if(KO_SCHEDULE[id]&&sch){KO_SCHEDULE[id].date=sch.date||KO_SCHEDULE[id].date;KO_SCHEDULE[id].t=sch.t||sch.time||KO_SCHEDULE[id].t;}});
+          }
+          if(koData&&koData.pairs) window.__WC26_KO_PAIRS__=koData.pairs;
+          if(koData) v145Sset(V145_KO_KEY,{ts:v145Now(),pairs:koData.pairs||window.__WC26_KO_PAIRS__||{},schedule:koData.schedule||{}});
+          return !!koData;
+        }finally{v145KoInFlight=null;}
+      })();
+      return v145KoInFlight;
+    };
+  }catch(e){}
+
+  // Final/historical results: one endpoint only. No /ko-pairs parallel fetch, no cache-bust on every F5.
+  try{
+    loadMatchResultsFromBackendDb=async function(bypassCache=false){
+      if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;
+      const hasFresh=v145ApplyResultsCache();
+      if(!bypassCache&&hasFresh&&!v145HasActiveLive()) return true;
+      if(v145ResultsInFlight&&!bypassCache)return v145ResultsInFlight;
+      const run=(async()=>{
+        try{
+          const data=await fetch(WC26_RESULTS_READ_URL,bypassCache?{cache:'reload'}:{cache:'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
+          if(data&&data.results){
+            v145DeriveKoFromResults(data.results);
+            const ok=mergeLiveResults(data.results);
+            v145SaveResults(data.results);
+            return ok!==false;
+          }
+          return hasFresh;
+        }catch(e){return hasFresh;}
+      })();
+      if(!bypassCache)v145ResultsInFlight=run.finally(()=>{v145ResultsInFlight=null;});
+      return bypassCache?run:v145ResultsInFlight;
+    };
+  }catch(e){}
+
+  // Community: only read Firestore when Community tab is open or a real force refresh happens.
+  // Auth refresh on Match tab must not trigger a full collection read.
+  try{
+    loadCommunityTips=async function(force=false){
+      if(!wc26Db){wc26CommunityItems=[];return false;}
+      const cached=v145Sget(V145_COMMUNITY_KEY);
+      if(!force&&v145CacheFresh(cached,V145_COMMUNITY_TTL_MS)&&Array.isArray(cached.items)){
+        wc26CommunityItems=cached.items;
+        try{if(typeof v141UpsertOwn==='function')v141UpsertOwn();}catch(e){}
+        return true;
+      }
+      if(!force&&!v145IsCommunityTab()){
+        try{if(typeof v141UpsertOwn==='function')v141UpsertOwn();}catch(e){}
+        return !!(Array.isArray(wc26CommunityItems)&&wc26CommunityItems.length);
+      }
+      if(v145CommunityInFlight)return v145CommunityInFlight;
+      v145CommunityInFlight=(async()=>{
+        try{
+          const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).get();
+          const rows=[];
+          snap.forEach(doc=>rows.push({id:doc.id,...doc.data()}));
+          wc26CommunityItems=rows;
+          try{if(typeof v141UpsertOwn==='function')v141UpsertOwn();}catch(e){}
+          v145Sset(V145_COMMUNITY_KEY,{ts:v145Now(),items:wc26CommunityItems});
+          return true;
+        }catch(e){
+          wc26BackendError=e&&e.message?e.message:String(e||'community load error');
+          return false;
+        }finally{v145CommunityInFlight=null;}
+      })();
+      return v145CommunityInFlight;
+    };
+  }catch(e){}
+
+  // On first paint after F5, use only session cache. The scheduled startup call will now skip network when cache is fresh.
+  v145ApplyKoCache();
+  if(v145ApplyResultsCache()&&v145IsMatchLikeTab()){
+    try{setTimeout(()=>render(),30);}catch(e){}
+  }
 })();
 
 </script></body></html>
