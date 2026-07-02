@@ -8228,14 +8228,6 @@ body.modal-open{
 .pen-clean-score b{color:currentColor;font-size:clamp(22px,5.2vw,30px);font-weight:950;line-height:1}
 .pen-clean-score em{color:#8fa1ad;font-size:clamp(14px,3vw,18px);font-style:normal;font-weight:950;line-height:1}
 .penalty-box.locked-real-pen,.pen-v91-card,.pen-v94-card,.pen-v98-card,.pen-compact-v86,.pen-compact-v87,.pen-v90{display:none!important}
-
-/* match card score layout: KO = group geometry */
-.matches-main .match-row[data-ko-mid] .mr-score-wrap{width:100%;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
-.matches-main .match-row[data-ko-mid] .mr-score-lines{width:100%;min-width:0;display:flex;flex-direction:column;gap:clamp(6px,1.7vw,9px)}
-.matches-main .match-row[data-ko-mid] .mr-score-compare,.matches-main .match-row[data-ko-mid] .mr-score-actual-only,.matches-main .match-row[data-ko-mid] .mr-score-tip-only{width:100%;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:clamp(6px,1.7vw,9px)}
-.matches-main .match-row[data-ko-mid] .mr-score-row{min-height:1.05em;width:100%;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end;justify-items:center;justify-content:stretch;column-gap:4px;line-height:1;white-space:nowrap}
-.matches-main .match-row[data-ko-mid] .mr-score-row.single{grid-template-columns:minmax(0,1fr)}
-.matches-main .match-row[data-ko-mid] .mr-score-real,.matches-main .match-row[data-ko-mid] .mr-score-tip,.matches-main .match-row[data-ko-mid] .mr-score-single{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;white-space:nowrap;font-size:inherit;font-weight:950;line-height:.95}
 .wc26-card-score{display:inline-flex;align-items:baseline;justify-content:center;gap:2px;min-width:0;white-space:nowrap}
 .wc26-card-pen{color:#ffc15a;font-size:.62em;font-weight:950;line-height:1;margin-left:1px}
 
@@ -10287,14 +10279,6 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
   const st=document.createElement('style');
   st.textContent=`
-    /* KO rows in Matches tab must use the same score geometry as group rows. No .matches-main dependency. */
-    .match-row[data-ko-mid] .mr-score-wrap{width:100%!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important}
-    .match-row[data-ko-mid] .mr-score-lines{width:100%!important;min-width:0!important;display:flex!important;flex-direction:column!important;gap:clamp(6px,1.7vw,9px)!important}
-    .match-row[data-ko-mid] .mr-score-compare,.match-row[data-ko-mid] .mr-score-actual-only,.match-row[data-ko-mid] .mr-score-tip-only{width:100%!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important;gap:clamp(6px,1.7vw,9px)!important}
-    .match-row[data-ko-mid] .mr-score-row{min-height:1.05em!important;width:100%!important;min-width:0!important;display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;align-items:end!important;justify-items:center!important;justify-content:stretch!important;column-gap:4px!important;line-height:1!important;white-space:nowrap!important}
-    .match-row[data-ko-mid] .mr-score-row.single{grid-template-columns:minmax(0,1fr)!important}
-    .match-row[data-ko-mid] .mr-score-real,.match-row[data-ko-mid] .mr-score-tip,.match-row[data-ko-mid] .mr-score-single{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;min-width:0!important;white-space:nowrap!important;font-size:inherit!important;font-weight:950!important;line-height:.95!important}
-    .match-row[data-ko-mid] .wc26-ko-core-tip,.match-row[data-ko-mid] .wc26-ko-left-clock{display:none!important}
 
     .ko-bracket{overflow-x:auto!important;overflow-y:visible!important;overscroll-behavior-x:contain!important;scroll-behavior:auto!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-x pan-y!important}
     .ko-card.has-score-compare{--ko-card-score-col:76px!important}
@@ -10318,282 +10302,6 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v116: KO match rows are literal group-card clones ===== */
-(function(){
-  if(window.__WC26_V116_KO_ROWS_GROUP_CLONE__) return;
-  window.__WC26_V116_KO_ROWS_GROUP_CLONE__ = true;
-
-  function v116BaseCat(cat){
-    cat=String(cat||'');
-    if(!cat)return'';
-    if(cat==='miss')return'miss';
-    if(cat.indexOf('exact')===0)return'exact';
-    if(cat==='draw-pen-outcome')return'outcome';
-    if(cat.indexOf('draw')===0)return'diff';
-    if(cat.indexOf('diff')>=0)return'diff';
-    if(cat.indexOf('outcome')>=0)return'outcome';
-    return cat;
-  }
-
-  function v116KoTime(m){
-    const lr=LIVE_RESULTS[m.id]||null;
-    const md=lr&&lr.date?lr.date:m.date;
-    const mt=lr&&lr.time?lr.time:(KO_SCHEDULE[m.id]||{}).t||m.t||'';
-    if(md&&mt){
-      try{
-        return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{
-          hour:'2-digit',
-          minute:'2-digit',
-          timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone
-        });
-      }catch(e){return mt;}
-    }
-    return '--:--';
-  }
-
-  function v116KoBadge(m){
-    const state=matchLockState({id:m.id});
-    const sc=koTipScore(m);
-    const base=sc.base||v116BaseCat(sc.cat);
-    const r=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null;
-    const clk=r&&!r.finished?liveClockLabel(r):'';
-
-    if(base==='exact')return'<em class="mr-live-state ok">'+esc(sc.label||'Pontos')+'</em>';
-    if(base==='diff')return'<em class="mr-live-state diff">'+esc(sc.label||'G&oacute;lk&uuml;l.')+'</em>';
-    if(base==='outcome')return'<em class="mr-live-state outcome">'+esc(sc.label||'Kimenetel')+'</em>';
-    if(base==='miss')return'<em class="mr-live-state bad">'+esc(sc.label||'Hib&aacute;s')+'</em>';
-    if(state==='finished')return'';
-    if(state==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
-    if(state==='open')return'<em class="mr-live-state open">Tippelhet&#337;</em>';
-    return'<em class="mr-live-state neutral">Z&aacute;rolva</em>';
-  }
-
-  /*
-    Fontos:
-    - NINCS data-ko-mid a soron, mert arra ráültek régi KO-specifikus CSS override-ok.
-    - data-ko-group-id csak JS hook, CSS nem bántja.
-    - DOM skeleton ugyanaz, mint a csoportkörös mrow().
-  */
-  koMatchRow=function(m){
-    const p=koPred(m.id);
-    const cls=p?'win':'';
-    const state=matchLockState({id:m.id});
-    const sc=koTipScore(m);
-    const base=sc.base||v116BaseCat(sc.cat);
-    const locked=state!=='open';
-    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
-    const rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
-      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
-
-    return '<div class="match-row'+rowCls+' ko-as-group-card" data-ko-group-id="'+m.id+'">'
-      +'<div class="mr-date">'+v116KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v116KoBadge(m)+'</div>'
-      +'<div class="mr-sep"></div>'
-      +'<div class="mr-teams">'
-        +'<div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div>'
-        +'<div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div>'
-      +'</div>'
-      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'
-      +edit
-    +'</div>';
-  };
-
-  function bindKoGroupRowsV116(root){
-    (root||document).querySelectorAll('.match-row[data-ko-group-id]').forEach(row=>{
-      if(row.__v116KoBound)return;
-      row.__v116KoBound=true;
-      row.addEventListener('click',e=>{
-        e.stopPropagation();
-        openKoTip(row.dataset.koGroupId);
-      });
-    });
-  }
-
-  const baseRenderMatchesV116=renderMatches;
-  renderMatches=function(){
-    const out=baseRenderMatchesV116.apply(this,arguments);
-    bindKoGroupRowsV116(document.getElementById('main')||document);
-    return out;
-  };
-
-  const baseRenderV116=render;
-  render=function(){
-    const out=baseRenderV116.apply(this,arguments);
-    if(S.tab==='matches')bindKoGroupRowsV116(document.getElementById('main')||document);
-    return out;
-  };
-
-  patchLiveRows=function(next){
-    if(S.tab!=='matches'&&S.tab!=='overview')return false;
-    let ok=true;
-    Object.keys(next||{}).forEach(id=>{
-      const r=LIVE_RESULTS[id];
-      if(!r)return;
-
-      const row=document.querySelector('[data-mid="'+id+'"],[data-ko-group-id="'+id+'"],[data-ko-mid="'+id+'"]');
-      if(!row){
-        if(!document.querySelector('.tip-overlay'))ok=false;
-        return;
-      }
-
-      const scWrap=row.querySelector('.mr-scores');
-      if(!scWrap){ok=false;return;}
-
-      const m=FX_BY_ID[id]||(()=>{try{return findKoMatch(id)||null}catch(e){return null}})();
-      if(!m){ok=false;return;}
-
-      scWrap.innerHTML=scoreHtml(m);
-
-      row.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked','predicted');
-      const isKo=!!String(id).startsWith('KO-');
-      const p=isKo?koPred(id):getPred(id);
-      const sc=isKo?koTipScore(m):tipScore(m);
-      const base=isKo?(sc.base||v116BaseCat(sc.cat)):sc.cat;
-
-      if(base==='exact')row.classList.add('result-exact');
-      else if(base==='diff')row.classList.add('result-diff');
-      else if(base==='outcome')row.classList.add('result-outcome');
-      else if(base==='miss')row.classList.add('result-miss');
-
-      if(r.started&&!r.finished)row.classList.add('live-locked');
-      if(p)row.classList.add('predicted');
-
-      const date=row.querySelector('.mr-date');
-      if(date&&isKo){
-        date.innerHTML=v116KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v116KoBadge(m);
-      }else{
-        const badge=row.querySelector('.mr-live-state');
-        if(badge&&FX_BY_ID[id]){
-          const nb=matchStateBadge(m);
-          if(nb!==badge.outerHTML){
-            const tmp=document.createElement('div');
-            tmp.innerHTML=nb;
-            if(tmp.firstChild)badge.replaceWith(tmp.firstChild);
-          }
-        }
-      }
-
-      bindKoGroupRowsV116(row.parentNode||document);
-    });
-    return ok;
-  };
-
-  const st=document.createElement('style');
-  st.textContent=`
-    /*
-      KO rows in Matches tab are now group-card clones.
-      Kill every KO-row-specific visual override by avoiding data-ko-mid and by hard-normalizing this class.
-    */
-    .match-row.ko-as-group-card{
-      display:grid!important;
-    }
-
-    .match-row.ko-as-group-card .mr-date,
-    .match-row.ko-as-group-card .mr-sep,
-    .match-row.ko-as-group-card .mr-teams,
-    .match-row.ko-as-group-card .mr-scores,
-    .match-row.ko-as-group-card .mr-bell{
-      position:relative!important;
-      z-index:1!important;
-    }
-
-    .match-row.ko-as-group-card .wc26-ko-core-tip,
-    .match-row.ko-as-group-card .wc26-ko-left-clock{
-      display:none!important;
-    }
-
-    /*
-      Deliberately copy the generic/group match score behavior.
-      These values match the non-KO .mr-score-wrap base, not the old [data-ko-mid] override.
-    */
-    .match-row.ko-as-group-card .mr-score-wrap{
-      display:grid!important;
-      grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
-      align-items:center!important;
-      justify-content:end!important;
-      gap:clamp(5px,.85vw,10px)!important;
-      width:auto!important;
-      min-width:0!important;
-    }
-
-    .match-row.ko-as-group-card .mr-score-lines{
-      display:flex!important;
-      flex-direction:column!important;
-      gap:inherit!important;
-      min-width:clamp(34px,5vw,56px)!important;
-      width:auto!important;
-    }
-
-    .match-row.ko-as-group-card .mr-score-compare,
-    .match-row.ko-as-group-card .mr-score-actual-only,
-    .match-row.ko-as-group-card .mr-score-tip-only{
-      display:flex!important;
-      flex-direction:column!important;
-      gap:inherit!important;
-      width:auto!important;
-      align-items:stretch!important;
-    }
-
-    .match-row.ko-as-group-card .mr-score-row{
-      display:grid!important;
-      grid-template-columns:minmax(12px,1fr) minmax(12px,1fr)!important;
-      align-items:end!important;
-      justify-items:center!important;
-      column-gap:clamp(4px,.8vw,7px)!important;
-      line-height:1!important;
-      white-space:nowrap!important;
-      width:auto!important;
-      min-height:0!important;
-    }
-
-    .match-row.ko-as-group-card .mr-score-row.single{
-      grid-template-columns:minmax(12px,1fr)!important;
-    }
-
-    .match-row.ko-as-group-card .mr-score-real,
-    .match-row.ko-as-group-card .mr-score-tip,
-    .match-row.ko-as-group-card .mr-score-single{
-      display:flex!important;
-      flex-direction:column!important;
-      align-items:center!important;
-      justify-content:center!important;
-      min-width:0!important;
-      white-space:nowrap!important;
-      font-size:inherit!important;
-      font-weight:950!important;
-      line-height:1.04!important;
-    }
-
-    .match-row.ko-as-group-card .mr-score-real{
-      color:#ff6470!important;
-    }
-
-    .match-row.ko-as-group-card .mr-score-tip,
-    .match-row.ko-as-group-card .mr-score-single{
-      color:#e8edf0!important;
-    }
-
-    .match-row.ko-as-group-card .wc26-card-score{
-      display:inline-flex!important;
-      align-items:baseline!important;
-      justify-content:center!important;
-      gap:2px!important;
-      white-space:nowrap!important;
-    }
-
-    .match-row.ko-as-group-card .wc26-card-pen{
-      color:#ffc15a!important;
-      font-size:.62em!important;
-      font-weight:950!important;
-      line-height:1!important;
-      margin-left:1px!important;
-    }
-  `;
-  document.head.appendChild(st);
-
-  if(S.tab==='matches'){
-    try{renderMatches();}catch(e){console.warn('v116 ko group clone render failed',e);}
-  }
-})();
 
 
 /* ===== WC26 v117 own-tip penalty format cleanup ===== */
@@ -10629,232 +10337,13 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   window.__WC26_V120_SAFE_STYLE_FIX__ = true;
   const st=document.createElement('style');
   st.textContent=`
-    /* v118 safe-injected: KO right pill + always-red actual scores */
-    .matches-main .mr-actual,
-    .matches-main .mr-score-pair .mr-actual,
-    .matches-main .match-row[data-ko-mid] .mr-actual,
-    .matches-main .match-row[data-ko-mid] .mr-score-pair .mr-actual{
-      color:#ff6470!important;
-    }
-    .matches-main .match-row[data-ko-mid] .mr-score-wrap{
-      gap:clamp(4px,.55vw,7px)!important;
-    }
-    .matches-main .match-row[data-ko-mid] .mr-clock-row{
-      gap:4px!important;
-    }
-    .matches-main .match-row[data-ko-mid] .mr-clock{
-      min-width:clamp(44px,3.2vw,58px)!important;
-      padding:clamp(3px,.34vw,6px) clamp(8px,.8vw,12px)!important;
-      font-size:clamp(11px,calc(0.15vw + 12px),15px)!important;
-    }
-    .matches-main .match-row[data-ko-mid] .mr-score-wrap.no-tip{
-      transform:translateX(-6px)!important;
-    }
     @media (max-width: 720px){
-      .matches-main .match-row[data-ko-mid] .mr-clock{
-        min-width:48px!important;
-        padding:4px 10px!important;
-        font-size:12px!important;
-      }
-      .matches-main .match-row[data-ko-mid] .mr-score-wrap.no-tip{
-        transform:translateX(-4px)!important;
-      }
     }
   `;
   document.head.appendChild(st);
 })();
 
 
-/* ===== WC26 v121: KO rows real group-card pixel clone ===== */
-(function(){
-  if(window.__WC26_V121_KO_PIXEL_GROUP_CLONE__) return;
-  window.__WC26_V121_KO_PIXEL_GROUP_CLONE__ = true;
-
-  function v121BaseCat(cat){
-    cat=String(cat||'');
-    if(!cat)return'';
-    if(cat==='miss')return'miss';
-    if(cat.indexOf('exact')===0)return'exact';
-    if(cat==='draw-pen-outcome')return'outcome';
-    if(cat.indexOf('draw')===0)return'diff';
-    if(cat.indexOf('diff')>=0)return'diff';
-    if(cat.indexOf('outcome')>=0)return'outcome';
-    return cat;
-  }
-
-  function v121KoTime(m){
-    const lr=LIVE_RESULTS[m.id]||null;
-    const sch=(typeof KO_SCHEDULE!=='undefined'&&KO_SCHEDULE[m.id])?KO_SCHEDULE[m.id]:{};
-    const md=(lr&&lr.date)||sch.date||m.date||'';
-    const mt=(lr&&lr.time)||sch.t||m.t||'';
-    if(md&&mt){
-      try{
-        return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{
-          hour:'2-digit',
-          minute:'2-digit',
-          timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone
-        });
-      }catch(e){return mt;}
-    }
-    return '--:--';
-  }
-
-  function v121KoBadge(m){
-    const state=matchLockState({id:m.id});
-    const sc=koTipScore(m);
-    const base=sc.base||v121BaseCat(sc.cat);
-    const r=LIVE_RESULTS[m.id]||actualFor({id:m.id})||null;
-    const clk=r&&!r.finished?liveClockLabel(r):'';
-
-    if(base==='exact')return'<em class="mr-live-state ok">'+esc(sc.label||'Pontos')+'</em>';
-    if(base==='diff')return'<em class="mr-live-state diff">'+esc(sc.label||'G&oacute;lk&uuml;l.')+'</em>';
-    if(base==='outcome')return'<em class="mr-live-state outcome">'+esc(sc.label||'Kimenetel')+'</em>';
-    if(base==='miss')return'<em class="mr-live-state bad">'+esc(sc.label||'Hib&aacute;s')+'</em>';
-    if(state==='finished')return'';
-    if(state==='live')return'<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
-    if(state==='open')return'<em class="mr-live-state open">Tippelhet&#337;</em>';
-    return'<em class="mr-live-state neutral">Z&aacute;rolva</em>';
-  }
-
-  /*
-    Pixel-perfect route:
-    - same .match-row skeleton as mrow()
-    - NO data-ko-mid, NO ko-as-group-card class
-    - only neutral data-ko-card-id hook for JS click/update
-    This lets the same group-match CSS apply without KO-specific overrides.
-  */
-  koMatchRow=function(m){
-    const p=koPred(m.id);
-    const cls=p?'win':'';
-    const state=matchLockState({id:m.id});
-    const sc=koTipScore(m);
-    const base=sc.base||v121BaseCat(sc.cat);
-    const locked=state!=='open';
-    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
-    const rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
-      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
-
-    return '<div class="match-row'+rowCls+'" data-ko-card-id="'+m.id+'">'
-      +'<div class="mr-date">'+v121KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v121KoBadge(m)+'</div>'
-      +'<div class="mr-sep"></div>'
-      +'<div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div>'
-      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
-  };
-
-  function bindKoPixelRows(root){
-    (root||document).querySelectorAll('.match-row[data-ko-card-id]').forEach(row=>{
-      if(row.__v121KoBound)return;
-      row.__v121KoBound=true;
-      row.addEventListener('click',e=>{
-        e.stopPropagation();
-        openKoTip(row.dataset.koCardId);
-      });
-    });
-  }
-
-  const baseRenderMatchesV121=renderMatches;
-  renderMatches=function(){
-    const out=baseRenderMatchesV121.apply(this,arguments);
-    bindKoPixelRows(document.getElementById('main')||document);
-    return out;
-  };
-
-  const baseRenderV121=render;
-  render=function(){
-    const out=baseRenderV121.apply(this,arguments);
-    if(S.tab==='matches')bindKoPixelRows(document.getElementById('main')||document);
-    return out;
-  };
-
-  patchLiveRows=function(next){
-    if(S.tab!=='matches'&&S.tab!=='overview')return false;
-    let touched=0, ok=true;
-    Object.keys(next||{}).forEach(id=>{
-      const r=LIVE_RESULTS[id];
-      if(!r)return;
-
-      const row=document.querySelector('[data-mid="'+id+'"],[data-ko-card-id="'+id+'"],[data-ko-group-id="'+id+'"],[data-ko-mid="'+id+'"]');
-      if(!row){
-        if(!document.querySelector('.tip-overlay'))ok=false;
-        return;
-      }
-
-      const m=FX_BY_ID[id]||(()=>{try{return findKoMatch(id)||null}catch(e){return null}})();
-      if(!m){ok=false;return;}
-
-      const scWrap=row.querySelector('.mr-scores');
-      if(!scWrap){ok=false;return;}
-
-      const newScore=scoreHtml(m);
-      if(scWrap.innerHTML!==newScore)scWrap.innerHTML=newScore;
-
-      row.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked','predicted','ko-as-group-card');
-      const isKo=String(id).startsWith('KO-');
-      const p=isKo?koPred(id):getPred(id);
-      const sc=isKo?koTipScore(m):tipScore(m);
-      const base=isKo?(sc.base||v121BaseCat(sc.cat)):sc.cat;
-
-      if(base==='exact')row.classList.add('result-exact');
-      else if(base==='diff')row.classList.add('result-diff');
-      else if(base==='outcome')row.classList.add('result-outcome');
-      else if(base==='miss')row.classList.add('result-miss');
-
-      if(r.started&&!r.finished)row.classList.add('live-locked');
-      if(p)row.classList.add('predicted');
-      row.classList.toggle('locked',matchLockState({id})!=='open');
-
-      const date=row.querySelector('.mr-date');
-      if(date&&isKo){
-        date.innerHTML=v121KoTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+v121KoBadge(m);
-      }else if(date){
-        const oldBadge=row.querySelector('.mr-live-state');
-        const nb=matchStateBadge(m);
-        if(oldBadge&&nb!==oldBadge.outerHTML){
-          const tmp=document.createElement('div');tmp.innerHTML=nb;if(tmp.firstChild)oldBadge.replaceWith(tmp.firstChild);
-        }else if(!oldBadge&&nb){
-          date.insertAdjacentHTML('beforeend',nb);
-        }
-      }
-
-      bindKoPixelRows(row.parentNode||document);
-      touched++;
-    });
-    return touched>0&&ok;
-  };
-
-  /*
-    Neutralize previous KO-row-only visual hacks in case an old row survives during live patch.
-    Current rows use data-ko-card-id and no special class, so they naturally use group CSS.
-  */
-  const st=document.createElement('style');
-  st.textContent=`
-    .matches-main .match-row[data-ko-card-id]{
-      display:grid!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-date,
-    .matches-main .match-row[data-ko-card-id] .mr-sep,
-    .matches-main .match-row[data-ko-card-id] .mr-teams,
-    .matches-main .match-row[data-ko-card-id] .mr-scores,
-    .matches-main .match-row[data-ko-card-id] .mr-bell{
-      position:relative!important;
-      z-index:1!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-actual,
-    .matches-main .match-row[data-ko-card-id] .mr-score-real,
-    .matches-main .match-row[data-ko-card-id] .mr-score-pair .mr-actual{
-      color:#ff6470!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .wc26-ko-core-tip,
-    .matches-main .match-row[data-ko-card-id] .wc26-ko-left-clock{
-      display:none!important;
-    }
-  `;
-  document.head.appendChild(st);
-
-  if(S.tab==='matches'){
-    try{renderMatches();}catch(e){console.warn('v121 ko pixel render failed',e);}
-  }
-})();
 
 
 /* ===== WC26 v122: AET red + wider long-minute pills + live KO row parity ===== */
@@ -10899,80 +10388,6 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
         min-width:50px!important;
       }
     }
-
-    /*
-      Élő KO sorok a Mérkőzések fülön: ugyanaz a grid/score viselkedés,
-      mint a csoportkörös .match-row. Csak a data hook más.
-    */
-    .matches-main .match-row[data-ko-card-id]{
-      display:grid!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-score-wrap{
-      display:grid!important;
-      grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
-      align-items:center!important;
-      justify-content:end!important;
-      gap:clamp(5px,.85vw,10px)!important;
-      width:auto!important;
-      min-width:0!important;
-      transform:none!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-score-wrap.no-tip{
-      grid-template-columns:auto minmax(clamp(34px,5vw,56px),auto)!important;
-      gap:clamp(5px,.85vw,10px)!important;
-      transform:none!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-clock-row{
-      display:flex!important;
-      align-items:center!important;
-      justify-content:center!important;
-      gap:5px!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-clock,
-    .matches-main .match-row[data-ko-card-id] .mr-int-badge{
-      min-width:clamp(24px,2.35vw,48px)!important;
-      padding:clamp(2px,.35vw,6px) clamp(5px,.8vw,13px)!important;
-      font-size:clamp(10px,calc(0.22vw + 12px),16px)!important;
-      line-height:1!important;
-      transform:none!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-score-lines{
-      display:flex!important;
-      flex-direction:column!important;
-      gap:inherit!important;
-      min-width:clamp(34px,5vw,56px)!important;
-      width:auto!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-score-compare,
-    .matches-main .match-row[data-ko-card-id] .mr-score-actual-only,
-    .matches-main .match-row[data-ko-card-id] .mr-score-tip-only{
-      width:auto!important;
-      min-width:0!important;
-      display:flex!important;
-      flex-direction:column!important;
-      gap:inherit!important;
-      align-items:stretch!important;
-      justify-content:center!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-score-row{
-      display:grid!important;
-      grid-template-columns:minmax(12px,1fr) minmax(12px,1fr)!important;
-      align-items:end!important;
-      justify-items:center!important;
-      column-gap:clamp(6px,.8vw,11px)!important;
-      line-height:1!important;
-      white-space:nowrap!important;
-      min-height:0!important;
-      width:auto!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-score-row.single{
-      grid-template-columns:minmax(12px,1fr)!important;
-    }
-    .matches-main .match-row[data-ko-card-id] .mr-score-real,
-    .matches-main .match-row[data-ko-card-id] .mr-score-single.mr-score-real,
-    .matches-main .match-row[data-ko-card-id] .mr-score-pair .mr-actual{
-      color:#ff6470!important;
-    }
   `;
   document.head.appendChild(st);
 
@@ -10980,6 +10395,179 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     try{renderMatches();}catch(e){console.warn('v122 ko parity render failed',e);}
   }else{
     try{refreshOpenTipModal();}catch(e){}
+  }
+})();
+
+
+
+/* ===== WC26 v123 KO match-row hard parity with group rows ===== */
+(function(){
+  if(window.__WC26_V123_KO_GROUP_PARITY__) return;
+  window.__WC26_V123_KO_GROUP_PARITY__ = true;
+
+  function wc26KoBase(cat){
+    cat=String(cat||'').toLowerCase();
+    if(cat==='exact' || cat==='diff' || cat==='outcome' || cat==='miss') return cat;
+    if(cat==='goal-diff' || cat==='difference') return 'diff';
+    if(cat==='winner' || cat==='result' || cat==='kimenetel') return 'outcome';
+    if(cat==='wrong' || cat==='incorrect' || cat==='hiba' || cat==='hibas' || cat==='missed') return 'miss';
+    return '';
+  }
+
+  function wc26KoParityTime(m){
+    try{
+      if(typeof koMatchTime==='function') return koMatchTime(m);
+    }catch(e){}
+    try{
+      const lr = LIVE_RESULTS[m.id] || null;
+      const md = (lr && lr.date) ? lr.date : (m.date || '');
+      const mt = (lr && lr.time) ? lr.time : ((KO_SCHEDULE[m.id]||{}).t || m.t || '');
+      if(md && mt){
+        return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});
+      }
+      return mt || '--:--';
+    }catch(e){ return (m && m.t) || '--:--'; }
+  }
+
+  function wc26KoParityBadge(m){
+    const sc = koTipScore(m) || {cat:'pending',label:''};
+    const base = wc26KoBase(sc.base || sc.cat || '');
+    const state = matchLockState({id:m.id});
+    const r = LIVE_RESULTS[m.id] || null;
+    const clk = r ? liveClockLabel(r) : '';
+    if(base==='exact') return '<em class="mr-live-state ok">'+esc(sc.label||'Pontos')+'</em>';
+    if(base==='diff') return '<em class="mr-live-state diff">'+esc(sc.label||'Gólkül.')+'</em>';
+    if(base==='outcome') return '<em class="mr-live-state outcome">'+esc(sc.label||'Kimenetel')+'</em>';
+    if(base==='miss') return '<em class="mr-live-state bad">'+esc(sc.label||'Hibás')+'</em>';
+    if(state==='finished') return '';
+    if(state==='live') return '<em class="mr-live-state live"><span></span>'+(clk||'Élő')+'</em>';
+    if(state==='open') return '<em class="mr-live-state open">Tippelhető</em>';
+    return '<em class="mr-live-state neutral">Zárolva</em>';
+  }
+
+  koMatchRow=function(m){
+    const p=koPred(m.id);
+    const cls=p?'win':'';
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m) || {cat:'pending'};
+    const base=wc26KoBase(sc.base || sc.cat || '');
+    const locked=state!=='open';
+    const edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
+    const rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+
+      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
+
+    return '<div class="match-row'+rowCls+'" data-ko-parity-id="'+m.id+'">'
+      +'<div class="mr-date">'+wc26KoParityTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title||'Kieséses kör')+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26KoParityBadge(m)+'</div>'
+      +'<div class="mr-sep"></div>'
+      +'<div class="mr-teams">'
+        +'<div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div>'
+        +'<div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div>'
+      +'</div>'
+      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'
+      +edit
+    +'</div>';
+  };
+
+  function wc26BindKoParityRows(root){
+    (root||document).querySelectorAll('.match-row[data-ko-parity-id]').forEach(row=>{
+      if(row.__wc26KoParityBound) return;
+      row.__wc26KoParityBound = true;
+      row.addEventListener('click',e=>{
+        e.stopPropagation();
+        openKoTip(row.dataset.koParityId);
+      });
+    });
+  }
+
+  const __wc26PrevRenderMatchesV123 = renderMatches;
+  renderMatches = function(){
+    const out = __wc26PrevRenderMatchesV123.apply(this, arguments);
+    wc26BindKoParityRows(document.getElementById('main')||document);
+    return out;
+  };
+
+  const __wc26PrevRenderV123 = render;
+  render = function(){
+    const out = __wc26PrevRenderV123.apply(this, arguments);
+    if(S.tab==='matches') wc26BindKoParityRows(document.getElementById('main')||document);
+    return out;
+  };
+
+  patchLiveRows = function(next){
+    if(S.tab!=='matches' && S.tab!=='overview') return false;
+    let ok = true;
+    Object.keys(next||{}).forEach(id=>{
+      const r = LIVE_RESULTS[id];
+      if(!r) return;
+
+      const row = document.querySelector('[data-mid="'+id+'"],[data-ko-parity-id="'+id+'"],[data-ko-group-id="'+id+'"],[data-ko-mid="'+id+'"]');
+      if(!row){
+        if(!document.querySelector('.tip-overlay')) ok = false;
+        return;
+      }
+
+      const scWrap = row.querySelector('.mr-scores');
+      if(!scWrap){ ok = false; return; }
+
+      const isKo = String(id).startsWith('KO-');
+      const m = FX_BY_ID[id] || (isKo ? (function(){ try{return findKoMatch(id)||null}catch(e){return null} })() : null);
+      if(!m){ ok = false; return; }
+
+      scWrap.innerHTML = scoreHtml(m);
+
+      row.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked','predicted');
+      const p = isKo ? koPred(id) : getPred(id);
+      const sc = isKo ? (koTipScore(m)||{cat:'pending'}) : tipScore(m);
+      const base = isKo ? wc26KoBase(sc.base || sc.cat || '') : sc.cat;
+
+      if(base==='exact') row.classList.add('result-exact');
+      else if(base==='diff') row.classList.add('result-diff');
+      else if(base==='outcome') row.classList.add('result-outcome');
+      else if(base==='miss') row.classList.add('result-miss');
+      if(r.started && !r.finished) row.classList.add('live-locked');
+      if(p) row.classList.add('predicted');
+
+      const date = row.querySelector('.mr-date');
+      if(date){
+        if(isKo){
+          date.innerHTML = wc26KoParityTime(m)+'<span>'+(KO_ROUND_SHORT[m.title]||m.title||'Kieséses kör')+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26KoParityBadge(m);
+        }else{
+          date.innerHTML = localMatchTime(m)+'<span>'+m.r+'. kör</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+matchStateBadge(m);
+        }
+      }
+    });
+    wc26BindKoParityRows(document.getElementById('main')||document);
+    return ok;
+  };
+
+  const st=document.createElement('style');
+  st.textContent=`
+.match-row[data-ko-parity-id]{ display:grid!important; }
+    .match-row[data-ko-parity-id] .wc26-ko-core-tip,
+    .match-row[data-ko-parity-id] .wc26-ko-left-clock{ display:none!important; }
+  `;
+  document.head.appendChild(st);
+
+  if(S.tab==='matches'){
+    try{ renderMatches(); }catch(e){ console.warn('v123 ko parity render failed', e); }
+  }
+})();
+
+
+/* ===== WC26 v124: old KO-row CSS remnants physically removed ===== */
+(function(){
+  window.__WC26_V124_KO_ROW_CSS_CLEAN__ = true;
+  if(S.tab==='matches'){
+    try{ renderMatches(); }catch(e){ console.warn('v124 ko css clean render failed', e); }
+  }
+})();
+
+
+/* ===== WC26 v125: obsolete KO-row variant blocks removed ===== */
+(function(){
+  window.__WC26_V125_KO_ROW_VARIANTS_REMOVED__ = true;
+  if(S.tab==='matches'){
+    try{ renderMatches(); }catch(e){ console.warn('v125 ko row clean render failed', e); }
   }
 })();
 
