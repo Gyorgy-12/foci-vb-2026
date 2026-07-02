@@ -12784,4 +12784,195 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   setTimeout(wc26StartWorkerLiveOnlyV139,900);
 })();
 
+
+/* ===== WC26 v140b: Matches tab right-side layout + KO local date grouping; left labels untouched ===== */
+(function(){
+  if(window.__WC26_V140_MATCHTAB_SAFE_LAYOUT_DATE__) return;
+  window.__WC26_V140_MATCHTAB_SAFE_LAYOUT_DATE__ = true;
+
+  const st=document.createElement('style');
+  st.textContent=`
+    /* Csak a Mérkőzések fül: élő perc-pirula picit nagyobb és olvashatóbb. */
+    .matches-main .mr-score-wrap .mr-live-state.live{
+      font-size:clamp(10.8px,calc(10px + .34vw),15px)!important;
+      padding:.34em .72em!important;
+      min-height:clamp(20px,calc(18px + .35vw),25px)!important;
+      border-width:1px!important;
+      font-weight:950!important;
+      letter-spacing:.01em!important;
+    }
+    .matches-main .mr-score-wrap .mr-live-state.live span{
+      width:.58em!important;
+      height:.58em!important;
+      box-shadow:0 0 0 3px rgba(255,92,104,.18)!important;
+    }
+
+    /* A jobb oldali live/score blokk is kicsit befelé, ne ragadjon a jobb szélhez. */
+    .matches-main .mr-scores{
+      position:relative!important;
+      right:clamp(3px,.42vw,7px)!important;
+    }
+    .matches-main .mr-score-wrap{
+      justify-content:end!important;
+      gap:clamp(6px,.95vw,12px)!important;
+    }
+    .matches-main .mr-clock-row{
+      gap:clamp(5px,.7vw,9px)!important;
+    }
+
+    @media (max-width:420px){
+      .matches-main .mr-score-wrap .mr-live-state.live{
+        font-size:10px!important;
+        padding:.30em .58em!important;
+      }
+      .matches-main .mr-scores{right:3px!important;}
+    }
+  `;
+  document.head.appendChild(st);
+
+  function wc26TzV140(){
+    try{return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Bucharest';}
+    catch(e){return 'Europe/Bucharest';}
+  }
+
+  function wc26DateTimePartsV140(m){
+    const id=String(m&&m.id||'');
+    const lr=(typeof LIVE_RESULTS!=='undefined'&&LIVE_RESULTS[id])?LIVE_RESULTS[id]:null;
+    const sch=(id.startsWith('KO-')&&typeof KO_SCHEDULE!=='undefined'&&KO_SCHEDULE[id])?KO_SCHEDULE[id]:null;
+    const d=(lr&&lr.date)||m?.date||sch?.date||'';
+    const t=(lr&&lr.time)||m?.t||sch?.t||'';
+    const offset=id.startsWith('KO-')?'+00:00':'+03:00';
+    return {d,t,offset};
+  }
+
+  function wc26MatchDateObjV140(m){
+    const p=wc26DateTimePartsV140(m);
+    if(p.d&&p.t){
+      const dt=new Date(p.d+'T'+p.t+':00'+p.offset);
+      if(!Number.isNaN(+dt)) return dt;
+    }
+    try{
+      const ms=fixtureKickoff(m);
+      if(Number.isFinite(ms)) return new Date(ms);
+    }catch(e){}
+    return null;
+  }
+
+  function wc26LocalDateKeyV140(m){
+    const dt=wc26MatchDateObjV140(m);
+    if(!dt) return '9999-12-31';
+    try{
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:wc26TzV140(),year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(dt);
+      const get=t=>(parts.find(p=>p.type===t)||{}).value;
+      return get('year')+'-'+get('month')+'-'+get('day');
+    }catch(e){
+      return dt.toISOString().slice(0,10);
+    }
+  }
+
+  function wc26LocalDateLabelV140(key){
+    if(!key||key==='9999-12-31') return 'Későbbi meccs';
+    try{
+      const dt=new Date(key+'T12:00:00+00:00');
+      return dt.toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:'UTC'}).replace(/\u00a0/g,' ');
+    }catch(e){return key;}
+  }
+
+  function wc26KoKickoffSortV140(m){
+    const dt=wc26MatchDateObjV140(m);
+    return dt?+dt:0;
+  }
+
+  koMatchRowsByDate=function(ms){
+    const sorted=(ms||[]).slice().sort((a,b)=>wc26KoKickoffSortV140(a)-wc26KoKickoffSortV140(b));
+    const by=groupBy(sorted,x=>wc26LocalDateKeyV140(x));
+    return Object.keys(by).sort().map(k=>
+      '<div class="round-comp"><span>'+wc26LocalDateLabelV140(k)+'</span></div><div class="matches">'+by[k].map(koMatchRow).join('')+'</div>'
+    ).join('');
+  };
+
+  function wc26BindMatchRowsV140(root){
+    root=root||document;
+    root.querySelectorAll('[data-mid]:not([data-ko-mid]):not([data-ko-match-id])').forEach(el=>{
+      if(el.__wc26V140Bound) return;
+      el.__wc26V140Bound=true;
+      el.onclick=e=>{e.stopPropagation();openTip(el.dataset.mid)};
+    });
+    root.querySelectorAll('[data-ko-mid],[data-ko-match-id]').forEach(el=>{
+      if(el.__wc26V140Bound) return;
+      el.__wc26V140Bound=true;
+      el.onclick=e=>{e.stopPropagation();openKoTip(el.dataset.koMid||el.dataset.koMatchId)};
+    });
+  }
+
+  function wc26RenderKoDateSectionsV140(){
+    let koItems=[];
+    try{
+      const allRounds=buildKO(), bronze=buildBronze(allRounds);
+      let allMatches=[...allRounds.flatMap(r=>r.matches)];
+      if(bronze&&(bronze.h||bronze.a||bronze.id)) allMatches.push(bronze);
+      allMatches.forEach(km=>koItems.push({km,kt:wc26KoKickoffSortV140(km),key:wc26LocalDateKeyV140(km)}));
+      koItems.sort((a,b)=>a.kt-b.kt);
+    }catch(e){}
+    const koByDate={};
+    koItems.forEach(({km,key})=>{(koByDate[key]??=[]).push(koMatchRow(km));});
+    return Object.keys(koByDate).sort().map(key=>
+      '<section class="card"><h2 class="card-title">'+wc26LocalDateLabelV140(key)+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+koByDate[key].join('')+'</div></section>'
+    ).join('');
+  }
+
+  renderMatches=function(){
+    let rows=FX.slice(),m=document.getElementById('main'),koHtml='';
+    m.className='main matches-main';
+    let isKoRound=MS.filt==='round'&&typeof MS.round==='string';
+    if(MS.filt==='round'&&!isKoRound) rows=rows.filter(x=>x.r===MS.round);
+    if(isKoRound) rows=[];
+    if(MS.filt==='team') rows=rows.filter(x=>x.h===MS.team||x.a===MS.team);
+    if(MS.filt==='date') koHtml=wc26RenderKoDateSectionsV140();
+    rows.sort((x,y)=>x.day-y.day||x.g.localeCompare(y.g)||x.r-y.r);
+
+    if(MS.filt==='date'){
+      let grpBy=groupBy(rows,x=>localMatchDate(x));
+      let grpDates=Object.keys(grpBy).sort((a,b)=>a.localeCompare(b));
+      let grpHtml=grpDates.map(d=>dateSection(d,grpBy[d])).join('');
+      m.innerHTML=grpHtml+koHtml;
+    }else if(MS.filt==='group'){
+      let by=groupBy(rows,x=>x.g);
+      m.innerHTML=Object.entries(by).map(([g,ms])=>'<section class="card"><h2 class="card-title">'+g+' csoport</h2>'+Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')+'</section>').join('')+koHtml;
+    }else if(isKoRound){
+      let koRoundRounds=buildKO(),koRoundBronze=buildBronze(koRoundRounds),koRoundAll=koRoundRounds.flatMap(r=>r.matches).concat([koRoundBronze]),koRoundMs=koRoundAll.filter(km=>km.round===MS.round),koRoundLabel=(KO_ROUND_OPTIONS.find(o=>o.key===MS.round)||{}).label||MS.round;
+      m.innerHTML='<section class="card"><h2 class="card-title">'+esc(koRoundLabel)+'</h2>'+(koRoundMs.length?koMatchRowsByDate(koRoundMs):'<div class="matches"><div class="community-empty">M&eacute;g nincs ehhez a k&ouml;rh&ouml;z el&eacute;rhet&#337; meccs.</div></div>')+'</section>';
+    }else if(MS.filt==='round'){
+      rows.sort((a,b)=>fixtureKickoff(a)-fixtureKickoff(b));
+      let byDate=groupBy(rows,x=>localMatchDate(x));
+      let dateSorted=Object.keys(byDate).sort((a,b)=>a.localeCompare(b));
+      m.innerHTML='<section class="card"><h2 class="card-title">Csoportkör - '+MS.round+'. kör</h2>'+
+        dateSorted.map(d=>{
+          let dayRows=byDate[d], byG=groupBy(dayRows,x=>x.g);
+          return Object.entries(byG).map(([g,ms])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+d+'</span></div><div class="matches">'+ms.map(mrow).join('')+'</div>').join('');
+        }).join('')+'</section>';
+    }else{
+      let by=groupBy(rows,x=>localMatchDate(x)),teamKoRounds=buildKO(),teamKoBronze=buildBronze(teamKoRounds),teamKoAll=teamKoRounds.flatMap(r=>r.matches).concat([teamKoBronze]),teamKoMs=teamKoAll.filter(km=>km.h===MS.team||km.a===MS.team),teamKoHtml=teamKoMs.length?'<section class="card"><h2 class="card-title">Egyenes kies&eacute;s</h2>'+koMatchRowsByDate(teamKoMs)+'</section>':'';
+      m.innerHTML='<section class="card"><h2 class="card-title">'+esc(MS.team)+'</h2>'+Object.entries(by).map(([k,v])=>'<div class="round-comp"><span>'+k+'</span></div><div class="matches">'+v.map(mrow).join('')+'</div>').join('')+'</section>'+teamKoHtml;
+    }
+    activateCrests();
+    if(!FROZEN_MODE) wc26BindMatchRowsV140(m);
+    scrollToCurrentMatch();
+    syncSoon();
+  };
+
+  const prevPatchLiveRowsV140=(typeof patchLiveRows==='function')?patchLiveRows:null;
+  if(prevPatchLiveRowsV140){
+    patchLiveRows=function(next){
+      const out=prevPatchLiveRowsV140.apply(this,arguments);
+      if(S.tab==='matches') wc26BindMatchRowsV140(document.getElementById('main')||document);
+      return out;
+    };
+  }
+
+  if(S.tab==='matches'){
+    try{renderMatches();}catch(e){console.warn('v140 matches tab layout/date refresh failed',e);}
+  }
+})();
+
 </script></body></html>
