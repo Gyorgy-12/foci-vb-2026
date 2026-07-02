@@ -8361,7 +8361,7 @@ function wc26FirebaseConfigured(){return !!(WC26_FIREBASE_CONFIG.apiKey&&WC26_FI
 function wc26LoadScript(src){return new Promise((res,rej)=>{let old=document.querySelector('script[src="'+src+'"]');if(old){res();return}let s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Nem sikerult betolteni: '+src));document.head.appendChild(s)})}
 async function loadWc26Firebase(){if(FROZEN_MODE||!wc26FirebaseConfigured())return;try{if(!window.firebase||!firebase.initializeApp){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js')}if(!firebase.auth){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js')}if(!firebase.firestore){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js')}initWc26Firebase()}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()}}
 async function loadOwnTipsFromFirebase(){if(!wc26Db||!wc26User)return false;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;try{let doc=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();wc26RemoteDocExists=doc.exists;if(doc.exists){let d=doc.data()||{},remotePred=wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']),remoteKo=wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']);PRED=wc26CleanTips(remotePred);KO_PRED=wc26CleanTips(remoteKo);wc26ClearLocalPreds();wc26OwnTipsLoaded=true;render();if(groupsComplete())syncKoPairsToWorker();return true}wc26OwnTipsLoaded=true;/* nincs remote doc: a helyi tippeket nem töröljük */render();return false}catch(e){wc26OwnTipsLoadFailed=true;wc26OwnTipsLoaded=false;wc26BackendError=e.message||String(e);return false}}
-function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();listenWc26LiveMatches();/* live results now come from Firestore live_matches onSnapshot; final results from Worker /results */wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();render();await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
+function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();listenWc26LiveMatches();/* live results now come from Worker /live-results; final results from Worker /results */wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();render();await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
 function communityGoalSum(obj){return Object.values(obj||{}).reduce((n,p)=>n+(validScore(p&&p.h)?+p.h:0)+(validScore(p&&p.a)?+p.a:0),0)}
 function gradeTip(p,r){if(!p||!r||!validScore(r.h)||!validScore(r.a))return{cat:'miss',pts:0,label:'Nincs tipp'};let ph=+p.h,pa=+p.a,rh=+r.h,ra=+r.a;if(ph===rh&&pa===ra)return{cat:'exact',pts:1,label:'Pontos'};if(ph-pa===rh-ra)return{cat:'diff',pts:.5,label:'Gólkülönbség'};if(Math.sign(ph-pa)===Math.sign(rh-ra))return{cat:'outcome',pts:.25,label:'Kimenetel'};return{cat:'miss',pts:0,label:'Téves'}}
 function communityWithTips(pred,ko,fn){let oldP=PRED,oldK=KO_PRED;try{PRED=pred||{};KO_PRED=ko||{};return fn()}finally{PRED=oldP;KO_PRED=oldK}}
@@ -9283,25 +9283,11 @@ let wc26LiveMatchesUnsub=null;
 let wc26LiveFallbackTimer=null;
 function wc26PlainFirestoreData(doc){try{return doc&&typeof doc.data==='function'?doc.data():{};}catch(e){return{}}}
 function listenWc26LiveMatches(){
-  if(FROZEN_MODE||!wc26Db||wc26LiveMatchesUnsub)return;
-  try{
-    wc26LiveMatchesUnsub=wc26Db.collection(WC26_LIVE_COLLECTION)
-      .where('liveActive','==',true)
-      .onSnapshot(snap=>{
-        const incoming={};
-        snap.forEach(doc=>{incoming[doc.id]=wc26PlainFirestoreData(doc)});
-        if(Object.keys(incoming).length)mergeLiveResults(incoming);
-      },err=>{
-        wc26BackendError=err&&err.message?err.message:String(err||'live listener error');
-        // Ha a security rules még nem engedi az új collectiont, Worker fallbackből is tudunk olvasni.
-        startWc26LiveWorkerFallback();
-        if(S.tab==='community')renderCommunity();
-      });
-  }catch(e){
-    wc26BackendError=e.message||String(e);
-    startWc26LiveWorkerFallback();
-  }
+  // v139 ZERO live DB: élőben nem nyitunk Firestore live listenert.
+  // A modal/kártya live adatát kizárólag a Worker /live-results adja.
+  return startWc26LiveWorkerFallback();
 }
+
 function startWc26LiveWorkerFallback(){
   if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL)return;
   const tick=()=>{
@@ -9329,7 +9315,7 @@ async function loadMatchResultsFromBackendDb(bypassCache=false){
 function scheduleLiveSync(delay){
   if(FROZEN_MODE)return;
   clearTimeout(wc26SyncTimer);
-  // Live közben már Firestore listener frissít. Ez csak ritka final/historikus bootstrap.
+  // Live közben a Worker /live-results frissít. Ez csak ritka final/historikus bootstrap.
   const d=delay??WC26_SYNC_IDLE_MS;
   wc26SyncTimer=setTimeout(async()=>{
     try{await loadMatchResultsFromBackendDb(false);}
@@ -9347,7 +9333,7 @@ async function syncLiveResults(opts={}){
   }finally{syncLiveResults._running=false;}
 }
 function ensureLivePaintLoop(){
-  // v11: nem indítunk 30 mp-es /results pollingot. Firestore onSnapshot fest.
+  // v139: élőben nincs Firestore live listener; csak Worker /live-results polling fut.
   if(wc26Db&&!wc26LiveMatchesUnsub)listenWc26LiveMatches();
 }
 /* ===== /WC26 FIRESTORE LIVE-DOC v11 ===== */
@@ -11816,14 +11802,14 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v134: Firestore listener leader + lazy community reads ===== */
+/* ===== WC26 v134/v139: Worker live leader + lazy community reads ===== */
 (function(){
   if(window.__WC26_V134_FIRESTORE_READ_OPT__) return;
   window.__WC26_V134_FIRESTORE_READ_OPT__ = true;
 
   /*
     Firebase read-opt cél:
-    - ne legyen minden megnyitott tab külön live onSnapshot listener
+    - ne legyen live Firestore live listener; leader tab csak Worker /live-results pollingot futtat
     - hidden tab ne tartson live listenert
     - Community lista csak akkor olvasson, amikor tényleg megnyitod
     - Community profilmodal live része továbbra is frissüljön
@@ -11879,35 +11865,13 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 
   function wc26AttachLeaderListenerV134(){
-    if(FROZEN_MODE||!wc26Db||document.hidden)return false;
-    if(wc26LiveMatchesUnsub)return true;
-
-    try{
-      wc26LiveMatchesUnsub=wc26Db.collection(WC26_LIVE_COLLECTION)
-        .where('liveActive','==',true)
-        .onSnapshot(snap=>{
-          const incoming={};
-          snap.forEach(doc=>{incoming[doc.id]=wc26PlainFirestoreData(doc);});
-          if(Object.keys(incoming).length){
-            mergeLiveResults(incoming);
-            wc26BroadcastLiveV134(incoming);
-          }
-        },err=>{
-          wc26BackendError=err&&err.message?err.message:String(err||'live listener error');
-          /*
-            Csak a leader tab indítson fallbackot, különben a fallback is megsokszorozódik.
-          */
-          wc26StartLeaderFallbackV134();
-          if(S.tab==='community')try{renderCommunity();}catch(e){}
-        });
-      try{if(wc26LiveBCV134)wc26LiveBCV134.postMessage({type:'leader-started',from:wc26TabIdV134,ts:Date.now()});}catch(e){}
-      return true;
-    }catch(e){
-      wc26BackendError=e.message||String(e);
-      wc26StartLeaderFallbackV134();
-      return false;
-    }
+    // v139 ZERO live DB: nincs Firestore live listener, csak Worker /live-results polling.
+    if(FROZEN_MODE||document.hidden)return false;
+    wc26StartLeaderFallbackV134();
+    try{if(wc26LiveBCV134)wc26LiveBCV134.postMessage({type:'leader-started-worker-live',from:wc26TabIdV134,ts:Date.now()});}catch(e){}
+    return true;
   }
+
 
   function wc26StartLeaderFallbackV134(){
     if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL||document.hidden)return;
@@ -11954,13 +11918,13 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     if(wc26LockRunningV134)return true;
     wc26LockRunningV134=true;
 
-    navigator.locks.request('wc26-firestore-live-listener-v134',{ifAvailable:true},async lock=>{
+    navigator.locks.request('wc26-worker-live-poller-v139',{ifAvailable:true},async lock=>{
       if(!lock){
         wc26LockRunningV134=false;
         return;
       }
 
-      if(document.hidden||!wc26Db){
+      if(document.hidden){
         wc26LockRunningV134=false;
         return;
       }
@@ -11983,10 +11947,10 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 
   function wc26TryLocalLeaseLeaderV134(){
-    if(wc26FallbackLeaseTimerV134||document.hidden||!wc26Db)return true;
+    if(wc26FallbackLeaseTimerV134||document.hidden)return true;
 
     const renew=()=>{
-      if(document.hidden||!wc26Db){
+      if(document.hidden){
         wc26ReleaseLeaderV134();
         return;
       }
@@ -12018,7 +11982,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 
   function wc26EnsureLiveLeaderV134(){
-    if(FROZEN_MODE||!wc26Db)return false;
+    if(FROZEN_MODE)return false;
     if(document.hidden){
       wc26ReleaseLeaderV134();
       return false;
@@ -12033,7 +11997,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
   /*
     Átírjuk a live listener belépési pontokat.
-    A korábbi, azonnali onSnapshot listenert is leállítjuk, hogy ne duplázzon.
+    A korábbi, azonnali live DB listenert is leállítjuk, hogy ne duplázzon.
   */
   wc26StopLiveListenerV134();
   wc26StopLiveFallbackV134();
@@ -12782,6 +12746,42 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   if(S.tab==='matches'){
     try{ renderMatches(); }catch(e){ console.warn('v138 KO card time/modal sync render failed', e); }
   }
+})();
+
+
+/* ===== v139 ZERO LIVE FIRESTORE SAFETY =====
+   Élő meccs alatt nincs Firestore live collection olvasás/írás.
+   A live UI kizárólag a Worker /live-results endpointot kérdezi.
+*/
+(function(){
+  if(window.__WC26_V139_ZERO_LIVE_DB__)return;
+  window.__WC26_V139_ZERO_LIVE_DB__=true;
+
+  function wc26StopAnyLiveDbListenerV139(){
+    try{
+      if(typeof wc26LiveMatchesUnsub==='function') wc26LiveMatchesUnsub();
+    }catch(e){}
+    try{wc26LiveMatchesUnsub=null;}catch(e){}
+  }
+
+  const oldStartFallbackV139 = (typeof startWc26LiveWorkerFallback==='function') ? startWc26LiveWorkerFallback : null;
+  function wc26StartWorkerLiveOnlyV139(){
+    wc26StopAnyLiveDbListenerV139();
+    if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL)return false;
+    if(oldStartFallbackV139){
+      oldStartFallbackV139();
+      return true;
+    }
+    return false;
+  }
+
+  listenWc26LiveMatches=function(){return wc26StartWorkerLiveOnlyV139();};
+  ensureLivePaintLoop=function(){return wc26StartWorkerLiveOnlyV139();};
+
+  wc26StopAnyLiveDbListenerV139();
+  setTimeout(wc26StartWorkerLiveOnlyV139,80);
+  setTimeout(wc26StopAnyLiveDbListenerV139,700);
+  setTimeout(wc26StartWorkerLiveOnlyV139,900);
 })();
 
 </script></body></html>
