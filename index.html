@@ -11734,4 +11734,382 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
 })();
 
+
+
+/* ===== WC26 v133: KO match-card bottom-left texts exactly mirror group-card logic ===== */
+(function(){
+  if(window.__WC26_V133_KO_LEFT_LABELS_GROUP_EXACT__) return;
+  window.__WC26_V133_KO_LEFT_LABELS_GROUP_EXACT__ = true;
+
+  function wc26KoLabelBaseV133(cat){
+    cat=String(cat||'').toLowerCase();
+    if(cat==='exact'||cat==='exact-pen-exact') return 'exact';
+    if(cat==='diff'||cat==='exact-pen-diff'||cat==='draw-pen-diff') return 'diff';
+    if(cat==='outcome'||cat==='exact-pen-outcome'||cat==='draw-pen-outcome'||cat==='draw') return 'outcome';
+    if(cat==='miss') return 'miss';
+    return '';
+  }
+
+  function wc26KoBottomBadgeV133(m){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m)||{cat:''};
+    const base=wc26KoLabelBaseV133(sc.base||sc.cat||'');
+    const r=actualFor({id:m.id});
+    const clk=liveClockLabel(r);
+    if(base==='exact') return '<em class="mr-live-state ok">Pontos</em>';
+    if(base==='diff') return '<em class="mr-live-state diff">G&oacute;lk&uuml;l.</em>';
+    if(base==='outcome') return '<em class="mr-live-state outcome">Kimenetel</em>';
+    if(base==='miss') return '<em class="mr-live-state bad">Hib&aacute;s</em>';
+    if(state==='finished') return '';
+    if(state==='live') return '<em class="mr-live-state live"><span></span>'+(clk||'&Eacute;l&#337;')+'</em>';
+    if(state==='open') return '<em class="mr-live-state open">Tippelhet&#337;</em>';
+    return '<em class="mr-live-state neutral">Z&aacute;rolva</em>';
+  }
+
+  function wc26KoRowClsV133(m,p){
+    const state=matchLockState({id:m.id});
+    const sc=koTipScore(m)||{cat:''};
+    const base=wc26KoLabelBaseV133(sc.base||sc.cat||'');
+    return (p?' predicted':'')+(state!=='open'?' locked':'')+(state==='live'?' live-locked':'')+
+      (base==='exact'?' result-exact':base==='diff'?' result-diff':base==='outcome'?' result-outcome':base==='miss'?' result-miss':'');
+  }
+
+  koMatchRow=function(m){
+    const p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>';
+    const home=m.h||m.hs||'', away=m.a||m.as||'';
+    const time=(typeof wc26MatchTimeV128==='function')?wc26MatchTimeV128(m,true):(typeof koMatchTime==='function'?koMatchTime(m):(m.t||'--:--'));
+    const round=(typeof wc26RoundLabelV128==='function')?wc26RoundLabelV128(m,true):(KO_ROUND_SHORT[m.title]||m.title||m.round||'Kieséses kör');
+    return '<div class="match-row'+wc26KoRowClsV133(m,p)+'" data-ko-match-id="'+m.id+'">'
+      +'<div class="mr-date">'+time+'<span>'+round+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26KoBottomBadgeV133(m)+'</div>'
+      +'<div class="mr-sep"></div>'
+      +'<div class="mr-teams"><div class="mr-team '+cls+'">'+crest(home)+'<span class="mr-tname">'+esc(home)+'</span></div><div class="mr-team '+cls+'">'+crest(away)+'<span class="mr-tname">'+esc(away)+'</span></div></div>'
+      +'<div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>';
+  };
+
+  const __wc26PatchLiveRowsV133 = patchLiveRows;
+  patchLiveRows=function(next){
+    if(S.tab!=='matches'&&S.tab!=='overview') return false;
+    let touched=0, ok=true;
+    Object.keys(next||{}).forEach(id=>{
+      const r=LIVE_RESULTS[id];
+      if(!r) return;
+      const isKo=String(id).startsWith('KO-');
+      const row=document.querySelector('[data-mid="'+id+'"],[data-ko-match-id="'+id+'"],[data-ko-parity-id="'+id+'"]');
+      if(!row){ if(!document.querySelector('.tip-overlay')) ok=false; return; }
+      const x=isKo ? (function(){try{return findKoMatch(id)||wc26FindAnyMatch(id)||null}catch(e){return null}})() : FX_BY_ID[id];
+      if(!x){ ok=false; return; }
+      const fresh=document.createElement('div');
+      fresh.innerHTML=isKo?koMatchRow(x):mrow(x);
+      const nextRow=fresh.firstElementChild;
+      if(!nextRow){ ok=false; return; }
+      row.className=nextRow.className;
+      row.innerHTML=nextRow.innerHTML;
+      try{ if(typeof wc26BindUnifiedRowsV128==='function') wc26BindUnifiedRowsV128(row.parentNode||document); }catch(e){}
+      touched++;
+    });
+    return touched>0&&ok;
+  };
+
+  if(S.tab==='matches'){
+    try{ renderMatches(); }catch(e){ console.warn('v133 KO label parity render failed', e); }
+  }
+})();
+
+
+/* ===== WC26 v134: Firestore listener leader + lazy community reads ===== */
+(function(){
+  if(window.__WC26_V134_FIRESTORE_READ_OPT__) return;
+  window.__WC26_V134_FIRESTORE_READ_OPT__ = true;
+
+  /*
+    Firebase read-opt cél:
+    - ne legyen minden megnyitott tab külön live onSnapshot listener
+    - hidden tab ne tartson live listenert
+    - Community lista csak akkor olvasson, amikor tényleg megnyitod
+    - Community profilmodal live része továbbra is frissüljön
+  */
+
+  const WC26_LIVE_BC_V134 = 'wc26-live-results-v134';
+  const WC26_LIVE_LEASE_KEY_V134 = 'wc26_live_listener_lease_v134';
+  const wc26TabIdV134 = Math.random().toString(36).slice(2)+Date.now().toString(36);
+  const wc26LiveBCV134 = ('BroadcastChannel' in window) ? new BroadcastChannel(WC26_LIVE_BC_V134) : null;
+
+  let wc26LockReleaseV134 = null;
+  let wc26LockRunningV134 = false;
+  let wc26FallbackLeaseTimerV134 = null;
+
+  function wc26StopLiveListenerV134(){
+    try{
+      if(wc26LiveMatchesUnsub){
+        wc26LiveMatchesUnsub();
+        wc26LiveMatchesUnsub=null;
+      }
+    }catch(e){
+      wc26LiveMatchesUnsub=null;
+    }
+  }
+
+  function wc26StopLiveFallbackV134(){
+    try{
+      if(wc26LiveFallbackTimer){
+        clearInterval(wc26LiveFallbackTimer);
+        wc26LiveFallbackTimer=null;
+      }
+    }catch(e){}
+  }
+
+  function wc26BroadcastLiveV134(incoming){
+    if(!incoming || !Object.keys(incoming).length)return;
+    try{
+      if(wc26LiveBCV134)wc26LiveBCV134.postMessage({type:'live-results',from:wc26TabIdV134,results:incoming,ts:Date.now()});
+    }catch(e){}
+  }
+
+  if(wc26LiveBCV134){
+    wc26LiveBCV134.onmessage=function(ev){
+      const msg=ev&&ev.data||{};
+      if(!msg || msg.from===wc26TabIdV134)return;
+      if(msg.type==='live-results' && msg.results){
+        try{mergeLiveResults(msg.results);}catch(e){}
+      }
+      if(msg.type==='leader-ping'){
+        try{wc26LiveBCV134.postMessage({type:'tab-alive',from:wc26TabIdV134,ts:Date.now()});}catch(e){}
+      }
+    };
+  }
+
+  function wc26AttachLeaderListenerV134(){
+    if(FROZEN_MODE||!wc26Db||document.hidden)return false;
+    if(wc26LiveMatchesUnsub)return true;
+
+    try{
+      wc26LiveMatchesUnsub=wc26Db.collection(WC26_LIVE_COLLECTION)
+        .where('liveActive','==',true)
+        .onSnapshot(snap=>{
+          const incoming={};
+          snap.forEach(doc=>{incoming[doc.id]=wc26PlainFirestoreData(doc);});
+          if(Object.keys(incoming).length){
+            mergeLiveResults(incoming);
+            wc26BroadcastLiveV134(incoming);
+          }
+        },err=>{
+          wc26BackendError=err&&err.message?err.message:String(err||'live listener error');
+          /*
+            Csak a leader tab indítson fallbackot, különben a fallback is megsokszorozódik.
+          */
+          wc26StartLeaderFallbackV134();
+          if(S.tab==='community')try{renderCommunity();}catch(e){}
+        });
+      try{if(wc26LiveBCV134)wc26LiveBCV134.postMessage({type:'leader-started',from:wc26TabIdV134,ts:Date.now()});}catch(e){}
+      return true;
+    }catch(e){
+      wc26BackendError=e.message||String(e);
+      wc26StartLeaderFallbackV134();
+      return false;
+    }
+  }
+
+  function wc26StartLeaderFallbackV134(){
+    if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL||document.hidden)return;
+    const tick=()=>{
+      if(document.hidden)return;
+      const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/live-results')+'?t='+Date.now();
+      fetch(url,{cache:'no-store'})
+        .then(r=>r.ok?r.json():null)
+        .then(data=>{
+          if(data&&data.results){
+            mergeLiveResults(data.results);
+            wc26BroadcastLiveV134(data.results);
+          }
+        })
+        .catch(()=>{});
+    };
+    tick();
+    wc26LiveFallbackTimer=setInterval(tick,WC26_SYNC_LIVE_MS);
+  }
+
+  function wc26ReleaseLeaderV134(){
+    wc26StopLiveListenerV134();
+    wc26StopLiveFallbackV134();
+
+    if(wc26LockReleaseV134){
+      try{wc26LockReleaseV134();}catch(e){}
+      wc26LockReleaseV134=null;
+    }
+
+    if(wc26FallbackLeaseTimerV134){
+      clearInterval(wc26FallbackLeaseTimerV134);
+      wc26FallbackLeaseTimerV134=null;
+    }
+
+    try{
+      const raw=localStorage.getItem(WC26_LIVE_LEASE_KEY_V134);
+      const lease=raw?JSON.parse(raw):null;
+      if(lease&&lease.id===wc26TabIdV134)localStorage.removeItem(WC26_LIVE_LEASE_KEY_V134);
+    }catch(e){}
+  }
+
+  function wc26TryWebLockLeaderV134(){
+    if(!navigator.locks||!navigator.locks.request)return false;
+    if(wc26LockRunningV134)return true;
+    wc26LockRunningV134=true;
+
+    navigator.locks.request('wc26-firestore-live-listener-v134',{ifAvailable:true},async lock=>{
+      if(!lock){
+        wc26LockRunningV134=false;
+        return;
+      }
+
+      if(document.hidden||!wc26Db){
+        wc26LockRunningV134=false;
+        return;
+      }
+
+      wc26AttachLeaderListenerV134();
+
+      await new Promise(resolve=>{
+        wc26LockReleaseV134=resolve;
+      });
+
+      wc26StopLiveListenerV134();
+      wc26StopLiveFallbackV134();
+      wc26LockRunningV134=false;
+    }).catch(()=>{
+      wc26LockRunningV134=false;
+      wc26TryLocalLeaseLeaderV134();
+    });
+
+    return true;
+  }
+
+  function wc26TryLocalLeaseLeaderV134(){
+    if(wc26FallbackLeaseTimerV134||document.hidden||!wc26Db)return true;
+
+    const renew=()=>{
+      if(document.hidden||!wc26Db){
+        wc26ReleaseLeaderV134();
+        return;
+      }
+
+      const now=Date.now();
+      let lease=null;
+      try{lease=JSON.parse(localStorage.getItem(WC26_LIVE_LEASE_KEY_V134)||'null');}catch(e){}
+
+      if(!lease || !lease.id || lease.expires<now || lease.id===wc26TabIdV134){
+        try{
+          localStorage.setItem(WC26_LIVE_LEASE_KEY_V134,JSON.stringify({id:wc26TabIdV134,expires:now+9000}));
+          wc26AttachLeaderListenerV134();
+        }catch(e){
+          /*
+            Ha a fallback lease nem elérhető, akkor inkább 1 listener legyen ebben a tabban,
+            ne full polling.
+          */
+          wc26AttachLeaderListenerV134();
+        }
+      }else{
+        wc26StopLiveListenerV134();
+        wc26StopLiveFallbackV134();
+      }
+    };
+
+    renew();
+    wc26FallbackLeaseTimerV134=setInterval(renew,3000);
+    return true;
+  }
+
+  function wc26EnsureLiveLeaderV134(){
+    if(FROZEN_MODE||!wc26Db)return false;
+    if(document.hidden){
+      wc26ReleaseLeaderV134();
+      return false;
+    }
+
+    if(navigator.locks&&navigator.locks.request){
+      return wc26TryWebLockLeaderV134();
+    }
+
+    return wc26TryLocalLeaseLeaderV134();
+  }
+
+  /*
+    Átírjuk a live listener belépési pontokat.
+    A korábbi, azonnali onSnapshot listenert is leállítjuk, hogy ne duplázzon.
+  */
+  wc26StopLiveListenerV134();
+  wc26StopLiveFallbackV134();
+
+  listenWc26LiveMatches=function(){
+    return wc26EnsureLiveLeaderV134();
+  };
+
+  ensureLivePaintLoop=function(){
+    return wc26EnsureLiveLeaderV134();
+  };
+
+  window.addEventListener('beforeunload',wc26ReleaseLeaderV134);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)wc26ReleaseLeaderV134();
+    else setTimeout(wc26EnsureLiveLeaderV134,120);
+  });
+
+  setTimeout(wc26EnsureLiveLeaderV134,1500);
+
+  /*
+    Community: nincs háttér-read.
+    A lista csak community tab megnyitáskor olvas egyszer.
+  */
+  let wc26CommunityLoadTokenV134=false;
+  let wc26CommunityRenderedV134=false;
+
+  const __wc26LoadCommunityTipsV134=loadCommunityTips;
+  loadCommunityTips=async function(){
+    if(S.tab!=='community' && !wc26CommunityLoadTokenV134){
+      return true;
+    }
+
+    if(S.tab==='community' && wc26CommunityRenderedV134 && !wc26CommunityLoadTokenV134){
+      return true;
+    }
+
+    wc26CommunityLoadTokenV134=false;
+    return await __wc26LoadCommunityTipsV134.apply(this,arguments);
+  };
+
+  const __wc26RenderCommunityV134=renderCommunity;
+  renderCommunity=function(){
+    if(S.tab==='community' && wc26CommunityRenderedV134 && !wc26CommunityLoadTokenV134){
+      return;
+    }
+    const out=__wc26RenderCommunityV134.apply(this,arguments);
+    if(S.tab==='community')wc26CommunityRenderedV134=true;
+    return out;
+  };
+
+  function wc26AllowCommunityOnceV134(){
+    wc26CommunityLoadTokenV134=true;
+    wc26CommunityRenderedV134=false;
+  }
+
+  document.addEventListener('click',e=>{
+    if(e.target.closest('.tab[data-tab="community"]')){
+      wc26AllowCommunityOnceV134();
+    }
+  },true);
+
+  /*
+    Ha live eredmény változik, community fül nem renderel újra.
+    Nyitott community profilmodal viszont kap célzott live patch-et,
+    mert refreshCommunityPreviews v132 már DOM-sor patch-re van cserélve.
+  */
+  const __wc26MergeLiveResultsV134=mergeLiveResults;
+  mergeLiveResults=function(next){
+    const beforeTab=S.tab;
+    const ret=__wc26MergeLiveResultsV134.apply(this,arguments);
+    if(beforeTab==='community'){
+      try{refreshCommunityPreviews();}catch(e){}
+    }
+    return ret;
+  };
+})();
+
 </script></body></html>
