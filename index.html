@@ -9775,7 +9775,7 @@ function scoreHtml(x){
 }
 function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),sc=koTipScore(m),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'||sc.cat==='exact-pen-exact'?' result-exact':sc.cat==='diff'||sc.cat==='exact-pen-diff'||sc.cat==='draw-pen-diff'?' result-diff':sc.cat==='outcome'||sc.cat==='exact-pen-outcome'||sc.cat==='draw-pen-outcome'||sc.cat==='draw'?' result-outcome':sc.cat==='miss'?' result-miss':''),sch=KO_SCHEDULE[m.id]||{},md=sch.date||m.date||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].date)||'',mt=sch.t||m.t||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].time)||'',timeStr=md&&mt?(()=>{try{return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){return mt}})():'--:--';return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26MatchStateBadgeAny(m)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>'}
 function koWinner(match){if(!match.h||!match.a)return null;let r=actualFor({id:match.id});if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pen==='h'?match.h:p.pen==='a'?match.a:null;if(validScore(p.h)&&validScore(p.a)){if(+p.h>+p.a)return match.h;if(+p.a>+p.h)return match.a;if(validScore(p.pH)&&validScore(p.pA)&&+p.pH!==+p.pA)return +p.pH>+p.pA?match.h:match.a;}return null}
-tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);applyFixtureOverrides();applyTeamElo();pruneStaleKoPred(false);render();setTimeout(()=>{loadWc26Firebase();loadMatchResultsFromBackendDb(false).finally(()=>{scheduleLiveSync();ensureLivePaintLoop();});},0);syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();
+tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);setTimeout(()=>{try{applyFixtureOverrides()}catch(e){};try{applyTeamElo()}catch(e){}},2500);pruneStaleKoPred(false);render();setTimeout(()=>{loadWc26Firebase();loadMatchResultsFromBackendDb(false).finally(()=>{scheduleLiveSync();ensureLivePaintLoop();});},0);syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();
 
 /* ===== WC26 v114 CLEAN REBASE: current-state audit pass ===== */
 (function(){
@@ -13528,438 +13528,31 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 
 
-/* ===== WC26 v152: community backend-first single loader =====
-   Community had the same lasagne problem: older click hooks/timers could call
-   loadCommunityTips several times, and v151 could still render stale session data
-   before the REST answer. This final override makes Community backend-first,
-   one in-flight request only, no automatic background warmup outside the tab. */
-(function(){
-  if(window.__WC26_V152_COMMUNITY_SINGLE_LOADER__) return;
-  window.__WC26_V152_COMMUNITY_SINGLE_LOADER__=true;
-
-  let communityInFlightV152=null;
-  let communityLoadedAtV152=0;
-  let communityLoadingV152=false;
-  let communityLastErrorV152='';
-  const COMMUNITY_MIN_RELOAD_MS_V152=45000;
-
-  function currentTab(){try{return (S&&S.tab)||'';}catch(e){return '';}}
-  function projectId(){try{return WC26_FIREBASE_CONFIG&&WC26_FIREBASE_CONFIG.projectId;}catch(e){return '';}}
-  function apiKey(){try{return WC26_FIREBASE_CONFIG&&WC26_FIREBASE_CONFIG.apiKey;}catch(e){return '';}}
-  function colRestUrl(col){return 'https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(projectId())+'/databases/(default)/documents/'+encodeURIComponent(col)+'?pageSize=300&key='+encodeURIComponent(apiKey());}
-  function getDocId(doc){return String(doc&&doc.name||'').split('/').pop();}
-  function cleanTipsSafe(o){try{return wc26CleanTips(o||{});}catch(e){return {};}}
-  function pickObjSafe(d,keys){try{return wc26PickObj(d,keys);}catch(e){for(const k of keys){if(d&&d[k]&&typeof d[k]==='object')return d[k];}return {};}}
-  function docPlain(doc){try{return wc26RestDocData(doc);}catch(e){
-    const out={};
-    const val=function(v){
-      if(!v||typeof v!=='object')return null;
-      if('stringValue' in v)return v.stringValue;
-      if('integerValue' in v)return Number(v.integerValue);
-      if('doubleValue' in v)return Number(v.doubleValue);
-      if('booleanValue' in v)return !!v.booleanValue;
-      if('timestampValue' in v)return v.timestampValue;
-      if('nullValue' in v)return null;
-      if('mapValue' in v){const m={};Object.entries((v.mapValue&&v.mapValue.fields)||{}).forEach(([k,x])=>m[k]=val(x));return m;}
-      if('arrayValue' in v)return (((v.arrayValue||{}).values)||[]).map(val);
-      return null;
-    };
-    Object.entries((doc&&doc.fields)||{}).forEach(([k,v])=>out[k]=val(v));
-    return out;
-  }}
-  function ownCommunityItemV152(){
-    try{
-      if(!wc26User) return null;
-      return {
-        id:wc26User.uid,
-        uid:wc26User.uid,
-        displayName:wc26User.displayName||wc26User.email||'Játékos',
-        photoURL:wc26User.photoURL||'',
-        pred:cleanTipsSafe(PRED),
-        ko:cleanTipsSafe(KO_PRED),
-        summary:typeof communitySummary==='function'?communitySummary(PRED||{},KO_PRED||{}):{},
-        updatedAt:new Date().toISOString(),
-        version:9,
-        storage:'firebase-rest-v152-local-merge'
-      };
-    }catch(e){return null;}
-  }
-  function upsertOwnV152(list){
-    list=Array.isArray(list)?list.slice():[];
-    const own=ownCommunityItemV152();
-    if(!own) return list;
-    const idx=list.findIndex(x=>x&&(x.id===own.id||x.uid===own.uid));
-    if(idx>=0) list[idx]=Object.assign({},list[idx],own);
-    else list.unshift(own);
-    return list;
-  }
-  function rankScoreV152(item){
-    try{
-      const s=communitySummary((item&&item.pred)||{},(item&&item.ko)||{});
-      return s&&s.eff?s.eff:{pct:0,pts:0,exact:0,diff:0,outcome:0};
-    }catch(e){return {pct:0,pts:0,exact:0,diff:0,outcome:0};}
-  }
-  function sortCommunityV152(list){
-    try{
-      return (Array.isArray(list)?list:[]).slice().sort((a,b)=>{
-        const ea=rankScoreV152(a), eb=rankScoreV152(b);
-        return (eb.pct-ea.pct)||(eb.pts-ea.pts)||(eb.exact-ea.exact)||(eb.diff-ea.diff)||String((a&&a.displayName)||'').localeCompare(String((b&&b.displayName)||''));
-      });
-    }catch(e){return Array.isArray(list)?list:[];}
-  }
-  function normalizeCommunityDocV152(doc){
-    const d=docPlain(doc)||{};
-    const id=d.uid||getDocId(doc);
-    return Object.assign({id:id,uid:id},d,{
-      id:id,
-      uid:id,
-      pred:cleanTipsSafe(pickObjSafe(d,['pred','predictions','tips','groupPred','groupPredictions','PRED'])),
-      ko:cleanTipsSafe(pickObjSafe(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']))
-    });
-  }
-
-  window.wc26CommunityHardRefresh=function(){
-    communityLoadedAtV152=0;
-    return loadCommunityTips(true).then(()=>{try{if(currentTab()==='community')renderCommunity();}catch(e){}});
-  };
-
-  loadCommunityTips=async function(force){
-    if(currentTab()!=='community'&&!force) return true;
-    const age=Date.now()-communityLoadedAtV152;
-    if(communityInFlightV152) return communityInFlightV152;
-    if(!force && communityLoadedAtV152 && age<COMMUNITY_MIN_RELOAD_MS_V152) return true;
-
-    communityLoadingV152=true;
-    communityLastErrorV152='';
-    try{ if(currentTab()==='community' && typeof renderCommunity==='function') setTimeout(()=>{try{renderCommunity();}catch(e){}},0); }catch(e){}
-
-    communityInFlightV152=(async()=>{
-      try{
-        if(!projectId()||!apiKey()) throw new Error('Firebase config missing');
-        const res=await fetch(colRestUrl(WC26_COMMUNITY_COLLECTION),{method:'GET',cache:'no-store'});
-        if(!res.ok) throw new Error('community REST '+res.status);
-        const data=await res.json();
-        const docs=(data&&data.documents)||[];
-        wc26CommunityItems=sortCommunityV152(upsertOwnV152(docs.map(normalizeCommunityDocV152)));
-        communityLoadedAtV152=Date.now();
-        communityLoadingV152=false;
-        return true;
-      }catch(e){
-        communityLastErrorV152=e&&e.message?e.message:String(e||'community load error');
-        wc26BackendError=communityLastErrorV152;
-        wc26CommunityItems=sortCommunityV152(upsertOwnV152(Array.isArray(wc26CommunityItems)?wc26CommunityItems:[]));
-        communityLoadingV152=false;
-        return false;
-      }finally{
-        communityInFlightV152=null;
-        if(currentTab()==='community') setTimeout(()=>{try{renderCommunity();}catch(e){}},0);
-      }
-    })();
-    return communityInFlightV152;
-  };
-
-  const prevRenderCommunityV152=typeof renderCommunity==='function'?renderCommunity:null;
-  if(prevRenderCommunityV152){
-    renderCommunity=function(){
-      const out=prevRenderCommunityV152.apply(this,arguments);
-      try{
-        const main=document.getElementById('main');
-        if(main&&currentTab()==='community'){
-          let card=main.querySelector('.community-card');
-          let old=main.querySelector('[data-v152-community-state]');
-          if(old) old.remove();
-          const fresh=communityLoadedAtV152?Math.round((Date.now()-communityLoadedAtV152)/1000):null;
-          const txt=communityLoadingV152?'Közösségi rangsor betöltése Firebase REST-ből…':(communityLastErrorV152?'Firebase közösségi betöltés hiba: '+communityLastErrorV152:(fresh!==null?'Firebase frissítve: '+fresh+' mp':'Közösségi adatok még nem töltődtek be.'));
-          const state=document.createElement('div');
-          state.dataset.v152CommunityState='1';
-          state.style.cssText='margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#101922;color:#9fb0bd;font-size:12px;font-weight:750;line-height:1.35';
-          state.textContent=txt;
-          if(card) card.appendChild(state);
-          if(!communityLoadingV152 && (!communityLoadedAtV152 || communityLastErrorV152)){
-            setTimeout(()=>{try{loadCommunityTips(false);}catch(e){}},60);
-          }
-        }
-      }catch(e){}
-      return out;
-    };
-  }
-
-  document.addEventListener('click',function(e){
-    const btn=e.target&&e.target.closest&&e.target.closest('#tabs .tab[data-tab="community"]');
-    if(!btn) return;
-    setTimeout(()=>{try{loadCommunityTips(false);}catch(e){}},120);
-  },true);
-
-  if(currentTab()==='community') setTimeout(()=>{try{loadCommunityTips(true);}catch(e){}},120);
-})();
-
-
-
-/* ===== WC26 v153: community REST parser + single fast renderer =====
-   Fixes the v152 community issue where the old wc26RestDocData parser returned
-   null for Firestore map fields, so many users rendered as 0%. This block uses
-   a real recursive REST parser, paginates the collection, includes auth token
-   when available, and replaces the stacked community renderer with one direct
-   backend-first renderer. */
-(function(){
-  if(window.__WC26_V153_COMMUNITY_REST_RENDER__) return;
-  window.__WC26_V153_COMMUNITY_REST_RENDER__ = true;
-
-  let v153InFlight = null;
-  let v153LoadedAt = 0;
-  let v153Loading = false;
-  let v153Error = '';
-  const V153_MIN_RELOAD_MS = 45000;
-  const V153_PAGE_SIZE = 300;
-
-  function currentTab(){ try { return (S && S.tab) || ''; } catch(e){ return ''; } }
-  function isCommunity(){ return currentTab() === 'community'; }
-  function projectId(){ try { return (WC26_FIREBASE_CONFIG && WC26_FIREBASE_CONFIG.projectId) || ''; } catch(e){ return ''; } }
-  function apiKey(){ try { return (WC26_FIREBASE_CONFIG && WC26_FIREBASE_CONFIG.apiKey) || ''; } catch(e){ return ''; } }
-  function enc(x){ return encodeURIComponent(String(x || '')); }
-  function collectionUrl(pageToken){
-    let u = 'https://firestore.googleapis.com/v1/projects/' + enc(projectId()) + '/databases/(default)/documents/' + enc(WC26_COMMUNITY_COLLECTION) + '?pageSize=' + V153_PAGE_SIZE + '&key=' + enc(apiKey());
-    if(pageToken) u += '&pageToken=' + enc(pageToken);
-    return u;
-  }
-  async function authHeaders(){
-    const h = { 'Accept':'application/json' };
-    try{
-      if(wc26User && wc26User.getIdToken){
-        const t = await wc26User.getIdToken(false);
-        if(t) h.Authorization = 'Bearer ' + t;
-      }
-    }catch(e){}
-    return h;
-  }
-
-  function restValue(v){
-    if(!v || typeof v !== 'object') return undefined;
-    if('stringValue' in v) return v.stringValue;
-    if('integerValue' in v) return Number(v.integerValue);
-    if('doubleValue' in v) return Number(v.doubleValue);
-    if('booleanValue' in v) return !!v.booleanValue;
-    if('timestampValue' in v) return v.timestampValue;
-    if('nullValue' in v) return null;
-    if(v.arrayValue) return ((v.arrayValue && v.arrayValue.values) || []).map(restValue);
-    if(v.mapValue){
-      const out = {};
-      Object.entries((v.mapValue && v.mapValue.fields) || {}).forEach(([k,x]) => { out[k] = restValue(x); });
-      return out;
-    }
-    return undefined;
-  }
-  function restDoc(doc){
-    const out = {};
-    Object.entries((doc && doc.fields) || {}).forEach(([k,v]) => { out[k] = restValue(v); });
-    return out;
-  }
-  function docId(doc){ try { return String((doc && doc.name) || '').split('/').pop() || ''; } catch(e){ return ''; } }
-  function pickObj(d, keys){
-    for(const k of keys){
-      const v = d && d[k];
-      if(v && typeof v === 'object' && !Array.isArray(v)) return v;
-    }
-    return {};
-  }
-  function cleanTipsSafe(o){ try { return wc26CleanTips(o || {}); } catch(e){ return {}; } }
-  function summarizeItem(item){
-    try { return communitySummary(item.pred || {}, item.ko || {}); }
-    catch(e){ return { groupCount:0, koCount:0, total:0, goals:0, eff:{ pct:0, pts:0, max:0, exact:0, diff:0, outcome:0, miss:0 } }; }
-  }
-  function effOf(item){
-    const s = item && item.__summary ? item.__summary : summarizeItem(item || {});
-    return (s && s.eff) || { pct:0, pts:0, max:0, exact:0, diff:0, outcome:0, miss:0 };
-  }
-  function normalizeDoc(doc){
-    const d = restDoc(doc) || {};
-    const id = String(d.uid || docId(doc) || '');
-    const item = Object.assign({}, d, {
-      id,
-      uid: id,
-      displayName: d.displayName || d.name || d.email || 'Játékos',
-      photoURL: d.photoURL || d.avatar || '',
-      pred: cleanTipsSafe(pickObj(d, ['pred','predictions','tips','groupPred','groupPredictions','PRED'])),
-      ko: cleanTipsSafe(pickObj(d, ['ko','knockout','knockoutPredictions','koPred','KO_PRED']))
-    });
-    item.__summary = summarizeItem(item);
-    return item;
-  }
-  function ownItem(){
-    try{
-      if(!wc26User) return null;
-      const item = {
-        id: wc26User.uid,
-        uid: wc26User.uid,
-        displayName: wc26User.displayName || wc26User.email || 'Játékos',
-        photoURL: wc26User.photoURL || '',
-        pred: cleanTipsSafe(PRED),
-        ko: cleanTipsSafe(KO_PRED),
-        updatedAt: new Date().toISOString(),
-        storage: 'local-current-user-v153'
-      };
-      item.__summary = summarizeItem(item);
-      return item;
-    }catch(e){ return null; }
-  }
-  function upsertOwn(list){
-    list = Array.isArray(list) ? list.slice() : [];
-    const own = ownItem();
-    if(!own) return list;
-    const idx = list.findIndex(x => x && (x.id === own.id || x.uid === own.uid));
-    if(idx >= 0) list[idx] = Object.assign({}, list[idx], own);
-    else list.unshift(own);
-    return list;
-  }
-  function sortList(list){
-    return (Array.isArray(list) ? list : []).slice().sort((a,b) => {
-      const ea = effOf(a), eb = effOf(b);
-      return (eb.pct - ea.pct) || (eb.pts - ea.pts) || ((eb.exact||0) - (ea.exact||0)) || ((eb.diff||0) - (ea.diff||0)) || ((eb.outcome||0) - (ea.outcome||0)) || String(a.displayName || '').localeCompare(String(b.displayName || ''));
-    });
-  }
-
-  async function fetchCommunityDocs(){
-    if(!projectId() || !apiKey()) throw new Error('Firebase config missing');
-    const headers = await authHeaders();
-    const docs = [];
-    let pageToken = '';
-    let guard = 0;
-    do{
-      const res = await fetch(collectionUrl(pageToken), { method:'GET', cache:'no-store', headers });
-      if(!res.ok){
-        let body = '';
-        try { body = await res.text(); } catch(e){}
-        throw new Error('community REST ' + res.status + (body ? ': ' + body.slice(0,120) : ''));
-      }
-      const data = await res.json();
-      docs.push(...((data && data.documents) || []));
-      pageToken = (data && data.nextPageToken) || '';
-      guard++;
-    }while(pageToken && guard < 8);
-    return docs;
-  }
-
-  loadCommunityTips = async function(force){
-    if(!force && !isCommunity()) return true;
-    const age = Date.now() - v153LoadedAt;
-    if(v153InFlight) return v153InFlight;
-    if(!force && v153LoadedAt && age < V153_MIN_RELOAD_MS) return true;
-
-    v153Loading = true;
-    v153Error = '';
-    if(isCommunity()) setTimeout(() => { try { renderCommunity(); } catch(e){} }, 0);
-
-    v153InFlight = (async() => {
-      try{
-        const docs = await fetchCommunityDocs();
-        const list = docs.map(normalizeDoc).filter(x => x && x.id);
-        wc26CommunityItems = sortList(upsertOwn(list));
-        v153LoadedAt = Date.now();
-        v153Loading = false;
-        v153Error = '';
-        return true;
-      }catch(e){
-        v153Error = e && e.message ? e.message : String(e || 'community load error');
-        wc26BackendError = v153Error;
-        wc26CommunityItems = sortList(upsertOwn(Array.isArray(wc26CommunityItems) ? wc26CommunityItems : []));
-        v153Loading = false;
-        return false;
-      }finally{
-        v153InFlight = null;
-        if(isCommunity()) setTimeout(() => { try { renderCommunity(); } catch(e){} }, 0);
-      }
-    })();
-    return v153InFlight;
-  };
-
-  function communityStatusHtml(){
-    const fresh = v153LoadedAt ? Math.round((Date.now() - v153LoadedAt) / 1000) : null;
-    const txt = v153Loading ? 'Közösségi rangsor betöltése Firebase REST-ből…' : (v153Error ? ('Firebase közösségi betöltés hiba: ' + v153Error) : (fresh !== null ? ('Firebase frissítve: ' + fresh + ' mp') : 'Közösségi adatok még nem töltődtek be.'));
-    return '<div data-v153-community-state="1" style="margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#101922;color:#9fb0bd;font-size:12px;font-weight:750;line-height:1.35">'+esc(txt)+'</div>';
-  }
-  function renderSkeleton(){
-    return '<div class="community-empty">Közösségi rangsor betöltése…</div>';
-  }
-
-  renderCommunity = function(){
-    const m = document.getElementById('main');
-    if(!m) return;
-    m.className = 'main community-main';
-
-    const configured = (typeof wc26FirebaseConfigured === 'function') ? wc26FirebaseConfigured() : !!projectId();
-    const mine = communitySummary(PRED || {}, KO_PRED || {});
-    const authHtml = wc26User
-      ? '<div class="community-user"><img class="community-avatar" src="'+esc(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(wc26User.displayName||wc26User.email||'Játékos')+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>'
-      : '<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!configured?'disabled':'')+'>Belépés Google-lel</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>';
-    const setupHtml = configured ? '' : '<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba.</p></section>';
-
-    const rows = sortList(upsertOwn(wc26CommunityItems || []));
-    let listHtml = '';
-    if(v153Loading && !rows.length) listHtml = renderSkeleton();
-    else if(rows.length){
-      listHtml = rows.map((item,i) => {
-        const s = item.__summary || summarizeItem(item);
-        const e = (s && s.eff) || { pct:0, pts:0, max:0 };
-        const score = e.max ? (e.pct + '%') : '0%';
-        return '<div class="community-row"><div class="community-rank">'+(i+1)+'.</div><div class="community-user"><img class="community-avatar" src="'+esc(item.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(item.displayName||'Játékos')+'</div><div class="community-meta">'+esc(communityRankMeta(e))+' · frissítve: '+esc(communityDate(item.updatedAt))+'</div></div></div><div><div class="community-score">'+esc(score)+'</div><button class="community-btn" data-community-view="'+esc(item.id||item.uid)+'">Megnézés</button></div></div>';
-      }).join('');
-    }else{
-      listHtml = '<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
-    }
-
-    m.innerHTML = setupHtml + '<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+communityStatsHtml(mine)+communityStatusHtml()+'</section><section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
-    m.querySelector('#wc26LoginBtn')?.addEventListener('click', wc26SignIn);
-    m.querySelector('#wc26LogoutBtn')?.addEventListener('click', wc26SignOut);
-    m.querySelector('#wc26RenameBtn')?.addEventListener('click', wc26RenameProfile);
-    m.querySelector('#wc26CommunityRefreshBtn')?.addEventListener('click', () => loadCommunityTips(true));
-    m.querySelectorAll('[data-community-view]').forEach(b => b.addEventListener('click', () => openCommunityTips(b.dataset.communityView)));
-    try{ activateCrests(); }catch(e){}
-    try{ syncSpacer(); }catch(e){}
-    if(isCommunity() && !v153Loading && !v153LoadedAt) setTimeout(() => loadCommunityTips(false), 50);
-  };
-
-  window.wc26CommunityHardRefresh = function(){ v153LoadedAt = 0; return loadCommunityTips(true); };
-
-  document.addEventListener('click', function(e){
-    const btn = e.target && e.target.closest && e.target.closest('#tabs .tab[data-tab="community"]');
-    if(!btn) return;
-    setTimeout(() => { try { loadCommunityTips(false); } catch(_e){} }, 80);
-  }, true);
-
-  if(isCommunity()) setTimeout(() => { try { loadCommunityTips(true); } catch(e){} }, 80);
-})();
-
-
-
-/* ===== WC26 v154: community via Worker cached endpoint + no direct community collection scan =====
-   Deep fix for Firebase read spikes:
-   - Community tab no longer scans wc26_community_predictions_v1 directly from each browser.
-   - It uses the Worker /community endpoint, which is edge-cached server-side.
-   - Auth remains Firebase Auth only; no Firestore SDK, no Listen/Write WebChannel.
-   - Manual refresh can bypass Worker cache, but normal tab opens reuse it.
+/* ===== WC26 v155: community single worker loader, no direct Firestore scans =====
+   Clean-up after the v152/v153/v154 stack:
+   - one community loader only, through Worker /community
+   - no browser-side community collection scan
+   - no session-first community paint
+   - no extra click listeners for community refresh; renderCommunity drives the load
+   - manual refresh uses the Worker cache too, so users cannot bypass edge cache by spam-clicking
 */
 (function(){
-  if(window.__WC26_V154_COMMUNITY_WORKER_CACHE__) return;
-  window.__WC26_V154_COMMUNITY_WORKER_CACHE__ = true;
+  if(window.__WC26_V155_COMMUNITY_SINGLE_WORKER__) return;
+  window.__WC26_V155_COMMUNITY_SINGLE_WORKER__ = true;
 
   const COMMUNITY_MIN_RELOAD_MS = 120000;
-  let communityInFlight = null;
-  let communityLoadedAt = 0;
-  let communityLoading = false;
-  let communityError = '';
+  let inFlight = null;
+  let loadedAt = 0;
+  let loading = false;
+  let error = '';
 
-  function tab(){ try { return (S && S.tab) || ''; } catch(e){ return ''; } }
-  function isCommunity(){ return tab() === 'community'; }
-  function workerBase(){
-    try { return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); }
-    catch(e){ return ''; }
-  }
-  function communityUrl(force){
-    const base = workerBase();
-    if(!base) return '';
-    return base + '/community' + (force ? '?fresh=1' : '');
-  }
+  function current(){ try { return (S && S.tab) || ''; } catch(e){ return ''; } }
+  function isCommunity(){ return current() === 'community'; }
+  function base(){ try { return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); } catch(e){ return ''; } }
+  function url(){ const b = base(); return b ? b + '/community' : ''; }
   function clean(o){ try { return wc26CleanTips(o || {}); } catch(e){ return {}; } }
+  function esc2(x){ try { return esc(x); } catch(e){ return String(x == null ? '' : x); } }
+  function configured(){ try { return wc26FirebaseConfigured(); } catch(e){ return false; } }
   function ownItem(){
     try{
       if(!wc26User) return null;
@@ -13971,122 +13564,126 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
         pred: clean(PRED),
         ko: clean(KO_PRED),
         updatedAt: new Date().toISOString(),
-        storage: 'local-current-user-v154'
+        storage: 'local-current-user-v155'
       };
     }catch(e){ return null; }
   }
-  function upsertOwn(list){
-    list = Array.isArray(list) ? list.slice() : [];
-    const own = ownItem();
-    if(!own) return list;
-    const idx = list.findIndex(x => x && (x.id === own.id || x.uid === own.uid));
-    if(idx >= 0) list[idx] = Object.assign({}, list[idx], own);
-    else list.unshift(own);
-    return list;
-  }
-  function normalizeItem(x){
+  function normalize(x){
     x = x || {};
     const id = String(x.uid || x.id || '').trim();
-    return Object.assign({}, x, {
+    return {
+      ...x,
       id,
       uid: id,
       displayName: x.displayName || x.name || x.email || 'Játékos',
       photoURL: x.photoURL || x.avatar || '',
       pred: clean(x.pred || x.predictions || x.tips || x.groupPred || x.groupPredictions || x.PRED || {}),
       ko: clean(x.ko || x.knockout || x.knockoutPredictions || x.koPred || x.KO_PRED || {})
-    });
+    };
   }
-  function summarize(item){
+  function summary(item){
     try { return communitySummary((item && item.pred) || {}, (item && item.ko) || {}); }
-    catch(e){ return { eff:{ pct:0, pts:0, max:0, exact:0, diff:0, outcome:0, miss:0 }, groupCount:0, koCount:0, total:0, goals:0 }; }
+    catch(e){ return {eff:{pct:0,pts:0,max:0,exact:0,diff:0,outcome:0,miss:0},groupCount:0,koCount:0,total:0,goals:0}; }
   }
-  function sortItems(list){
+  function sort(list){
     return (Array.isArray(list) ? list : []).slice().sort((a,b)=>{
-      const sa = a.__summary || summarize(a), sb = b.__summary || summarize(b);
-      const ea = (sa && sa.eff) || {}, eb = (sb && sb.eff) || {};
+      const sa = a.__summary || summary(a), sb = b.__summary || summary(b);
+      const ea = sa.eff || {}, eb = sb.eff || {};
       return ((eb.pct||0)-(ea.pct||0)) || ((eb.pts||0)-(ea.pts||0)) || ((eb.exact||0)-(ea.exact||0)) || ((eb.diff||0)-(ea.diff||0)) || String(a.displayName||'').localeCompare(String(b.displayName||''));
     });
   }
   function setItems(items){
-    let list = (Array.isArray(items) ? items : []).map(normalizeItem).filter(x => x && x.id);
-    list = upsertOwn(list).map(x => { x.__summary = summarize(x); return x; });
-    wc26CommunityItems = sortItems(list);
+    let list = (Array.isArray(items) ? items : []).map(normalize).filter(x => x && x.id);
+    const own = ownItem();
+    if(own){
+      const idx = list.findIndex(x => x && (x.id === own.id || x.uid === own.uid));
+      if(idx >= 0) list[idx] = Object.assign({}, list[idx], own);
+      else list.unshift(own);
+    }
+    list = list.map(x => { x.__summary = summary(x); return x; });
+    wc26CommunityItems = sort(list);
   }
-  function statusText(){
-    const age = communityLoadedAt ? Math.round((Date.now() - communityLoadedAt) / 1000) : null;
-    if(communityLoading) return 'Közösségi rangsor betöltése Worker cache-ből…';
-    if(communityError) return 'Közösségi betöltés hiba: ' + communityError;
-    if(age !== null) return 'Worker közösségi cache frissítve: ' + age + ' mp';
-    return 'Közösségi adatok még nem töltődtek be.';
+  function statusHtml(){
+    const age = loadedAt ? Math.round((Date.now() - loadedAt) / 1000) : null;
+    const txt = loading ? 'Közösségi rangsor betöltése Worker cache-ből…'
+      : error ? ('Közösségi betöltés hiba: ' + error)
+      : age !== null ? ('Worker cache frissítve: ' + age + ' mp')
+      : 'Közösségi adatok még nem töltődtek be.';
+    return '<div data-v155-community-state="1" style="margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#101922;color:#9fb0bd;font-size:12px;font-weight:750;line-height:1.35">'+esc2(txt)+'</div>';
   }
-
-  loadCommunityTips = async function(force){
+  function skeleton(){
+    return '<div class="community-empty">Közösségi rangsor betöltése…</div>';
+  }
+  async function loadCommunity(force){
     if(!force && !isCommunity()) return true;
-    const age = Date.now() - communityLoadedAt;
-    if(communityInFlight) return communityInFlight;
-    if(!force && communityLoadedAt && age < COMMUNITY_MIN_RELOAD_MS) return true;
-
-    const url = communityUrl(!!force);
-    if(!url){ communityError = 'Worker URL missing'; return false; }
-
-    communityLoading = true;
-    communityError = '';
+    const age = Date.now() - loadedAt;
+    if(inFlight) return inFlight;
+    if(!force && loadedAt && age < COMMUNITY_MIN_RELOAD_MS) return true;
+    const u = url();
+    if(!u){ error = 'Worker URL missing'; return false; }
+    loading = true; error = '';
     if(isCommunity()) setTimeout(()=>{ try{ renderCommunity(); }catch(e){} },0);
-
-    communityInFlight = (async()=>{
+    inFlight = (async()=>{
       try{
-        const res = await fetch(url, { method:'GET', cache: force ? 'reload' : 'default' });
+        // Fontos: nincs ?fresh=1. A Frissítés gomb sem kerülheti meg a Worker edge cache-t.
+        const res = await fetch(u, { method:'GET', cache:'default' });
         if(!res.ok) throw new Error('worker /community ' + res.status);
         const data = await res.json();
-        const items = data.items || data.community || [];
-        setItems(items);
-        communityLoadedAt = Date.now();
-        communityLoading = false;
-        communityError = '';
+        setItems(data.items || data.community || []);
+        loadedAt = Date.now();
+        loading = false; error = '';
         return true;
       }catch(e){
-        communityError = e && e.message ? e.message : String(e || 'community error');
-        wc26BackendError = communityError;
+        error = e && e.message ? e.message : String(e || 'community error');
+        wc26BackendError = error;
         setItems(wc26CommunityItems || []);
-        communityLoading = false;
+        loading = false;
         return false;
       }finally{
-        communityInFlight = null;
+        inFlight = null;
         if(isCommunity()) setTimeout(()=>{ try{ renderCommunity(); }catch(e){} },0);
       }
     })();
-    return communityInFlight;
-  };
-
-  window.wc26CommunityHardRefresh = function(){
-    communityLoadedAt = 0;
-    return loadCommunityTips(true).then(ok=>{ try{ if(isCommunity()) renderCommunity(); }catch(e){} return ok; });
-  };
-
-  // Override the previous v153 status text without rewriting the full renderer.
-  const prevRenderCommunity = typeof renderCommunity === 'function' ? renderCommunity : null;
-  if(prevRenderCommunity){
-    renderCommunity = function(){
-      const out = prevRenderCommunity.apply(this, arguments);
-      try{
-        const box = document.querySelector('[data-v153-community-state="1"]');
-        if(box) box.textContent = statusText();
-        const btn = document.getElementById('wc26CommunityRefreshBtn');
-        if(btn) btn.onclick = () => loadCommunityTips(true);
-      }catch(e){}
-      return out;
-    };
+    return inFlight;
   }
 
-  document.addEventListener('click', function(e){
-    const btn = e.target && e.target.closest && e.target.closest('#tabs .tab[data-tab="community"]');
-    if(!btn) return;
-    setTimeout(()=>{ try{ loadCommunityTips(false); }catch(e){} },80);
-  }, true);
+  loadCommunityTips = function(force){ return loadCommunity(!!force); };
+  listenCommunityTips = function(){ try{ if(wc26CommunityUnsub){ wc26CommunityUnsub(); wc26CommunityUnsub = null; } }catch(e){} return false; };
+  window.wc26CommunityHardRefresh = function(){ loadedAt = 0; return loadCommunity(true); };
 
-  // Start auth only after all overrides exist. This avoids the old Firestore compat bootstrap.
-  setTimeout(()=>{ try{ loadWc26Firebase(); }catch(e){} },0);
-  if(isCommunity()) setTimeout(()=>{ try{ loadCommunityTips(false); }catch(e){} },120);
+  renderCommunity = function(){
+    const m = document.getElementById('main');
+    if(!m) return;
+    m.className = 'main community-main';
+    try{
+      document.querySelectorAll('#tabs .tab').forEach(btn=>btn.classList.toggle('active', btn.dataset && btn.dataset.tab === 'community'));
+      ['tblCtrl','koCtrl','mCtrl','mRoundBar','mTeamBar'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.add('hidden'); });
+    }catch(e){}
+    const mine = communitySummary(PRED || {}, KO_PRED || {});
+    const cfg = configured();
+    const authHtml = wc26User
+      ? '<div class="community-user"><img class="community-avatar" src="'+esc2(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+esc2(wc26User.displayName||wc26User.email||'Játékos')+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>'
+      : '<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!cfg?'disabled':'')+'>Belépés Google-lel</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>';
+    const setupHtml = cfg ? '' : '<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba.</p></section>';
+    const rows = sort(Array.isArray(wc26CommunityItems) ? wc26CommunityItems : []);
+    let listHtml = '';
+    if(loading && !rows.length) listHtml = skeleton();
+    else if(rows.length){
+      listHtml = rows.map((item,i)=>{
+        const s = item.__summary || summary(item), e = s.eff || {};
+        const score = e.max ? (e.pct + '%') : '0%';
+        return '<div class="community-row"><div class="community-rank">'+(i+1)+'.</div><div class="community-user"><img class="community-avatar" src="'+esc2(item.photoURL||'')+'" alt=""><div><div class="community-name">'+esc2(item.displayName||'Játékos')+'</div><div class="community-meta">'+esc2(communityRankMeta(e))+' · frissítve: '+esc2(communityDate(item.updatedAt))+'</div></div></div><div><div class="community-score">'+esc2(score)+'</div><button class="community-btn" data-community-view="'+esc2(item.id||item.uid)+'">Megnézés</button></div></div>';
+      }).join('');
+    }else listHtml = '<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
+    m.innerHTML = setupHtml + '<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+communityStatsHtml(mine)+statusHtml()+'</section><section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
+    m.querySelector('#wc26LoginBtn')?.addEventListener('click', wc26SignIn);
+    m.querySelector('#wc26LogoutBtn')?.addEventListener('click', wc26SignOut);
+    m.querySelector('#wc26RenameBtn')?.addEventListener('click', wc26RenameProfile);
+    m.querySelector('#wc26CommunityRefreshBtn')?.addEventListener('click', () => loadCommunity(true));
+    m.querySelectorAll('[data-community-view]').forEach(b => b.addEventListener('click', () => openCommunityTips(b.dataset.communityView)));
+    try{ activateCrests(); syncSpacer(); }catch(e){}
+    if(isCommunity() && !loading && !loadedAt) setTimeout(()=>loadCommunity(false),60);
+  };
 })();
 
 </script></body></html>
