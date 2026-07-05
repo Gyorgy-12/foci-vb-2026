@@ -8359,9 +8359,32 @@ const WC26_LIVE_COLLECTION='wc26_live_matches_v1';
 let wc26Db=null,wc26Auth=null,wc26User=null,wc26BackendReady=false,wc26BackendError='',wc26CommunityItems=[],wc26AutosaveTimer=null,wc26CommunityUnsub=null,wc26ResultsUnsub=null,wc26OwnTipsLoaded=false,wc26OwnTipsLoadFailed=false,wc26RemoteDocExists=false;
 function wc26FirebaseConfigured(){return !!(WC26_FIREBASE_CONFIG.apiKey&&WC26_FIREBASE_CONFIG.projectId&&WC26_FIREBASE_CONFIG.appId)}
 function wc26LoadScript(src){return new Promise((res,rej)=>{let old=document.querySelector('script[src="'+src+'"]');if(old){res();return}let s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Nem sikerult betolteni: '+src));document.head.appendChild(s)})}
-async function loadWc26Firebase(){if(FROZEN_MODE||!wc26FirebaseConfigured())return;try{if(!window.firebase||!firebase.initializeApp){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js')}if(!firebase.auth){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js')}if(!firebase.firestore){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js')}initWc26Firebase()}catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||loadMatchResultsOnceFromFirestore());scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity()}}
+async function wc26AuthOnlyBootstrapEarly(){
+  if(FROZEN_MODE||!wc26FirebaseConfigured())return false;
+  try{
+    if(!window.firebase||!firebase.initializeApp){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js')}
+    if(!firebase.auth){await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js')}
+    let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');
+    wc26Auth=app.auth();
+    wc26Db=null; // V156: Firestore SDK/WebChannel disabled. REST/Worker only.
+    wc26BackendReady=true;
+    try{listenCommunityTips()}catch(e){}
+    try{listenWc26LiveMatches()}catch(e){}
+    if(!window.__WC26_AUTH_ONLY_HOOKED_EARLY__){
+      window.__WC26_AUTH_ONLY_HOOKED_EARLY__=true;
+      wc26Auth.onAuthStateChanged(async u=>{
+        wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;
+        if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();try{render()}catch(e){};await loadOwnTipsFromFirebase(false).catch(e=>{wc26BackendError=e&&e.message?e.message:String(e)})}
+        else{PRED={};KO_PRED={};wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;wc26ClearLocalPreds();try{render()}catch(e){}}
+        if(S.tab==='community')loadCommunityTips(false).then(()=>renderCommunity()).catch(()=>renderCommunity());
+      });
+    }
+    return true;
+  }catch(e){wc26BackendError=e.message||String(e);loadMatchResultsFromBackendDb().then(ok=>ok||false);scheduleLiveSync(WC26_SYNC_LIVE_MS);if(S.tab==='community')renderCommunity();return false}
+}
+async function loadWc26Firebase(){return wc26AuthOnlyBootstrapEarly()}
 async function loadOwnTipsFromFirebase(){if(!wc26Db||!wc26User)return false;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;try{let doc=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).doc(wc26User.uid).get();wc26RemoteDocExists=doc.exists;if(doc.exists){let d=doc.data()||{},remotePred=wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']),remoteKo=wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']);PRED=wc26CleanTips(remotePred);KO_PRED=wc26CleanTips(remoteKo);wc26ClearLocalPreds();wc26OwnTipsLoaded=true;render();if(groupsComplete())syncKoPairsToWorker();return true}wc26OwnTipsLoaded=true;/* nincs remote doc: a helyi tippeket nem töröljük */render();return false}catch(e){wc26OwnTipsLoadFailed=true;wc26OwnTipsLoaded=false;wc26BackendError=e.message||String(e);return false}}
-function initWc26Firebase(){try{let app=(firebase.apps||[]).find(a=>a.name==='wc26-backend')||firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');wc26Auth=app.auth();wc26Db=app.firestore();wc26BackendReady=true;listenCommunityTips();listenWc26LiveMatches();/* live results now come from Worker /live-results; final results from Worker /results */wc26Auth.onAuthStateChanged(async u=>{wc26User=u||null;wc26OwnTipsLoaded=false;wc26OwnTipsLoadFailed=false;wc26RemoteDocExists=false;if(u){PRED={};KO_PRED={};wc26ClearLocalPreds();render();await wc26Db.collection(WC26_USER_COLLECTION).doc(u.uid).set({uid:u.uid,displayName:u.displayName||'',email:u.email||'',photoURL:u.photoURL||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});await loadOwnTipsFromFirebase()}else{let local=wc26ReadLocalPreds();PRED=wc26CleanTips(local.pred);KO_PRED=wc26CleanTips(local.ko);wc26OwnTipsLoaded=true;wc26RemoteDocExists=false;render()}if(!wc26CommunityUnsub)await loadCommunityTips();if(S.tab==='community')renderCommunity()})}catch(e){wc26BackendError=e.message||String(e);if(S.tab==='community')renderCommunity()}}
+function initWc26Firebase(){return wc26AuthOnlyBootstrapEarly()}
 function communityGoalSum(obj){return Object.values(obj||{}).reduce((n,p)=>n+(validScore(p&&p.h)?+p.h:0)+(validScore(p&&p.a)?+p.a:0),0)}
 function gradeTip(p,r){if(!p||!r||!validScore(r.h)||!validScore(r.a))return{cat:'miss',pts:0,label:'Nincs tipp'};let ph=+p.h,pa=+p.a,rh=+r.h,ra=+r.a;if(ph===rh&&pa===ra)return{cat:'exact',pts:1,label:'Pontos'};if(ph-pa===rh-ra)return{cat:'diff',pts:.5,label:'Gólkülönbség'};if(Math.sign(ph-pa)===Math.sign(rh-ra))return{cat:'outcome',pts:.25,label:'Kimenetel'};return{cat:'miss',pts:0,label:'Téves'}}
 function communityWithTips(pred,ko,fn){let oldP=PRED,oldK=KO_PRED;try{PRED=pred||{};KO_PRED=ko||{};return fn()}finally{PRED=oldP;KO_PRED=oldK}}
@@ -8619,10 +8642,13 @@ function wc26RestValue(v){if(!v||typeof v!=='object')return null;if('booleanValu
 function wc26RestDocData(doc){let out={};Object.entries(doc?.fields||{}).forEach(([k,v])=>out[k]=wc26RestValue(v));return out}
 async function loadMatchResultsOnceFromFirestore(){return false;try{let url='https://firestore.googleapis.com/v1/projects/'+WC26_FIREBASE_CONFIG.projectId+'/databases/(default)/documents/'+WC26_RESULTS_COLLECTION+'?key='+encodeURIComponent(WC26_FIREBASE_CONFIG.apiKey),data=await fetch(url).then(r=>r.ok?r.json():null),incoming={};(data?.documents||[]).forEach(doc=>{let id=(doc.name||'').split('/').pop(),plain=wc26RestDocData(doc),r=normalizeLiveResult(id,plain);if(r)incoming[id]=r});return mergeLiveResults(incoming)}catch(e){return false}}
 async function loadMatchResultsFromBackendDb(bypassCache=false){if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;try{
-  // Ko schedule + results párhuzamos lekérdezése
+  // Backend-first. Browser cache-t nem használunk itt, mert az oddsok a Worker
+  // /results payloadban jönnek, és a böngésző max-age miatt különben látszólag
+  // beragadhatnak. Firestore-t továbbra is a Worker edge/public cache védi.
+  const fetchOpts={cache:'no-store'};
   const [data, koData] = await Promise.all([
-    fetch(WC26_RESULTS_READ_URL,bypassCache?{cache:'reload'}:{}).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs')).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(WC26_RESULTS_READ_URL,fetchOpts).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs'),fetchOpts).then(r=>r.ok?r.json():null).catch(()=>null),
   ]);
   // KO schedule felülírása ha van frissebb adat
   if(koData?.schedule){
@@ -13683,6 +13709,35 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     m.querySelectorAll('[data-community-view]').forEach(b => b.addEventListener('click', () => openCommunityTips(b.dataset.communityView)));
     try{ activateCrests(); syncSpacer(); }catch(e){}
     if(isCommunity() && !loading && !loadedAt) setTimeout(()=>loadCommunity(false),60);
+  };
+})();
+
+
+/* ===== WC26 v156: hard Firestore-SDK kill switch =====
+   Auth stays available; Firestore reads/writes must go through REST/Worker only.
+*/
+(function(){
+  if(window.__WC26_V156_NO_FIRESTORE_SDK__) return;
+  window.__WC26_V156_NO_FIRESTORE_SDK__=true;
+  try{
+    const oldLoad=typeof wc26LoadScript==='function'?wc26LoadScript:null;
+    if(oldLoad){
+      wc26LoadScript=function(src){
+        if(String(src||'').includes('firebase-firestore-compat')){
+          wc26Db=null;
+          return Promise.resolve(false);
+        }
+        return oldLoad.apply(this,arguments);
+      };
+    }
+  }catch(e){}
+  listenCommunityTips=function(){try{if(wc26CommunityUnsub){wc26CommunityUnsub();wc26CommunityUnsub=null}}catch(e){}return false};
+  listenWc26LiveMatches=function(){try{if(wc26LiveMatchesUnsub){wc26LiveMatchesUnsub();wc26LiveMatchesUnsub=null}}catch(e){}return false};
+  const oldLoadFirebase=loadWc26Firebase;
+  loadWc26Firebase=async function(){
+    const ok = await oldLoadFirebase.apply(this,arguments).catch(()=>false);
+    wc26Db=null;
+    return ok;
   };
 })();
 
