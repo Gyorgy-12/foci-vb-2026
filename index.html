@@ -14120,4 +14120,116 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   setTimeout(()=>pollLive(true).catch(()=>{}),250);
 })();
 /* ===== /WC26 v163 live kickoff feedback restore ===== */
+
+
+/* ===== WC26 v164: live penalty-tip match-card right side breathing room =====
+   Élő meccseknél, ahol a felhasználó tizenegyeseket is tippelt,
+   a jobb oldali live pill + valós/tipp eredményblokk picit beljebb és szélesebb helyre kerül.
+   Csak a Mérkőzések fül kártyáit érinti; normál, nem-penalty tippes kártyákhoz nem nyúl.
+*/
+(function(){
+  if(window.__WC26_V164_LIVE_PEN_CARD_BREATHING_ROOM__) return;
+  window.__WC26_V164_LIVE_PEN_CARD_BREATHING_ROOM__ = true;
+
+  function hasPenaltyTipForRowId(id){
+    try{
+      const p = String(id||'').startsWith('KO-') ? koPred(id) : getPred(id);
+      return !!(p && validScore(p.h) && validScore(p.a) && validScore(p.pH) && validScore(p.pA));
+    }catch(e){ return false; }
+  }
+
+  function markPenaltyLiveRows(root){
+    try{
+      (root||document).querySelectorAll('.matches-main .match-row').forEach(row=>{
+        const id = row.getAttribute('data-mid') || row.getAttribute('data-ko-match-id') || row.getAttribute('data-ko-mid') || row.getAttribute('data-ko-parity-id') || row.getAttribute('data-ko-group-id') || '';
+        const r = id ? (LIVE_RESULTS[id] || null) : null;
+        const isLive = row.classList.contains('live-locked') || !!(r && r.started && !r.finished);
+        const penTip = id && hasPenaltyTipForRowId(id);
+        row.classList.toggle('wc26-live-pen-tip-row', !!(isLive && penTip));
+      });
+    }catch(e){}
+  }
+
+  const st=document.createElement('style');
+  st.textContent=`
+    .matches-main .match-row.wc26-live-pen-tip-row,
+    .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen){
+      grid-template-columns:clamp(64px,17.2vw,74px) 1px minmax(0,1fr) clamp(88px,13.5vw,126px) clamp(22px,4.8vw,34px)!important;
+    }
+    .matches-main .match-row.wc26-live-pen-tip-row .mr-scores,
+    .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-scores{
+      right:clamp(12px,1.45vw,22px)!important;
+      min-width:clamp(88px,13.5vw,126px)!important;
+      max-width:clamp(88px,13.5vw,126px)!important;
+      overflow:visible!important;
+    }
+    .matches-main .match-row.wc26-live-pen-tip-row .mr-score-wrap,
+    .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-score-wrap{
+      width:100%!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(5px,.75vw,9px)!important;
+    }
+    .matches-main .match-row.wc26-live-pen-tip-row .mr-score-row,
+    .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-score-row{
+      justify-content:center!important;
+      gap:clamp(8px,.95vw,13px)!important;
+      white-space:nowrap!important;
+    }
+    .matches-main .match-row.wc26-live-pen-tip-row .wc26-card-pen,
+    .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .wc26-card-pen{
+      font-size:.56em!important;
+      margin-left:1px!important;
+      letter-spacing:-.04em!important;
+    }
+    @media (max-width:560px){
+      .matches-main .match-row.wc26-live-pen-tip-row,
+      .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen){
+        grid-template-columns:clamp(61px,17vw,72px) 1px minmax(0,1fr) clamp(76px,19vw,94px) clamp(12px,3.2vw,18px)!important;
+      }
+      .matches-main .match-row.wc26-live-pen-tip-row .mr-scores,
+      .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-scores{
+        right:clamp(7px,2.1vw,12px)!important;
+        min-width:clamp(76px,19vw,94px)!important;
+        max-width:clamp(76px,19vw,94px)!important;
+      }
+      .matches-main .match-row.wc26-live-pen-tip-row .mr-score-row,
+      .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-score-row{
+        gap:clamp(5px,1.5vw,8px)!important;
+      }
+    }
+  `;
+  document.head.appendChild(st);
+
+  const prevPatch = typeof patchLiveRows==='function' ? patchLiveRows : null;
+  if(prevPatch){
+    patchLiveRows=function(next){
+      const out=prevPatch.apply(this,arguments);
+      markPenaltyLiveRows(document.getElementById('main')||document);
+      return out;
+    };
+  }
+
+  const prevRender = typeof render==='function' ? render : null;
+  if(prevRender){
+    render=function(){
+      const out=prevRender.apply(this,arguments);
+      if(S && S.tab==='matches') markPenaltyLiveRows(document.getElementById('main')||document);
+      return out;
+    };
+  }
+
+  const prevRenderMatches = typeof renderMatches==='function' ? renderMatches : null;
+  if(prevRenderMatches){
+    renderMatches=function(){
+      const out=prevRenderMatches.apply(this,arguments);
+      markPenaltyLiveRows(document.getElementById('main')||document);
+      return out;
+    };
+  }
+
+  markPenaltyLiveRows(document.getElementById('main')||document);
+})();
+/* ===== /WC26 v164 live penalty-tip match-card right side breathing room ===== */
+
 </script></body></html>
