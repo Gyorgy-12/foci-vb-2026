@@ -1,4 +1,4 @@
-=<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><style>
+<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><style>
 :root{
   --bg:#05090b;
   --surface:#0f161a;
@@ -14208,221 +14208,174 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 /* ===== /WC26 v172 step 5 ===== */
 
 
-/* ===== WC26 v173 step 6: render/renderMatches wrapper flatten =====
-   UI untouched. This final render layer bypasses the old render wrapper-chain:
-   - one render()
-   - one renderMatches()
-   - one after-render hook set
-   - no extra backend calls, no Firestore reads, no Community reloads
+
+/* ===== WC26 v174: safe step 6 rollback + modal/date/freeze fixes =====
+   V173 render flatten caused KO date regressions and scroll/modal jank. Keep V168-V172 runtime cleanups,
+   but do not use the risky final render/renderMatches override.
 */
 (function(){
-  if(window.__WC26_V173_STEP6_RENDER_FLATTEN__) return;
-  window.__WC26_V173_STEP6_RENDER_FLATTEN__ = true;
+  if(window.__WC26_V174_SAFE_MODAL_DATE_FREEZE__) return;
+  window.__WC26_V174_SAFE_MODAL_DATE_FREEZE__ = true;
 
-  let rendering = false;
-  let rerenderQueued = false;
-
-  function byId(id){ return document.getElementById(id); }
-  function tabName(){ try{return (S && S.tab) || 'overview';}catch(e){return 'overview';} }
-  function safeCall(fn){ try{ if(typeof fn==='function') return fn(); }catch(e){ try{console.warn('v173 render hook failed', e);}catch(_e){} } }
-
-  function syncChromeV173(){
-    const current = tabName();
+  function modalOpen(){
+    try{return !!document.querySelector('.tip-overlay,.community-preview');}catch(e){return false;}
+  }
+  function now(){ return Date.now ? Date.now() : +new Date(); }
+  function isBadDateLabel(v){ return !v || /^\s*invalid date\s*$/i.test(String(v)); }
+  function humanDateFromIso(iso,tz){
     try{
-      document.querySelectorAll('#tabs .tab').forEach(btn=>{
-        btn.classList.toggle('active', !!(btn.dataset && btn.dataset.tab===current));
-      });
-      const tbl=byId('tblCtrl'), ko=byId('koCtrl'), mc=byId('mCtrl'), rb=byId('mRoundBar'), tb=byId('mTeamBar');
-      if(tbl) tbl.classList.toggle('hidden', current!=='table');
-      if(ko) ko.classList.toggle('hidden', current!=='knockout');
-      if(mc) mc.classList.toggle('hidden', current!=='matches');
-      if(rb) rb.classList.toggle('hidden', !(current==='matches' && MS && MS.filt==='round'));
-      if(tb) tb.classList.toggle('hidden', !(current==='matches' && MS && MS.filt==='team'));
-      if(current==='community') [tbl,ko,mc,rb,tb].forEach(el=>{ if(el) el.classList.add('hidden'); });
-    }catch(e){}
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||''))) return '';
+      const d = new Date(String(iso)+'T12:00:00+00:00');
+      if(!Number.isFinite(d.getTime())) return '';
+      return d.toLocaleDateString('hu-HU',{month:'short',day:'numeric',timeZone:tz||Intl.DateTimeFormat().resolvedOptions().timeZone}).replace(/\u00a0/g,' ');
+    }catch(e){return '';}
   }
 
-  function koAllMatchesV173(){
-    try{
-      const rounds = buildKO();
-      const bronze = buildBronze(rounds);
-      const all = rounds.flatMap(r=>r.matches || []);
-      if(bronze && (bronze.h || bronze.a || bronze.id)) all.push(bronze);
-      return all;
-    }catch(e){ return []; }
-  }
-
-  function koDateKeyV173(km){
-    try{
-      const sch = typeof koMatchSchedule==='function' ? koMatchSchedule(km) : null;
-      if(sch && sch.d) return sch.d;
-    }catch(e){}
-    try{ if(km && km.date) return km.date; }catch(e){}
-    return '9999-12-31';
-  }
-
-  function koDateLabelV173(iso){
-    if(!iso || iso==='9999-12-31' || iso==='Később') return 'Későbbi meccs';
-    try{
-      return new Date(iso+'T12:00:00+00:00').toLocaleDateString('hu-HU',{
-        month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone
-      }).replace(/\u00a0/g,' ');
-    }catch(e){ return iso; }
-  }
-
-  function koRowsByDateV173(matches){
-    const sorted = (matches||[]).slice().sort((a,b)=>{
-      let ak=0,bk=0;
-      try{ ak=koMatchKickoff(a)||0; }catch(e){}
-      try{ bk=koMatchKickoff(b)||0; }catch(e){}
-      return ak-bk || String(a.id||'').localeCompare(String(b.id||''));
-    });
-    const by = {};
-    sorted.forEach(km=>{ const k=koDateKeyV173(km); (by[k]||(by[k]=[])).push(km); });
-    return Object.keys(by).sort((a,b)=>a.localeCompare(b)).map(iso=>{
-      return '<div class="round-comp"><span>'+esc(koDateLabelV173(iso))+'</span></div><div class="matches">'+by[iso].map(koMatchRow).join('')+'</div>';
-    }).join('');
-  }
-
-  function koSectionsV173(){
-    const all = koAllMatchesV173();
-    const by = {};
-    all.forEach(km=>{ const k=koDateKeyV173(km); (by[k]||(by[k]=[])).push(km); });
-    return Object.keys(by).sort((a,b)=>a.localeCompare(b)).map(iso=>{
-      const ms = by[iso].slice().sort((a,b)=>{
-        let ak=0,bk=0;
-        try{ ak=koMatchKickoff(a)||0; }catch(e){}
-        try{ bk=koMatchKickoff(b)||0; }catch(e){}
-        return ak-bk || String(a.id||'').localeCompare(String(b.id||''));
-      });
-      return '<section class="card"><h2 class="card-title">'+esc(koDateLabelV173(iso))+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+ms.map(koMatchRow).join('')+'</div></section>';
-    }).join('');
-  }
-
-  function bindMatchRowsV173(root){
-    root = root || document;
-    if(FROZEN_MODE) return;
-    try{
-      root.querySelectorAll('[data-mid]:not([data-ko-mid]):not([data-ko-match-id]):not([data-ko-parity-id]):not([data-ko-group-id])').forEach(el=>{
-        if(el.__wc26V173Bound) return;
-        el.__wc26V173Bound = true;
-        el.onclick = e => { e.stopPropagation(); openTip(el.dataset.mid); };
-      });
-      root.querySelectorAll('[data-ko-mid],[data-ko-match-id],[data-ko-parity-id],[data-ko-group-id]').forEach(el=>{
-        if(el.__wc26V173KoBound) return;
-        el.__wc26V173KoBound = true;
-        el.onclick = e => {
-          e.stopPropagation();
-          const id = el.dataset.koMid || el.dataset.koMatchId || el.dataset.koParityId || el.dataset.koGroupId;
-          if(id) openKoTip(id);
-        };
-      });
-      root.querySelectorAll('[data-koid]').forEach(el=>{
-        if(el.__wc26V173KoBracketBound) return;
-        el.__wc26V173KoBracketBound = true;
-        el.onclick = e => {
-          e.stopPropagation();
-          try{ const br=document.querySelector('.ko-bracket'); if(br) KO_SCROLL=br.scrollLeft; }catch(_e){}
-          if(el.dataset.koid) openKoTip(el.dataset.koid);
-        };
-      });
-    }catch(e){}
-  }
-
-  function afterRenderV173(kind){
-    const main = byId('main') || document;
-    safeCall(syncChromeV173);
-    safeCall(activateCrests);
-    if(kind==='matches' || tabName()==='matches') bindMatchRowsV173(main);
-    if(kind==='knockout' || tabName()==='knockout') bindMatchRowsV173(main);
-    safeCall(function(){ if(typeof applyLivePenCardRoom==='function') applyLivePenCardRoom(); });
-    safeCall(function(){ if(typeof syncSoon==='function') syncSoon(); else if(typeof syncSpacer==='function') syncSpacer(); });
-  }
-
-  renderMatches = function(){
-    const m = byId('main');
-    if(!m) return;
-    m.className = 'main matches-main';
-    let rows = FX.slice();
-    let isKoRound = MS.filt==='round' && typeof MS.round==='string';
-
-    if(MS.filt==='round' && !isKoRound) rows = rows.filter(x=>x.r===MS.round);
-    if(isKoRound) rows = [];
-    if(MS.filt==='team') rows = rows.filter(x=>x.h===MS.team || x.a===MS.team);
-    rows.sort((x,y)=>x.day-y.day || x.g.localeCompare(y.g) || x.r-y.r);
-
-    if(MS.filt==='date'){
-      const grpBy = groupBy(rows,x=>localMatchDate(x));
-      const grpHtml = Object.keys(grpBy).sort((a,b)=>a.localeCompare(b)).map(d=>dateSection(d,grpBy[d])).join('');
-      m.innerHTML = grpHtml + koSectionsV173();
-    }else if(MS.filt==='group'){
-      const by = groupBy(rows,x=>x.g);
-      m.innerHTML = Object.entries(by).map(([g,ms])=>'<section class="card"><h2 class="card-title">'+g+' csoport</h2>'+Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')+'</section>').join('');
-    }else if(isKoRound){
-      const all = koAllMatchesV173();
-      const koRoundMs = all.filter(km=>km.round===MS.round);
-      const koRoundLabel = (KO_ROUND_OPTIONS.find(o=>o.key===MS.round)||{}).label || MS.round;
-      m.innerHTML = '<section class="card"><h2 class="card-title">'+esc(koRoundLabel)+'</h2>'+(koRoundMs.length?koRowsByDateV173(koRoundMs):'<div class="matches"><div class="community-empty">M&eacute;g nincs ehhez a k&ouml;rh&ouml;z el&eacute;rhet&#337; meccs.</div></div>')+'</section>';
-    }else if(MS.filt==='round'){
-      rows.sort((a,b)=>fixtureKickoff(a)-fixtureKickoff(b));
-      const byDate = groupBy(rows,x=>localMatchDate(x));
-      m.innerHTML = '<section class="card"><h2 class="card-title">Csoportkör - '+MS.round+'. kör</h2>'+
-        Object.keys(byDate).sort((a,b)=>a.localeCompare(b)).map(d=>{
-          const byG = groupBy(byDate[d],x=>x.g);
-          return Object.entries(byG).map(([g,ms])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+d+'</span></div><div class="matches">'+ms.map(mrow).join('')+'</div>').join('');
-        }).join('') + '</section>';
-    }else{
-      const by = groupBy(rows,x=>localMatchDate(x));
-      const teamKoMs = koAllMatchesV173().filter(km=>km.h===MS.team || km.a===MS.team);
-      const teamKoHtml = teamKoMs.length ? '<section class="card"><h2 class="card-title">Egyenes kies&eacute;s</h2>'+koRowsByDateV173(teamKoMs)+'</section>' : '';
-      m.innerHTML = '<section class="card"><h2 class="card-title">'+esc(MS.team)+'</h2>'+Object.entries(by).map(([k,v])=>'<div class="round-comp"><span>'+k+'</span></div><div class="matches">'+v.map(mrow).join('')+'</div>').join('')+'</section>'+teamKoHtml;
-    }
-    afterRenderV173('matches');
-    safeCall(scrollToCurrentMatch);
-  };
-
-  render = function(){
-    if(rendering){
-      if(!rerenderQueued){
-        rerenderQueued = true;
-        setTimeout(()=>{ rerenderQueued=false; try{render();}catch(e){} },0);
+  // 1) Community debug/source line hidden. Errors still remain visible.
+  try{
+    const st=document.createElement('style');
+    st.textContent=`
+      .community-hint:not(.community-error){display:none!important;}
+      html.modal-open{overflow:hidden!important;scrollbar-gutter:stable!important;}
+      body.modal-open{
+        position:fixed!important;
+        top:var(--wc26-modal-lock-top,0px)!important;
+        left:0!important;
+        right:0!important;
+        width:100%!important;
+        overflow:hidden!important;
       }
+      .overlay.tip-overlay,.community-preview{overscroll-behavior:contain!important;}
+      .overlay.tip-overlay .sheet,.community-preview .community-modal{overscroll-behavior:contain!important;}
+    `;
+    document.head.appendChild(st);
+  }catch(e){}
+
+  // 2) Proper scroll lock: background stays exactly where it was while modal is open.
+  const oldSyncModal = typeof syncModalOpenClass==='function' ? syncModalOpenClass : null;
+  syncModalOpenClass = function(){
+    const open = modalOpen();
+    const body = document.body, html = document.documentElement;
+    const was = body.classList.contains('modal-open');
+    if(open){
+      if(!was){
+        const y = window.scrollY || html.scrollTop || body.scrollTop || 0;
+        body.dataset.scrollY = String(y);
+        body.style.setProperty('--wc26-modal-lock-top', (-y)+'px');
+        body.style.top = (-y)+'px';
+      }
+      html.classList.add('modal-open');
+      body.classList.add('modal-open');
       return;
     }
-    rendering = true;
-    try{
-      const mainEl = byId('main');
-      if(mainEl && !mainEl._firstRender){
-        mainEl._firstRender = true;
-        if(!Object.keys(LIVE_RESULTS||{}).length){
-          mainEl.style.opacity='0';
-          requestAnimationFrame(()=>{ mainEl.style.transition='opacity .35s ease'; mainEl.style.opacity='1'; });
-        }
-      }
-      const current = tabName();
-      if(current!=='community') document.querySelectorAll('.community-preview').forEach(x=>x.remove());
-      syncChromeV173();
-      if(current==='overview') renderOverview();
-      else if(current==='table') renderTables();
-      else if(current==='matches') renderMatches();
-      else if(current==='knockout') renderKO();
-      else if(current==='stats') renderStats();
-      else if(current==='community') renderCommunity();
-      else renderStats();
-      afterRenderV173(current);
-    }finally{
-      rendering = false;
+    if(was){
+      const y = +(body.dataset.scrollY || 0);
+      body.classList.remove('modal-open');
+      html.classList.remove('modal-open');
+      body.style.removeProperty('--wc26-modal-lock-top');
+      body.style.top = body.style.left = body.style.right = body.style.width = '';
+      delete body.dataset.scrollY;
+      window.scrollTo(0,y);
+      requestAnimationFrame(()=>window.scrollTo(0,y));
+      setTimeout(()=>window.scrollTo(0,y),60);
+      return;
     }
+    if(oldSyncModal) try{ oldSyncModal(); }catch(e){}
   };
 
-  try{
-    window.WC26_RENDER_DEBUG = {
-      route:'v173-single-render-layer',
-      wrappersBypassed:true,
-      installedAt:new Date().toISOString()
+  // 3) Autoscroll must never fire while a modal is opening/open. This was the visible jump on the Matches tab.
+  const oldScrollCurrent = typeof scrollToCurrentMatch==='function' ? scrollToCurrentMatch : null;
+  if(oldScrollCurrent){
+    scrollToCurrentMatch = function(force){
+      if(modalOpen()) return;
+      return oldScrollCurrent.apply(this,arguments);
     };
-  }catch(e){}
+  }
+
+  // 4) Defensive date fallback. It prevents any leftover KO schedule/display label from becoming "Invalid Date".
+  const oldLocalMatchDate = typeof localMatchDate==='function' ? localMatchDate : null;
+  if(oldLocalMatchDate){
+    localMatchDate = function(m,tz){
+      let out='';
+      try{ out = oldLocalMatchDate.apply(this,arguments); }catch(e){ out=''; }
+      if(!isBadDateLabel(out)) return out;
+      try{
+        const id = m && m.id;
+        const lr = id && LIVE_RESULTS ? LIVE_RESULTS[id] : null;
+        if(lr && lr.date){ const v=humanDateFromIso(lr.date,tz); if(v) return v; }
+        if(id && KO_SCHEDULE && KO_SCHEDULE[id] && KO_SCHEDULE[id].date){ const v=humanDateFromIso(KO_SCHEDULE[id].date,tz); if(v) return v; }
+        if(m && m.date){ const v=humanDateFromIso(m.date,tz); if(v) return v; }
+      }catch(e){}
+      return '';
+    };
+  }
+
+  const oldKoMatchSchedule = typeof koMatchSchedule==='function' ? koMatchSchedule : null;
+  if(oldKoMatchSchedule){
+    koMatchSchedule = function(m){
+      const s = oldKoMatchSchedule.apply(this,arguments) || {};
+      try{
+        if((!s.d || isBadDateLabel(s.d)) && s.date){
+          const h = humanDateFromIso(s.date);
+          if(h) s.d = h;
+        }
+      }catch(e){}
+      return s;
+    };
+  }
+
+  // 5) While a modal is open, do not let background live polling/rendering steal the main thread.
+  // It resumes immediately after close / next scheduled tick.
+  const oldSyncLive = typeof syncLiveResults==='function' ? syncLiveResults : null;
+  let lastSkippedLiveAt = 0;
+  if(oldSyncLive){
+    syncLiveResults = function(opts){
+      if(modalOpen()){
+        lastSkippedLiveAt = now();
+        return Promise.resolve(false);
+      }
+      return oldSyncLive.apply(this,arguments);
+    };
+  }
+
+  // 6) Close actions should restore scroll, then allow live refresh shortly after, not during the modal close frame.
+  const oldCloseTip = typeof closeTip==='function' ? closeTip : null;
+  if(oldCloseTip){
+    closeTip = function(){
+      const out = oldCloseTip.apply(this,arguments);
+      setTimeout(()=>{ try{ if(oldSyncLive && now()-lastSkippedLiveAt<90000) oldSyncLive({forceLive:true,skipRetry:true}); }catch(e){} },180);
+      return out;
+    };
+  }
+  const oldCloseAll = typeof closeAllModals==='function' ? closeAllModals : null;
+  if(oldCloseAll){
+    closeAllModals = function(){
+      const out = oldCloseAll.apply(this,arguments);
+      setTimeout(()=>{ try{ if(oldSyncLive && now()-lastSkippedLiveAt<90000) oldSyncLive({forceLive:true,skipRetry:true}); }catch(e){} },180);
+      return out;
+    };
+  }
+
+  // 7) Tiny DOM guard for already-rendered text nodes after old cached HTML.
+  function cleanInvalidDateText(root){
+    try{
+      (root||document).querySelectorAll('.card-title,.round-comp span,.tip-head span').forEach(el=>{
+        if(/^\s*Invalid Date\s*$/i.test(el.textContent||'')) el.textContent='Későbbi meccs';
+      });
+    }catch(e){}
+  }
+  const oldRenderV174 = typeof render==='function' ? render : null;
+  if(oldRenderV174){
+    render = function(){
+      const out = oldRenderV174.apply(this,arguments);
+      cleanInvalidDateText(document);
+      return out;
+    };
+  }
+  setTimeout(()=>cleanInvalidDateText(document),80);
+
+  try{ window.WC26_V174_DEBUG = { route:'v174-safe-step6-rollback-modal-date-freeze', installedAt:new Date().toISOString() }; }catch(e){}
 })();
-/* ===== /WC26 v173 step 6 ===== */
+/* ===== /WC26 v174 ===== */
 
 </script></body></html>
