@@ -1,4 +1,4 @@
-<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><style>
+=<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><style>
 :root{
   --bg:#05090b;
   --surface:#0f161a;
@@ -13357,5 +13357,1072 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   markPenaltyLiveRows(document.getElementById('main')||document);
 })();
 /* ===== /WC26 v164 live penalty-tip match-card right side breathing room ===== */
+
+
+
+/* ===== WC26 v168 step 1: single live controller =====
+   Goal: stop old live timer races without touching UI modules.
+   This block intentionally does not change render/renderMatches/community/save logic.
+*/
+(function(){
+  if(window.__WC26_V168_SINGLE_LIVE_CONTROLLER__) return;
+  window.__WC26_V168_SINGLE_LIVE_CONTROLLER__ = true;
+
+  const LIVE_FAST_MS = 12000;
+  const LIVE_MATCH_TAB_MS = 20000;
+  const LIVE_IDLE_MS = 45000;
+  const LIVE_HIDDEN_MS = 90000;
+  const MIN_FORCED_GAP_MS = 1200;
+  const MIN_NORMAL_GAP_MS = 7000;
+
+  let liveTimerV168 = null;
+  let liveInFlightV168 = null;
+  let lastLiveStartV168 = 0;
+  let lastLiveOkV168 = 0;
+  let lastLiveErrorV168 = '';
+  let lastLiveChangedV168 = false;
+
+  function clearKnownLiveTimers(){
+    try{ if(window.wc26SyncTimer){ clearTimeout(window.wc26SyncTimer); clearInterval(window.wc26SyncTimer); window.wc26SyncTimer=null; } }catch(e){}
+    try{ if(window.wc26LiveFallbackTimer){ clearTimeout(window.wc26LiveFallbackTimer); clearInterval(window.wc26LiveFallbackTimer); window.wc26LiveFallbackTimer=null; } }catch(e){}
+    try{ if(window.wc26LivePaintLoopTimer){ clearTimeout(window.wc26LivePaintLoopTimer); clearInterval(window.wc26LivePaintLoopTimer); window.wc26LivePaintLoopTimer=null; } }catch(e){}
+    try{ if(typeof wc26SyncTimer!=='undefined' && wc26SyncTimer){ clearTimeout(wc26SyncTimer); clearInterval(wc26SyncTimer); wc26SyncTimer=null; } }catch(e){}
+    try{ if(typeof wc26LivePaintLoopTimer!=='undefined' && wc26LivePaintLoopTimer){ clearTimeout(wc26LivePaintLoopTimer); clearInterval(wc26LivePaintLoopTimer); wc26LivePaintLoopTimer=null; } }catch(e){}
+  }
+
+  function tabName(){
+    try{ if(typeof currentTab==='function') return currentTab(); }catch(e){}
+    try{ return S && S.tab ? S.tab : ''; }catch(e){ return ''; }
+  }
+  function isVisible(){ return !(document.hidden || document.visibilityState==='hidden'); }
+  function workerBase(){
+    try{ return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); }catch(e){ return ''; }
+  }
+  function liveUrl(){
+    const base = workerBase();
+    if(!base) return '';
+    return base + '/live-results?t=' + Date.now();
+  }
+  function hasActiveLiveInState(){
+    try{
+      return Object.values(LIVE_RESULTS || {}).some(r => r && r.started && !r.finished);
+    }catch(e){ return false; }
+  }
+  function nextDelay(defaultDelay){
+    if(!isVisible()) return LIVE_HIDDEN_MS;
+    if(hasActiveLiveInState()) return LIVE_FAST_MS;
+    const t = tabName();
+    if(t==='matches' || t==='knockout' || t==='overview') return LIVE_MATCH_TAB_MS;
+    return defaultDelay || LIVE_IDLE_MS;
+  }
+  function schedule(delay){
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return null;
+    clearKnownLiveTimers();
+    try{ if(liveTimerV168){ clearTimeout(liveTimerV168); clearInterval(liveTimerV168); liveTimerV168=null; } }catch(e){}
+    const d = Math.max(1000, Number.isFinite(+delay) ? +delay : nextDelay());
+    liveTimerV168 = setTimeout(function(){
+      liveTimerV168 = null;
+      syncLiveResults({source:'v168-timer'}).catch(function(){}).finally(function(){ schedule(); });
+    }, d);
+    window.wc26SyncTimer = liveTimerV168;
+    return liveTimerV168;
+  }
+
+  async function sync(opts){
+    opts = opts || {};
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return false;
+    const url = liveUrl();
+    if(!url) return false;
+    const now = Date.now();
+    const minGap = opts.forceLive || opts.force ? MIN_FORCED_GAP_MS : MIN_NORMAL_GAP_MS;
+    if(liveInFlightV168) return liveInFlightV168;
+    if(now - lastLiveStartV168 < minGap) return false;
+    lastLiveStartV168 = now;
+
+    liveInFlightV168 = (async function(){
+      try{
+        const res = await fetch(url, { cache:'no-store', headers:{ 'Accept':'application/json' } });
+        if(!res.ok) throw new Error('live-results HTTP '+res.status);
+        const data = await res.json().catch(function(){ return null; });
+        const results = data && data.results && typeof data.results==='object' ? data.results : {};
+        let changed = false;
+        try{ changed = typeof mergeLiveResults==='function' ? !!mergeLiveResults(results) : false; }catch(e){ changed=false; }
+        lastLiveOkV168 = Date.now();
+        lastLiveErrorV168 = data && data.degraded && data.error ? String(data.error) : '';
+        lastLiveChangedV168 = changed;
+        try{
+          window.WC26_LIVE_DEBUG = {
+            controller:'v168-single-live-controller',
+            lastStart:lastLiveStartV168,
+            lastOk:lastLiveOkV168,
+            lastError:lastLiveErrorV168,
+            lastChanged:lastLiveChangedV168,
+            count:Object.keys(results).length,
+            nextDelay:nextDelay()
+          };
+        }catch(e){}
+        return changed;
+      }catch(e){
+        lastLiveErrorV168 = e && e.message ? e.message : String(e || 'live error');
+        try{ window.WC26_LIVE_DEBUG = { controller:'v168-single-live-controller', lastStart:lastLiveStartV168, lastOk:lastLiveOkV168, lastError:lastLiveErrorV168, lastChanged:false, count:0, nextDelay:LIVE_IDLE_MS }; }catch(_e){}
+        return false;
+      }finally{
+        liveInFlightV168 = null;
+      }
+    })();
+    return liveInFlightV168;
+  }
+
+  clearKnownLiveTimers();
+  syncLiveResults = sync;
+  scheduleLiveSync = schedule;
+  ensureLivePaintLoop = function(){ schedule(900); return true; };
+  startLiveWorkerFallback = function(){ schedule(900); return true; };
+  wc26EnsureLiveLeaderV134 = function(){ schedule(900); return true; };
+  listenWc26LiveMatches = function(){ schedule(900); return true; };
+
+  document.addEventListener('visibilitychange', function(){
+    if(isVisible()) sync({forceLive:true, source:'v168-visible'}).catch(function(){}).finally(function(){ schedule(1200); });
+    else schedule(LIVE_HIDDEN_MS);
+  }, { passive:true });
+
+  document.addEventListener('click', function(e){
+    try{
+      if(e.target && e.target.closest && e.target.closest('[data-mid],[data-ko-mid],[data-koid],.tab,.match-row')){
+        setTimeout(function(){ sync({forceLive:true, source:'v168-click'}).catch(function(){}); }, 90);
+      }
+    }catch(_e){}
+  }, true);
+
+  setTimeout(function(){ sync({forceLive:true, source:'v168-start'}).catch(function(){}).finally(function(){ schedule(2500); }); }, 250);
+})();
+/* ===== /WC26 v168 step 1 ===== */
+
+
+
+/* ===== WC26 v169 step 2: single live merge + row patch path ===== */
+(function(){
+  if(window.__WC26_V169_STEP2_MERGE_ROW_PATCH__) return;
+  window.__WC26_V169_STEP2_MERGE_ROW_PATCH__ = true;
+
+  const RENDER_GAP_MS = 220;
+  const MODAL_GAP_MS = 500;
+  let renderQueued = false;
+  let lastRenderAt = 0;
+  let modalRefreshAt = 0;
+
+  function now(){ return Date.now(); }
+  function tab(){ try{return S && S.tab ? S.tab : '';}catch(e){return '';} }
+  function openModal(){ return !!document.querySelector('.tip-overlay,.sheet.tip-sheet,.modal-open'); }
+  function safeEsc(v){ try{return String(v||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}catch(e){return String(v||'');} }
+  function hasFn(name){ return typeof window[name] === 'function' || (typeof globalThis !== 'undefined' && typeof globalThis[name] === 'function'); }
+  function call(name, ...args){ try{ const fn = window[name] || globalThis[name]; if(typeof fn==='function') return fn(...args); }catch(e){} return undefined; }
+
+  function getKo(id){
+    try{ if(typeof findKoMatch==='function') return findKoMatch(id) || null; }catch(e){}
+    try{ if(typeof findKoSafe==='function') return findKoSafe(id) || null; }catch(e){}
+    try{
+      const k = KO_SCHEDULE && KO_SCHEDULE[id];
+      if(k) return { id, h:k.h||k.home||k.homeTeam||'', a:k.a||k.away||k.awayTeam||'', title:k.title||k.round||'KO', date:k.date||'', t:k.t||k.time||'' };
+    }catch(e){}
+    return null;
+  }
+  function getMatch(id){
+    try{ if(FX_BY_ID && FX_BY_ID[id]) return FX_BY_ID[id]; }catch(e){}
+    if(String(id||'').startsWith('KO-')) return getKo(id);
+    return null;
+  }
+  function normalizeIncoming(id,obj){
+    try{
+      let r = obj;
+      if(typeof normalizeLiveResult === 'function') r = normalizeLiveResult(id, obj);
+      if(!r) return null;
+      // Keep KO teams/schedule coming from backend/live payloads without waiting for a full render.
+      try{
+        if(String(id).startsWith('KO-')){
+          if(KO_SCHEDULE && KO_SCHEDULE[id]){
+            if(r.date) KO_SCHEDULE[id].date = r.date;
+            if(r.time) KO_SCHEDULE[id].t = r.time;
+          }
+          if(r.homeTeam && r.awayTeam){
+            window.__WC26_KO_PAIRS__ = Object.assign({}, window.__WC26_KO_PAIRS__ || {}, {
+              [id]: { home:r.homeTeam, away:r.awayTeam, espnId:r.espnId || null }
+            });
+          }
+        }
+      }catch(e){}
+      return r;
+    }catch(e){ return null; }
+  }
+  function resultSig(r){
+    if(!r) return '';
+    const odds = r.odds && typeof r.odds === 'object' ? [r.odds.h,r.odds.d,r.odds.a,r.odds.provider].join('/') : '';
+    const scorersN = Array.isArray(r.scorers) ? r.scorers.length : (r.scorers ? String(r.scorers).length : 0);
+    const redsN = Array.isArray(r.redCards) ? r.redCards.length : (r.redCards ? String(r.redCards).length : 0);
+    const yellowsN = Array.isArray(r.yellowCards) ? r.yellowCards.length : (r.yellowCards ? String(r.yellowCards).length : 0);
+    return [
+      r.started?1:0, r.finished?1:0,
+      r.h, r.a, r.pH, r.pA,
+      r.minute || '', r.status || '',
+      r.homeTeam || '', r.awayTeam || '', r.date || '', r.time || '',
+      odds, r.oddsUpdatedAt || '', scorersN, redsN, yellowsN
+    ].join('|');
+  }
+  function rowFor(id){
+    try{ return document.querySelector('[data-mid="'+id+'"],[data-ko-mid="'+id+'"]'); }catch(e){ return null; }
+  }
+  function buildRow(id){
+    const isKo = String(id||'').startsWith('KO-');
+    const m = getMatch(id);
+    if(!m) return '';
+    try{
+      if(isKo && typeof koMatchRow === 'function') return koMatchRow(m);
+      if(!isKo && typeof mrow === 'function') return mrow(m);
+    }catch(e){}
+    return '';
+  }
+  function replaceRow(id){
+    const row = rowFor(id);
+    if(!row) return false;
+    const html = buildRow(id);
+    if(!html) return false;
+    try{
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html.trim();
+      const fresh = tmp.firstElementChild;
+      if(!fresh) return false;
+      row.replaceWith(fresh);
+      return true;
+    }catch(e){ return false; }
+  }
+  function refreshModalLight(){
+    if(!openModal()) return;
+    if(now() - modalRefreshAt < MODAL_GAP_MS) return;
+    modalRefreshAt = now();
+    try{ if(typeof refreshOpenTipModal === 'function') refreshOpenTipModal(); }catch(e){}
+    try{ if(typeof refreshModal === 'function') refreshModal(); }catch(e){}
+    try{ if(typeof refreshCommunityPreviews === 'function') refreshCommunityPreviews(); }catch(e){}
+  }
+  function requestRenderLight(reason){
+    if(renderQueued) return;
+    const wait = Math.max(0, RENDER_GAP_MS - (now() - lastRenderAt));
+    renderQueued = true;
+    setTimeout(function(){
+      renderQueued = false;
+      lastRenderAt = now();
+      try{ if(typeof render === 'function') render(); }catch(e){ console.warn('v169 render failed', reason, e); }
+    }, wait);
+  }
+
+  // One final row patcher: replace only affected visible rows using the existing full row renderer.
+  patchLiveRows = function(next){
+    const ids = Object.keys(next || {});
+    if(!ids.length) return true;
+    const t = tab();
+    if(t !== 'matches' && t !== 'overview' && t !== 'knockout') return true;
+    if(openModal()) return true;
+    let ok = true;
+    for(const id of ids){
+      // If the row is not visible on the current tab, do not force a render from here.
+      // The caller decides whether overview/stats need a full render.
+      if(!rowFor(id)) continue;
+      if(!replaceRow(id)) ok = false;
+    }
+    try{ if(typeof applyLivePenCardRoom === 'function') applyLivePenCardRoom(); }catch(e){}
+    return ok;
+  };
+
+  // One final merge path: cheap signatures, no JSON.stringify on whole objects, one render decision.
+  mergeLiveResults = function(next){
+    if(!next || typeof next !== 'object') return false;
+    const fixed = {};
+    let changed = false;
+    let finalChanged = false;
+    for(const [id,obj] of Object.entries(next)){
+      const r = normalizeIncoming(id,obj);
+      if(!r) continue;
+      const old = LIVE_RESULTS ? LIVE_RESULTS[id] : null;
+      try{ if(typeof wc26IncomingIsStale === 'function' && wc26IncomingIsStale(id,r,old)) continue; }catch(e){}
+      if(old && old.finished && !r.finished) continue;
+      if(resultSig(old) === resultSig(r)) continue;
+      LIVE_RESULTS[id] = r;
+      fixed[id] = r;
+      changed = true;
+      if(r.finished && (!old || !old.finished || old.h!==r.h || old.a!==r.a || old.pH!==r.pH || old.pA!==r.pA)) finalChanged = true;
+    }
+    if(!changed) return false;
+
+    try{ if(finalChanged && typeof pruneStaleKoPred === 'function') pruneStaleKoPred(true); }catch(e){}
+    try{ if(typeof applyKoScheduleHotfix === 'function') applyKoScheduleHotfix(); }catch(e){}
+
+    if(openModal()){
+      refreshModalLight();
+      return true;
+    }
+
+    const t = tab();
+    if(t === 'matches' || t === 'knockout'){
+      const patched = patchLiveRows(fixed);
+      if(!patched || finalChanged) requestRenderLight('v169-live-'+t);
+    }else if(t === 'overview'){
+      // Overview has derived cards/stat blocks; patch visible rows, then throttle one full refresh.
+      patchLiveRows(fixed);
+      requestRenderLight('v169-overview-live');
+    }else if(t === 'table' || t === 'stats'){
+      requestRenderLight('v169-derived-'+t);
+    }else if(t === 'community'){
+      try{ if(typeof refreshCommunityPreviews === 'function') refreshCommunityPreviews(); }catch(e){}
+    }
+
+    try{
+      window.WC26_RUNTIME_DEBUG = Object.assign({}, window.WC26_RUNTIME_DEBUG || {}, {
+        step2:'v169-single-merge-row-patch',
+        changed:Object.keys(fixed).length,
+        finalChanged,
+        lastMergeAt:new Date().toISOString()
+      });
+    }catch(e){}
+    return true;
+  };
+})();
+/* ===== /WC26 v169 step 2 ===== */
+
+
+
+
+/* ===== WC26 v170 step 3: single results loader + lazy KO pairs ===== */
+(function(){
+  if(window.__WC26_V170_STEP3_RESULTS_LOADER__) return;
+  window.__WC26_V170_STEP3_RESULTS_LOADER__ = true;
+
+  const RESULTS_GAP_MS = 30000;
+  const FORCE_GAP_MS = 4500;
+  const KO_PAIRS_GAP_MS = 10 * 60 * 1000;
+  let resultsInFlight = null;
+  let lastResultsAt = 0;
+  let lastResultsOkAt = 0;
+  let koPairsInFlight = null;
+  let koPairsLoadedAt = (typeof wc26KoPairsLoadedAt !== 'undefined' && wc26KoPairsLoadedAt) ? wc26KoPairsLoadedAt : 0;
+
+  function now(){ return Date.now(); }
+  function tab(){ try{return S && S.tab ? S.tab : '';}catch(e){return '';} }
+  function resultsUrl(){ try{return typeof WC26_RESULTS_READ_URL==='string' ? WC26_RESULTS_READ_URL : '';}catch(e){return '';} }
+  function koPairsUrl(){ const u=resultsUrl(); return u ? u.replace(/\/results(?:\?.*)?$/,'/ko-pairs') : ''; }
+  function fetchJson(url){
+    return fetch(url, { cache:'no-store', headers:{ 'Accept':'application/json' } })
+      .then(function(r){ return r && r.ok ? r.json() : null; })
+      .catch(function(){ return null; });
+  }
+  function applyKoFromResults(results){
+    if(!results || typeof results!=='object') return 0;
+    let touched=0;
+    try{ window.__WC26_KO_PAIRS__ = window.__WC26_KO_PAIRS__ || {}; }catch(e){}
+    for(const [id,r] of Object.entries(results)){
+      if(!String(id).startsWith('KO-') || !r) continue;
+      try{
+        if(typeof KO_SCHEDULE!=='undefined' && KO_SCHEDULE && KO_SCHEDULE[id]){
+          if(r.date) KO_SCHEDULE[id].date = r.date;
+          if(r.time) KO_SCHEDULE[id].t = r.time;
+          touched++;
+        }
+        if(r.homeTeam && r.awayTeam){
+          window.__WC26_KO_PAIRS__[id] = { home:r.homeTeam, away:r.awayTeam, espnId:r.espnId || null };
+          touched++;
+        }
+      }catch(e){}
+    }
+    try{ if(typeof applyKoScheduleHotfix==='function') applyKoScheduleHotfix(); }catch(e){}
+    return touched;
+  }
+  function applyKoPairsPayload(data){
+    if(!data || typeof data!=='object') return false;
+    let touched=false;
+    try{
+      if(data.schedule && typeof KO_SCHEDULE!=='undefined'){
+        for(const [id,sch] of Object.entries(data.schedule)){
+          if(!KO_SCHEDULE || !KO_SCHEDULE[id] || !sch) continue;
+          if(sch.date) KO_SCHEDULE[id].date = sch.date;
+          if(sch.t || sch.time) KO_SCHEDULE[id].t = sch.t || sch.time;
+          touched=true;
+        }
+        try{ if(typeof applyKoScheduleHotfix==='function') applyKoScheduleHotfix(); }catch(e){}
+      }
+      if(data.pairs){ window.__WC26_KO_PAIRS__ = data.pairs; touched=true; }
+      if(touched){ koPairsLoadedAt = now(); try{ wc26KoPairsLoadedAt = koPairsLoadedAt; }catch(e){} }
+    }catch(e){}
+    return touched;
+  }
+
+  // Public results are the canonical startup/hydration source. Do not chain /ko-pairs from here.
+  loadMatchResultsFromBackendDb = async function(force){
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return false;
+    const url=resultsUrl();
+    if(!url) return false;
+    const gap = force ? FORCE_GAP_MS : RESULTS_GAP_MS;
+    if(resultsInFlight) return resultsInFlight;
+    if(now() - lastResultsAt < gap) return true;
+    lastResultsAt = now();
+    resultsInFlight = (async function(){
+      try{
+        const data=await fetchJson(url);
+        if(!data || !data.results || typeof data.results!=='object') return false;
+        const koTouched=applyKoFromResults(data.results);
+        const changed = (typeof mergeLiveResults==='function') ? !!mergeLiveResults(data.results) : false;
+        lastResultsOkAt = now();
+        try{
+          window.WC26_RESULTS_DEBUG = {
+            loader:'v170-single-results-loader',
+            source:data.source || '',
+            count:Object.keys(data.results).length,
+            changed,
+            koTouched,
+            at:new Date().toISOString()
+          };
+        }catch(e){}
+        return true;
+      }catch(e){
+        try{ window.WC26_RESULTS_DEBUG = { loader:'v170-single-results-loader', error:e && e.message ? e.message : String(e), at:new Date().toISOString() }; }catch(_e){}
+        return false;
+      }finally{
+        resultsInFlight = null;
+      }
+    })();
+    return resultsInFlight;
+  };
+
+  // KO pairs/schedule is lazy. It may fetch only when forced, missing, stale, or on KO tab.
+  wc26LoadKoPairsFromWorker = async function(force){
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return false;
+    try{ applyKoFromResults(typeof LIVE_RESULTS!=='undefined' ? LIVE_RESULTS : {}); }catch(e){}
+    const hasPairs = !!(window.__WC26_KO_PAIRS__ && Object.keys(window.__WC26_KO_PAIRS__).length);
+    const stale = now() - koPairsLoadedAt > KO_PAIRS_GAP_MS;
+    const shouldFetch = !!force || !hasPairs || (tab()==='knockout' && stale);
+    if(!shouldFetch) return true;
+    const url=koPairsUrl();
+    if(!url) return hasPairs;
+    if(koPairsInFlight) return koPairsInFlight;
+    koPairsInFlight = (async function(){
+      try{
+        const data=await fetchJson(url);
+        const ok=applyKoPairsPayload(data);
+        try{
+          window.WC26_KO_PAIRS_DEBUG = {
+            loader:'v170-lazy-ko-pairs',
+            source:data && data.source || '',
+            count:data && data.pairs ? Object.keys(data.pairs).length : 0,
+            fetched:true,
+            ok,
+            at:new Date().toISOString()
+          };
+        }catch(e){}
+        return ok || hasPairs;
+      }catch(e){
+        try{ window.WC26_KO_PAIRS_DEBUG = { loader:'v170-lazy-ko-pairs', error:e && e.message ? e.message : String(e), at:new Date().toISOString() }; }catch(_e){}
+        return hasPairs;
+      }finally{
+        koPairsInFlight=null;
+      }
+    })();
+    return koPairsInFlight;
+  };
+
+  // Old direct Firestore/SKD result paths stay dead. Backend worker is the only results source.
+  loadMatchResultsOnceFromFirestore = async function(){ return false; };
+  loadMatchResultsOnceFromSdk = async function(){ return false; };
+  listenMatchResults = function(){ return false; };
+
+  // One warm backend hydration; no chained KO-pairs call.
+  setTimeout(function(){
+    try{ loadMatchResultsFromBackendDb(true).catch(function(){}); }catch(e){}
+  }, 60);
+})();
+/* ===== /WC26 v170 step 3 ===== */
+
+
+
+/* ===== WC26 v171 step 4: single tip save/delete route =====
+   UI untouched. This flattens the saveTip/saveKoTip/delete wrapper chain:
+   - one group save route
+   - one KO save route
+   - one delete route per type
+   - backend publish is debounced and non-blocking
+   - render happens once after the local mutation, not through stacked wrappers
+*/
+(function(){
+  if(window.__WC26_V171_STEP4_TIP_SAVE_CLEAN__) return;
+  window.__WC26_V171_STEP4_TIP_SAVE_CLEAN__ = true;
+
+  const SAVE_DEBOUNCE_MS = 650;
+  let publishTimer = null;
+  let publishBusy = false;
+  let renderTimer = null;
+
+  function tab(){ try{return S && S.tab ? S.tab : '';}catch(e){return '';} }
+  function msg(ov,text){ try{ const el=(ov||document).querySelector('#tipMsg'); if(el) el.textContent=text||''; }catch(e){} }
+  function clearAuthLocal(){
+    try{ if(wc26User && typeof wc26ClearLocalPreds==='function') wc26ClearLocalPreds(); }catch(e){}
+    try{ if(wc26User){ localStorage.removeItem(STORE_KEY); localStorage.removeItem(KO_STORE_KEY); } }catch(e){}
+  }
+  function ownReady(){
+    try{ return !wc26User || !!wc26OwnTipsLoaded; }catch(e){ return true; }
+  }
+  function requireOwnReady(ov){
+    if(ownReady()) return true;
+    msg(ov,'A saját Firebase tippek még töltődnek. Várj egy pillanatot, nehogy a régi állapot írjon felül valamit.');
+    try{ if(typeof loadOwnTipsFromFirebase==='function') loadOwnTipsFromFirebase(false).catch(()=>{}); }catch(e){}
+    return false;
+  }
+  function schedulePublish(){
+    if(!wc26User) return;
+    clearAuthLocal();
+    try{ clearTimeout(wc26AutosaveTimer); }catch(e){}
+    clearTimeout(publishTimer);
+    publishTimer = setTimeout(async function(){
+      if(publishBusy) return;
+      publishBusy = true;
+      try{
+        if(typeof publishCommunityTips==='function'){
+          await publishCommunityTips(true,{allowEmpty:true,forceManual:true,source:'v171-step4'});
+        }
+      }catch(e){
+        try{ wc26BackendError = e && e.message ? e.message : String(e); }catch(_e){}
+      }finally{
+        publishBusy = false;
+      }
+    }, SAVE_DEBOUNCE_MS);
+  }
+  function persistLocalAndQueue(){
+    clearAuthLocal();
+    try{ if(typeof savePred==='function') savePred(); }catch(e){}
+    // savePred may have scheduled an older autosave; keep only the v171 one.
+    if(wc26User){
+      try{ clearTimeout(wc26AutosaveTimer); }catch(e){}
+      schedulePublish();
+    }
+  }
+  function afterMutation(kind,id){
+    try{ if(kind==='ko'){ const br=document.querySelector('.ko-bracket'); if(br) KO_SCROLL=br.scrollLeft; } }catch(e){}
+    persistLocalAndQueue();
+    try{ closeTip(); }catch(e){}
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(function(){
+      try{ if(typeof render==='function') render(); }catch(e){}
+      try{ if(typeof patchLiveRows==='function' && id) patchLiveRows({[id]:LIVE_RESULTS && LIVE_RESULTS[id]}); }catch(e){}
+      try{ if(typeof refreshOpenTipModal==='function') refreshOpenTipModal(); }catch(e){}
+      try{ if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews(); }catch(e){}
+      try{ if(typeof applyLivePenCardRoom==='function') applyLivePenCardRoom(); }catch(e){}
+    }, 0);
+  }
+  function koMatchById(id){
+    try{ if(typeof findKoMatch==='function') return findKoMatch(id); }catch(e){}
+    try{ if(typeof findKoSafe==='function') return findKoSafe(id); }catch(e){}
+    return null;
+  }
+  function lockedGroup(x){ try{return !x || matchLockState(x)!=='open';}catch(e){return true;} }
+  function lockedKo(x){ try{return !x || x.locked || matchLockState({id:x.id})!=='open';}catch(e){return true;} }
+
+  // Keep queueCommunityAutosave as a single debounced backend publish path too.
+  queueCommunityAutosave = function(){
+    if(!wc26User) return;
+    if(!ownReady()) return;
+    schedulePublish();
+  };
+
+  saveTip = async function(id){
+    if(READONLY_MODE || FROZEN_MODE) return false;
+    const ov=document.querySelector('.tip-overlay');
+    id = id || (ov && ov.dataset ? ov.dataset.tipId : '');
+    const x = (typeof FX_BY_ID!=='undefined' && FX_BY_ID) ? FX_BY_ID[id] : null;
+    if(!ov || !x) return false;
+    if(!requireOwnReady(ov)) return false;
+    if(lockedGroup(x)){ msg(ov,'Ez a mérkőzés már elkezdődött vagy lezárult, ezért nem módosítható.'); return false; }
+
+    const hEl=ov.querySelector('#tipH'), aEl=ov.querySelector('#tipA');
+    const h=hEl ? hEl.value : '', a=aEl ? aEl.value : '';
+    if(h==='' && a===''){
+      delete PRED[id];
+      afterMutation('group',id);
+      return true;
+    }
+    if(!validScore(h) || !validScore(a)){ msg(ov,'Adj meg két 0 és 99 közötti egész számot.'); return false; }
+    PRED[id] = { h:+h, a:+a };
+    afterMutation('group',id);
+    return true;
+  };
+
+  saveKoTip = function(id){
+    if(READONLY_MODE || FROZEN_MODE) return false;
+    const ov=document.querySelector('.tip-overlay');
+    id = id || (ov && ov.dataset ? ov.dataset.tipId : '');
+    const x = koMatchById(id);
+    if(!ov || !x) return false;
+    if(!requireOwnReady(ov)) return false;
+    if(lockedKo(x)){ msg(ov,'Ez a mérkőzés már elkezdődött vagy lezárult, ezért nem módosítható.'); return false; }
+    if(!groupsComplete()){ msg(ov,'Előbb tippeld ki mind a 72 csoportmeccset.'); return false; }
+
+    const hEl=ov.querySelector('#tipH'), aEl=ov.querySelector('#tipA'), pHEl=ov.querySelector('#penH'), pAEl=ov.querySelector('#penA');
+    const h=hEl ? hEl.value : '', a=aEl ? aEl.value : '', pH=pHEl ? pHEl.value : '', pA=pAEl ? pAEl.value : '';
+    if(!validScore(h) || !validScore(a)){ msg(ov,'Adj meg két 0 és 99 közötti egész számot.'); return false; }
+
+    const obj = {
+      h:+h,
+      a:+a,
+      hTeam: typeof x.h==='object' ? (x.h && x.h.team) : x.h,
+      aTeam: typeof x.a==='object' ? (x.a && x.a.team) : x.a,
+      round: x.title
+    };
+    if(+h===+a){
+      if(!validScore(pH) || !validScore(pA)){ msg(ov,'Döntetlennél a tizenegyeseket is meg kell adni.'); return false; }
+      if(+pH===+pA){ msg(ov,'A tizenegyespárbaj nem lehet döntetlen.'); return false; }
+      obj.pH=+pH; obj.pA=+pA;
+    }
+    KO_PRED[id] = obj;
+    afterMutation('ko',id);
+    return true;
+  };
+
+  wc26DeleteGroupTip = async function(id){
+    if(READONLY_MODE || FROZEN_MODE) return false;
+    const x = FX_BY_ID && FX_BY_ID[id];
+    if(!x || lockedGroup(x)) return false;
+    if(!ownReady()){ try{ if(typeof loadOwnTipsFromFirebase==='function') loadOwnTipsFromFirebase(false).catch(()=>{}); }catch(e){} return false; }
+    delete PRED[id];
+    persistLocalAndQueue();
+    return true;
+  };
+
+  wc26DeleteKoTip = async function(id){
+    if(READONLY_MODE || FROZEN_MODE) return false;
+    const x=koMatchById(id);
+    if(!x || lockedKo(x)) return false;
+    if(!ownReady()){ try{ if(typeof loadOwnTipsFromFirebase==='function') loadOwnTipsFromFirebase(false).catch(()=>{}); }catch(e){} return false; }
+    delete KO_PRED[id];
+    persistLocalAndQueue();
+    return true;
+  };
+
+  try{
+    window.WC26_SAVE_DEBUG = { route:'v171-single-tip-save-route', debounceMs:SAVE_DEBOUNCE_MS, installedAt:new Date().toISOString() };
+  }catch(e){}
+})();
+/* ===== /WC26 v171 step 4 ===== */
+
+
+
+/* ===== WC26 v172 step 5: final single Community loader =====
+   UI untouched. Community is now one backend path only:
+   - Worker /community only, no Firestore SDK collection scan
+   - one in-flight request
+   - one renderer
+   - old realtime/listener/community timers become harmless because they call this throttled loader
+*/
+(function(){
+  if(window.__WC26_V172_STEP5_COMMUNITY_SINGLE_LOADER__) return;
+  window.__WC26_V172_STEP5_COMMUNITY_SINGLE_LOADER__ = true;
+
+  const MIN_RELOAD_MS = 120000;
+  let inFlight = null;
+  let loadedAt = 0;
+  let loading = false;
+  let lastError = '';
+  let renderQueued = false;
+
+  function currentTab(){ try{return (S && S.tab) || '';}catch(e){return '';} }
+  function isCommunity(){ return currentTab() === 'community'; }
+  function baseWorker(){
+    try{
+      const u = String(typeof WC26_RESULTS_READ_URL !== 'undefined' ? WC26_RESULTS_READ_URL : '');
+      return u.replace(/\/results(?:\?.*)?$/,'');
+    }catch(e){ return ''; }
+  }
+  function communityUrl(){ const b=baseWorker(); return b ? b + '/community' : ''; }
+  function htmlEsc(x){ try{return esc(x);}catch(e){return String(x==null?'':x).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));} }
+  function cleanTips(o){ try{return wc26CleanTips(o||{});}catch(e){return o && typeof o==='object' ? o : {}; } }
+  function isConfigured(){ try{return wc26FirebaseConfigured();}catch(e){return !!(typeof WC26_FIREBASE_CONFIG==='object' && WC26_FIREBASE_CONFIG && WC26_FIREBASE_CONFIG.projectId);} }
+  function dateValue(v){
+    try{
+      if(!v) return '';
+      if(v && typeof v.toDate==='function') v=v.toDate();
+      if(v && v.timestampValue) v=v.timestampValue;
+      if(v && v.stringValue) v=v.stringValue;
+      if(v && v.seconds) v=new Date(+v.seconds*1000);
+      return v;
+    }catch(e){ return v; }
+  }
+  function itemDate(v){ try{return typeof communityDate==='function' ? communityDate(dateValue(v)) : (dateValue(v)?new Date(dateValue(v)).toLocaleString('hu-HU'):'' );}catch(e){return '';} }
+  function summaryFor(item){
+    try{return communitySummary(cleanTips(item && item.pred), cleanTips(item && item.ko));}
+    catch(e){return {eff:{pts:0,max:0,pct:0,exact:0,diff:0,outcome:0,miss:0}};}
+  }
+  function normalizeItem(raw){
+    raw = raw || {};
+    // Accept both worker-normalized rows and accidental Firestore REST-shaped rows.
+    let d = raw;
+    try{ if(raw.fields && typeof fromFirestoreFields==='function') d = fromFirestoreFields(raw.fields); }catch(e){}
+    const id = String(d.uid || d.id || raw.id || '').trim();
+    const pred = cleanTips(d.pred || d.predictions || d.tips || d.groupPred || d.groupPredictions || d.PRED || {});
+    const ko = cleanTips(d.ko || d.knockout || d.knockoutPredictions || d.koPred || d.KO_PRED || {});
+    const out = Object.assign({}, d, {
+      id,
+      uid:id,
+      displayName:d.displayName || d.name || d.email || 'Játékos',
+      photoURL:d.photoURL || d.avatar || '',
+      pred,
+      ko,
+      updatedAt:dateValue(d.updatedAt || d.updated || d.createdAt || raw.updatedAt)
+    });
+    out.__summary = summaryFor(out);
+    return out;
+  }
+  function ownItem(){
+    try{
+      if(!wc26User) return null;
+      const it = {
+        id:wc26User.uid,
+        uid:wc26User.uid,
+        displayName:wc26User.displayName || wc26User.email || 'Játékos',
+        photoURL:wc26User.photoURL || '',
+        pred:cleanTips(PRED || {}),
+        ko:cleanTips(KO_PRED || {}),
+        updatedAt:new Date().toISOString(),
+        storage:'local-current-user-v172'
+      };
+      it.__summary = summaryFor(it);
+      return it;
+    }catch(e){ return null; }
+  }
+  function setCommunityItems(list){
+    const map = new Map();
+    (Array.isArray(list)?list:[]).forEach(x=>{
+      const it=normalizeItem(x);
+      if(it.id) map.set(it.id,it);
+    });
+    const mine=ownItem();
+    if(mine && mine.id) map.set(mine.id, Object.assign({}, map.get(mine.id)||{}, mine));
+    wc26CommunityItems = Array.from(map.values()).sort((a,b)=>{
+      const ea=(a.__summary && a.__summary.eff) || {}, eb=(b.__summary && b.__summary.eff) || {};
+      return (eb.pct||0)-(ea.pct||0) || (eb.pts||0)-(ea.pts||0) || (eb.max||0)-(ea.max||0) || String(a.displayName||'').localeCompare(String(b.displayName||''),'hu');
+    });
+  }
+  function queueRenderCommunity(){
+    if(!isCommunity() || renderQueued) return;
+    renderQueued = true;
+    setTimeout(()=>{ renderQueued=false; try{ renderCommunity(); }catch(e){} },0);
+  }
+  function statusHtml(){
+    const src = (window.WC26_COMMUNITY_DEBUG && window.WC26_COMMUNITY_DEBUG.source) || '';
+    if(loading) return '<div class="community-hint">Közösségi rangsor betöltése Worker cache-ből...</div>';
+    if(lastError) return '<div class="community-hint community-error">Közösség betöltési hiba: '+htmlEsc(lastError)+'</div>';
+    if(src) return '<div class="community-hint">Forrás: '+htmlEsc(src)+' · '+htmlEsc(wc26CommunityItems.length)+' játékos</div>';
+    return '';
+  }
+  function skeleton(){
+    return '<div class="community-empty">Közösségi rangsor betöltése...</div>';
+  }
+  function statsHtml(){
+    try{return communityStatsHtml(communitySummary(PRED||{},KO_PRED||{}));}
+    catch(e){return '<div class="community-grid community-grid-wide"><div class="community-stat"><b>0%</b><span>Saját pontosság</span></div></div>';}
+  }
+  function rankMeta(e){ try{return communityRankMeta(e);}catch(err){return e && e.max ? ((e.pts||0)+' pont / '+(e.max||0)+' meccs') : 'Nincs élő vagy lezárt meccs';} }
+
+  async function loadCommunity(force){
+    const u = communityUrl();
+    if(!u){ lastError='Worker /community URL hiányzik'; setCommunityItems(wc26CommunityItems||[]); return false; }
+    const freshEnough = loadedAt && (Date.now()-loadedAt < MIN_RELOAD_MS);
+    if(!force && freshEnough && Array.isArray(wc26CommunityItems) && wc26CommunityItems.length) return true;
+    if(inFlight) return inFlight;
+    loading = true;
+    lastError = '';
+    queueRenderCommunity();
+    inFlight = (async()=>{
+      try{
+        const res = await fetch(u, { method:'GET', cache:'default' });
+        if(!res.ok) throw new Error('/community '+res.status);
+        const data = await res.json();
+        const rows = data.items || data.community || data.results || [];
+        setCommunityItems(rows);
+        loadedAt = Date.now();
+        lastError = '';
+        try{ window.WC26_COMMUNITY_DEBUG = { route:'v172-worker-only', source:data.source||'', count:wc26CommunityItems.length, at:new Date().toISOString() }; }catch(e){}
+        return true;
+      }catch(e){
+        lastError = e && e.message ? e.message : String(e || 'community error');
+        try{ wc26BackendError = lastError; }catch(_e){}
+        setCommunityItems(wc26CommunityItems || []);
+        return false;
+      }finally{
+        loading = false;
+        inFlight = null;
+        queueRenderCommunity();
+      }
+    })();
+    return inFlight;
+  }
+
+  loadCommunityTips = function(force){ return loadCommunity(!!force); };
+  listenCommunityTips = function(){ try{ if(wc26CommunityUnsub){ wc26CommunityUnsub(); wc26CommunityUnsub=null; } }catch(e){} return false; };
+  window.wc26CommunityHardRefresh = function(){ loadedAt = 0; return loadCommunity(true); };
+
+  renderCommunity = function(){
+    const m=document.getElementById('main');
+    if(!m) return;
+    m.className='main community-main';
+    try{
+      document.querySelectorAll('#tabs .tab').forEach(btn=>btn.classList.toggle('active', btn.dataset && btn.dataset.tab==='community'));
+      ['tblCtrl','koCtrl','mCtrl','mRoundBar','mTeamBar'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.add('hidden'); });
+    }catch(e){}
+    const cfg=isConfigured();
+    const authHtml = wc26User
+      ? '<div class="community-user"><img class="community-avatar" src="'+htmlEsc(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+htmlEsc(wc26User.displayName||wc26User.email||'Játékos')+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>'
+      : '<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!cfg?'disabled':'')+'>Belépés Google-lel</button><button class="community-btn" id="wc26CommunityRefreshBtn">Frissítés</button></div>';
+    const setupHtml = cfg ? '' : '<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba.</p></section>';
+    const rows = Array.isArray(wc26CommunityItems) ? wc26CommunityItems : [];
+    let listHtml='';
+    if(loading && !rows.length) listHtml=skeleton();
+    else if(rows.length){
+      listHtml = rows.map((item,i)=>{
+        const s=item.__summary || summaryFor(item), e=s.eff || {};
+        const score=e.max ? ((e.pct||0)+'%') : '0%';
+        return '<div class="community-row"><div class="community-rank">'+(i+1)+'.</div><div class="community-user"><img class="community-avatar" src="'+htmlEsc(item.photoURL||'')+'" alt=""><div><div class="community-name">'+htmlEsc(item.displayName||'Játékos')+'</div><div class="community-meta">'+htmlEsc(rankMeta(e))+' · frissítve: '+htmlEsc(itemDate(item.updatedAt))+'</div></div></div><div><div class="community-score">'+htmlEsc(score)+'</div><button class="community-btn" data-community-view="'+htmlEsc(item.id||item.uid)+'">Megnézés</button></div></div>';
+      }).join('');
+    }else listHtml='<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
+    m.innerHTML = setupHtml + '<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+statsHtml()+statusHtml()+'</section><section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
+    m.querySelector('#wc26LoginBtn')?.addEventListener('click',()=>{ try{ wc26SignIn(); }catch(e){} });
+    m.querySelector('#wc26LogoutBtn')?.addEventListener('click',()=>{ try{ wc26SignOut(); }catch(e){} });
+    m.querySelector('#wc26RenameBtn')?.addEventListener('click',()=>{ try{ wc26RenameProfile(); }catch(e){} });
+    m.querySelector('#wc26CommunityRefreshBtn')?.addEventListener('click',()=>{ loadedAt=0; loadCommunity(true); });
+    m.querySelectorAll('[data-community-view]').forEach(b=>b.addEventListener('click',()=>{ try{ openCommunityTips(b.dataset.communityView); }catch(e){} }));
+    try{ activateCrests(); }catch(e){}
+    try{ syncSpacer(); }catch(e){}
+    if(isCommunity() && !loading && (!loadedAt || (Date.now()-loadedAt > MIN_RELOAD_MS && !rows.length))){ setTimeout(()=>loadCommunity(false),40); }
+  };
+
+  // Keep old click listeners harmless: they may still call loadCommunityTips(), but that now goes through one inflight/throttle path.
+  document.addEventListener('click',function(e){
+    const btn=e.target && e.target.closest && e.target.closest('#tabs .tab[data-tab="community"]');
+    if(btn) setTimeout(()=>{ if(isCommunity()) loadCommunity(false); },80);
+  },true);
+
+  try{ window.WC26_COMMUNITY_DEBUG = Object.assign({}, window.WC26_COMMUNITY_DEBUG||{}, { route:'v172-installed', installedAt:new Date().toISOString() }); }catch(e){}
+})();
+/* ===== /WC26 v172 step 5 ===== */
+
+
+/* ===== WC26 v173 step 6: render/renderMatches wrapper flatten =====
+   UI untouched. This final render layer bypasses the old render wrapper-chain:
+   - one render()
+   - one renderMatches()
+   - one after-render hook set
+   - no extra backend calls, no Firestore reads, no Community reloads
+*/
+(function(){
+  if(window.__WC26_V173_STEP6_RENDER_FLATTEN__) return;
+  window.__WC26_V173_STEP6_RENDER_FLATTEN__ = true;
+
+  let rendering = false;
+  let rerenderQueued = false;
+
+  function byId(id){ return document.getElementById(id); }
+  function tabName(){ try{return (S && S.tab) || 'overview';}catch(e){return 'overview';} }
+  function safeCall(fn){ try{ if(typeof fn==='function') return fn(); }catch(e){ try{console.warn('v173 render hook failed', e);}catch(_e){} } }
+
+  function syncChromeV173(){
+    const current = tabName();
+    try{
+      document.querySelectorAll('#tabs .tab').forEach(btn=>{
+        btn.classList.toggle('active', !!(btn.dataset && btn.dataset.tab===current));
+      });
+      const tbl=byId('tblCtrl'), ko=byId('koCtrl'), mc=byId('mCtrl'), rb=byId('mRoundBar'), tb=byId('mTeamBar');
+      if(tbl) tbl.classList.toggle('hidden', current!=='table');
+      if(ko) ko.classList.toggle('hidden', current!=='knockout');
+      if(mc) mc.classList.toggle('hidden', current!=='matches');
+      if(rb) rb.classList.toggle('hidden', !(current==='matches' && MS && MS.filt==='round'));
+      if(tb) tb.classList.toggle('hidden', !(current==='matches' && MS && MS.filt==='team'));
+      if(current==='community') [tbl,ko,mc,rb,tb].forEach(el=>{ if(el) el.classList.add('hidden'); });
+    }catch(e){}
+  }
+
+  function koAllMatchesV173(){
+    try{
+      const rounds = buildKO();
+      const bronze = buildBronze(rounds);
+      const all = rounds.flatMap(r=>r.matches || []);
+      if(bronze && (bronze.h || bronze.a || bronze.id)) all.push(bronze);
+      return all;
+    }catch(e){ return []; }
+  }
+
+  function koDateKeyV173(km){
+    try{
+      const sch = typeof koMatchSchedule==='function' ? koMatchSchedule(km) : null;
+      if(sch && sch.d) return sch.d;
+    }catch(e){}
+    try{ if(km && km.date) return km.date; }catch(e){}
+    return '9999-12-31';
+  }
+
+  function koDateLabelV173(iso){
+    if(!iso || iso==='9999-12-31' || iso==='Később') return 'Későbbi meccs';
+    try{
+      return new Date(iso+'T12:00:00+00:00').toLocaleDateString('hu-HU',{
+        month:'short',day:'numeric',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone
+      }).replace(/\u00a0/g,' ');
+    }catch(e){ return iso; }
+  }
+
+  function koRowsByDateV173(matches){
+    const sorted = (matches||[]).slice().sort((a,b)=>{
+      let ak=0,bk=0;
+      try{ ak=koMatchKickoff(a)||0; }catch(e){}
+      try{ bk=koMatchKickoff(b)||0; }catch(e){}
+      return ak-bk || String(a.id||'').localeCompare(String(b.id||''));
+    });
+    const by = {};
+    sorted.forEach(km=>{ const k=koDateKeyV173(km); (by[k]||(by[k]=[])).push(km); });
+    return Object.keys(by).sort((a,b)=>a.localeCompare(b)).map(iso=>{
+      return '<div class="round-comp"><span>'+esc(koDateLabelV173(iso))+'</span></div><div class="matches">'+by[iso].map(koMatchRow).join('')+'</div>';
+    }).join('');
+  }
+
+  function koSectionsV173(){
+    const all = koAllMatchesV173();
+    const by = {};
+    all.forEach(km=>{ const k=koDateKeyV173(km); (by[k]||(by[k]=[])).push(km); });
+    return Object.keys(by).sort((a,b)=>a.localeCompare(b)).map(iso=>{
+      const ms = by[iso].slice().sort((a,b)=>{
+        let ak=0,bk=0;
+        try{ ak=koMatchKickoff(a)||0; }catch(e){}
+        try{ bk=koMatchKickoff(b)||0; }catch(e){}
+        return ak-bk || String(a.id||'').localeCompare(String(b.id||''));
+      });
+      return '<section class="card"><h2 class="card-title">'+esc(koDateLabelV173(iso))+'</h2><div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>Egyenes kies&eacute;s</span></div><div class="matches">'+ms.map(koMatchRow).join('')+'</div></section>';
+    }).join('');
+  }
+
+  function bindMatchRowsV173(root){
+    root = root || document;
+    if(FROZEN_MODE) return;
+    try{
+      root.querySelectorAll('[data-mid]:not([data-ko-mid]):not([data-ko-match-id]):not([data-ko-parity-id]):not([data-ko-group-id])').forEach(el=>{
+        if(el.__wc26V173Bound) return;
+        el.__wc26V173Bound = true;
+        el.onclick = e => { e.stopPropagation(); openTip(el.dataset.mid); };
+      });
+      root.querySelectorAll('[data-ko-mid],[data-ko-match-id],[data-ko-parity-id],[data-ko-group-id]').forEach(el=>{
+        if(el.__wc26V173KoBound) return;
+        el.__wc26V173KoBound = true;
+        el.onclick = e => {
+          e.stopPropagation();
+          const id = el.dataset.koMid || el.dataset.koMatchId || el.dataset.koParityId || el.dataset.koGroupId;
+          if(id) openKoTip(id);
+        };
+      });
+      root.querySelectorAll('[data-koid]').forEach(el=>{
+        if(el.__wc26V173KoBracketBound) return;
+        el.__wc26V173KoBracketBound = true;
+        el.onclick = e => {
+          e.stopPropagation();
+          try{ const br=document.querySelector('.ko-bracket'); if(br) KO_SCROLL=br.scrollLeft; }catch(_e){}
+          if(el.dataset.koid) openKoTip(el.dataset.koid);
+        };
+      });
+    }catch(e){}
+  }
+
+  function afterRenderV173(kind){
+    const main = byId('main') || document;
+    safeCall(syncChromeV173);
+    safeCall(activateCrests);
+    if(kind==='matches' || tabName()==='matches') bindMatchRowsV173(main);
+    if(kind==='knockout' || tabName()==='knockout') bindMatchRowsV173(main);
+    safeCall(function(){ if(typeof applyLivePenCardRoom==='function') applyLivePenCardRoom(); });
+    safeCall(function(){ if(typeof syncSoon==='function') syncSoon(); else if(typeof syncSpacer==='function') syncSpacer(); });
+  }
+
+  renderMatches = function(){
+    const m = byId('main');
+    if(!m) return;
+    m.className = 'main matches-main';
+    let rows = FX.slice();
+    let isKoRound = MS.filt==='round' && typeof MS.round==='string';
+
+    if(MS.filt==='round' && !isKoRound) rows = rows.filter(x=>x.r===MS.round);
+    if(isKoRound) rows = [];
+    if(MS.filt==='team') rows = rows.filter(x=>x.h===MS.team || x.a===MS.team);
+    rows.sort((x,y)=>x.day-y.day || x.g.localeCompare(y.g) || x.r-y.r);
+
+    if(MS.filt==='date'){
+      const grpBy = groupBy(rows,x=>localMatchDate(x));
+      const grpHtml = Object.keys(grpBy).sort((a,b)=>a.localeCompare(b)).map(d=>dateSection(d,grpBy[d])).join('');
+      m.innerHTML = grpHtml + koSectionsV173();
+    }else if(MS.filt==='group'){
+      const by = groupBy(rows,x=>x.g);
+      m.innerHTML = Object.entries(by).map(([g,ms])=>'<section class="card"><h2 class="card-title">'+g+' csoport</h2>'+Object.entries(groupBy(ms,x=>localMatchDate(x))).map(([d,ds])=>'<div class="round-comp"><span>'+d+'</span></div><div class="matches">'+ds.map(mrow).join('')+'</div>').join('')+'</section>').join('');
+    }else if(isKoRound){
+      const all = koAllMatchesV173();
+      const koRoundMs = all.filter(km=>km.round===MS.round);
+      const koRoundLabel = (KO_ROUND_OPTIONS.find(o=>o.key===MS.round)||{}).label || MS.round;
+      m.innerHTML = '<section class="card"><h2 class="card-title">'+esc(koRoundLabel)+'</h2>'+(koRoundMs.length?koRowsByDateV173(koRoundMs):'<div class="matches"><div class="community-empty">M&eacute;g nincs ehhez a k&ouml;rh&ouml;z el&eacute;rhet&#337; meccs.</div></div>')+'</section>';
+    }else if(MS.filt==='round'){
+      rows.sort((a,b)=>fixtureKickoff(a)-fixtureKickoff(b));
+      const byDate = groupBy(rows,x=>localMatchDate(x));
+      m.innerHTML = '<section class="card"><h2 class="card-title">Csoportkör - '+MS.round+'. kör</h2>'+
+        Object.keys(byDate).sort((a,b)=>a.localeCompare(b)).map(d=>{
+          const byG = groupBy(byDate[d],x=>x.g);
+          return Object.entries(byG).map(([g,ms])=>'<div class="round-comp"><img class="rc-logo" src="https://images.fotmob.com/image_resources/logo/leaguelogo/77.png" alt=""><span>'+g+' csoport</span><span class="rc-sep">&middot;</span><span>'+d+'</span></div><div class="matches">'+ms.map(mrow).join('')+'</div>').join('');
+        }).join('') + '</section>';
+    }else{
+      const by = groupBy(rows,x=>localMatchDate(x));
+      const teamKoMs = koAllMatchesV173().filter(km=>km.h===MS.team || km.a===MS.team);
+      const teamKoHtml = teamKoMs.length ? '<section class="card"><h2 class="card-title">Egyenes kies&eacute;s</h2>'+koRowsByDateV173(teamKoMs)+'</section>' : '';
+      m.innerHTML = '<section class="card"><h2 class="card-title">'+esc(MS.team)+'</h2>'+Object.entries(by).map(([k,v])=>'<div class="round-comp"><span>'+k+'</span></div><div class="matches">'+v.map(mrow).join('')+'</div>').join('')+'</section>'+teamKoHtml;
+    }
+    afterRenderV173('matches');
+    safeCall(scrollToCurrentMatch);
+  };
+
+  render = function(){
+    if(rendering){
+      if(!rerenderQueued){
+        rerenderQueued = true;
+        setTimeout(()=>{ rerenderQueued=false; try{render();}catch(e){} },0);
+      }
+      return;
+    }
+    rendering = true;
+    try{
+      const mainEl = byId('main');
+      if(mainEl && !mainEl._firstRender){
+        mainEl._firstRender = true;
+        if(!Object.keys(LIVE_RESULTS||{}).length){
+          mainEl.style.opacity='0';
+          requestAnimationFrame(()=>{ mainEl.style.transition='opacity .35s ease'; mainEl.style.opacity='1'; });
+        }
+      }
+      const current = tabName();
+      if(current!=='community') document.querySelectorAll('.community-preview').forEach(x=>x.remove());
+      syncChromeV173();
+      if(current==='overview') renderOverview();
+      else if(current==='table') renderTables();
+      else if(current==='matches') renderMatches();
+      else if(current==='knockout') renderKO();
+      else if(current==='stats') renderStats();
+      else if(current==='community') renderCommunity();
+      else renderStats();
+      afterRenderV173(current);
+    }finally{
+      rendering = false;
+    }
+  };
+
+  try{
+    window.WC26_RENDER_DEBUG = {
+      route:'v173-single-render-layer',
+      wrappersBypassed:true,
+      installedAt:new Date().toISOString()
+    };
+  }catch(e){}
+})();
+/* ===== /WC26 v173 step 6 ===== */
 
 </script></body></html>
