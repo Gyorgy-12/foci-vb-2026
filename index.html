@@ -14030,4 +14030,94 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   scheduleLiveSync(1200);
 })();
 
+
+
+/* ===== WC26 v163 live kickoff feedback restore =====
+   v162 reduced runtime load, but it only hit /live-results when its local active-window check was true.
+   If KO schedule/provider timing shifts, the card can show locked/live by kickoff while no provider poll runs.
+   This block keeps a single cheap worker poller alive on match-related tabs and never touches Firestore directly.
+*/
+(function(){
+  if(window.__WC26_V163_LIVE_FEEDBACK_RESTORE__) return;
+  window.__WC26_V163_LIVE_FEEDBACK_RESTORE__ = true;
+
+  const LIVE_GAP_MS = 12000;
+  const MATCH_TAB_GAP_MS = 18000;
+  const IDLE_GAP_MS = 90000;
+  let timer = null;
+  let inflight = null;
+  let lastTick = 0;
+
+  function now(){ return Date.now ? Date.now() : +new Date(); }
+  function visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
+  function tab(){ try{return (S&&S.tab)||''}catch(e){return ''} }
+  function matchish(){ const t=tab(); return t==='matches'||t==='overview'||t==='knockout'; }
+  function activeLocal(){
+    try{ if(typeof liveSyncInfo==='function' && liveSyncInfo().active) return true; }catch(e){}
+    try{ return Object.values(LIVE_RESULTS||{}).some(r=>r&&r.started&&!r.finished); }catch(e){ return false; }
+  }
+  function workerBase(){ try{return String(WC26_RESULTS_READ_URL||'').replace(/\/results(?:\?.*)?$/,'')}catch(e){return ''} }
+  function liveEndpoint(){ const b=workerBase(); return b ? b + '/live-results' : ''; }
+  async function fetchJson(url){ try{ const r=await fetch(url,{cache:'no-store'}); return r.ok?await r.json():null; }catch(e){return null;} }
+  function cheapRenderIfNeeded(changed){
+    if(!changed) return;
+    try{ if(typeof patchLiveRows==='function' && tab()==='matches'){ if(patchLiveRows(LIVE_RESULTS)) return; } }catch(e){}
+    try{ if(typeof render==='function') render(); }catch(e){}
+  }
+
+  async function pollLive(force=false){
+    if(FROZEN_MODE || !visible()) return false;
+    const url=liveEndpoint();
+    if(!url) return false;
+    if(inflight) return inflight;
+    const gap = activeLocal()?LIVE_GAP_MS:(matchish()?MATCH_TAB_GAP_MS:IDLE_GAP_MS);
+    if(!force && now()-lastTick<gap) return true;
+    inflight=(async()=>{
+      lastTick=now();
+      const data=await fetchJson(url + (url.includes('?')?'&':'?') + 't=' + now() + '&src=v163');
+      if(data && data.results){
+        let changed=false;
+        try{ changed = (typeof mergeLiveResults==='function') ? !!mergeLiveResults(data.results) : false; }catch(e){ changed=false; }
+        cheapRenderIfNeeded(changed);
+        return changed || true;
+      }
+      return false;
+    })().finally(()=>{inflight=null;});
+    return inflight;
+  }
+
+  function schedule(delay){
+    try{ if(timer) clearTimeout(timer); }catch(e){}
+    const d = delay ?? (activeLocal()?LIVE_GAP_MS:(matchish()?MATCH_TAB_GAP_MS:IDLE_GAP_MS));
+    timer=setTimeout(async()=>{
+      try{ await pollLive(false); }catch(e){}
+      schedule();
+    }, d);
+    return timer;
+  }
+
+  const oldSync = typeof syncLiveResults==='function' ? syncLiveResults : null;
+  syncLiveResults = async function(opts={}){
+    if(syncLiveResults._running) return false;
+    syncLiveResults._running=true;
+    try{
+      // First ask the worker live provider. If it has no event yet, fall back to final/public results once.
+      const liveOk = await pollLive(!!(opts.force||opts.forceLive||opts.skipRetry));
+      if(!liveOk && oldSync && opts.force) return await oldSync(opts);
+      return liveOk;
+    }finally{ syncLiveResults._running=false; }
+  };
+
+  listenWc26LiveMatches = function(){ schedule(500); return true; };
+  startWc26LiveWorkerFallback = function(){ schedule(500); return true; };
+  startLiveWorkerFallback = function(){ schedule(500); return true; };
+  ensureLivePaintLoop = function(){ schedule(500); return true; };
+
+  document.addEventListener('visibilitychange',()=>{ if(visible()){ lastTick=0; pollLive(true).catch(()=>{}); schedule(1000); } },{passive:true});
+  document.addEventListener('click',(e)=>{ if(e.target&&e.target.closest&&e.target.closest('[data-mid],[data-ko-mid],[data-koid],.tab')){ setTimeout(()=>pollLive(true).catch(()=>{}),80); } },true);
+
+  schedule(700);
+  setTimeout(()=>pollLive(true).catch(()=>{}),250);
+})();
+/* ===== /WC26 v163 live kickoff feedback restore ===== */
 </script></body></html>
