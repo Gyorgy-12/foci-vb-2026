@@ -8655,7 +8655,7 @@ async function loadMatchResultsFromBackendDb(bypassCache=false){if(FROZEN_MODE||
   // KO schedule felülírása ha van frissebb adat
   if(koData?.schedule){
     for(const[id,sch]of Object.entries(koData.schedule)){
-      if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date;KO_SCHEDULE[id].t=sch.t;}
+      if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date;KO_SCHEDULE[id].t=sch.t;}applyKoScheduleHotfix();
     }
   }
   // KO párok tárolása
@@ -9113,7 +9113,7 @@ const KO_SCHEDULE={
   'KO-R16-3':{date:'2026-07-05',t:'20:00'},
   'KO-R16-4':{date:'2026-07-06',t:'00:00'},
   'KO-R16-5':{date:'2026-07-06',t:'19:00'},
-  'KO-R16-6':{date:'2026-07-07',t:'00:00'},
+  'KO-R16-6':{date:'2026-07-06',t:'01:00'}, // delayed: 04:00 RO / 01:00 UTC
   'KO-R16-7':{date:'2026-07-07',t:'16:00'},
   'KO-R16-8':{date:'2026-07-07',t:'20:00'},
   // QF
@@ -9128,6 +9128,17 @@ const KO_SCHEDULE={
   'KO-BR-1':{date:'2026-07-18',t:'21:00'},
   'KO-F-1': {date:'2026-07-19',t:'19:00'},
 };
+const KO_SCHEDULE_HOTFIX={
+  'KO-R16-6':{date:'2026-07-06',t:'01:00'} // Mexico - England delayed: 04:00 Romania / 01:00 UTC
+};
+function applyKoScheduleHotfix(){
+  try{
+    Object.entries(KO_SCHEDULE_HOTFIX).forEach(([id,sch])=>{
+      if(KO_SCHEDULE&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date;KO_SCHEDULE[id].t=sch.t;}
+    });
+  }catch(e){}
+}
+applyKoScheduleHotfix();
 const KO_ROUND_OPTIONS=[{key:'R32',label:'Legjobb 32'},{key:'R16',label:'Nyolcaddöntő'},{key:'QF',label:'Negyeddöntő'},{key:'SF',label:'Elődöntő'},{key:'BR',label:'Bronzmeccs'},{key:'F',label:'Döntő'}];
 function groupsComplete(){return FX.length===72&&FX.every(m=>{let lr=LIVE_RESULTS[m.id];return (lr&&lr.finished&&validScore(lr.h)&&validScore(lr.a))||getPred(m.id)!==null})}
 function koPred(id){let p=KO_PRED[id];if(!p||!validScore(p.h)||!validScore(p.a))return null;let h=+p.h,a=+p.a,ph=validScore(p.pH)?+p.pH:null,pa=validScore(p.pA)?+p.pA:null;if(h===a&&(ph==null||pa==null||ph===pa))return null;return{h,a,pH:ph,pA:pa,pen:h===a}}
@@ -9307,7 +9318,7 @@ async function wc26LoadKoPairsFromWorker(force=false){
     try{
       const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/ko-pairs')+'?r='+Math.floor(Date.now()/300000);
       const koData=await fetch(url,{cache:'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
-      if(koData?.schedule){for(const[id,sch]of Object.entries(koData.schedule)){if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date||KO_SCHEDULE[id].date;KO_SCHEDULE[id].t=sch.t||sch.time||KO_SCHEDULE[id].t;}}}
+      if(koData?.schedule){for(const[id,sch]of Object.entries(koData.schedule)){if(KO_SCHEDULE[id]){KO_SCHEDULE[id].date=sch.date||KO_SCHEDULE[id].date;KO_SCHEDULE[id].t=sch.t||sch.time||KO_SCHEDULE[id].t;}applyKoScheduleHotfix();}}
       if(koData?.pairs)window.__WC26_KO_PAIRS__=koData.pairs;
       wc26KoPairsLoadedAt=Date.now();
       return !!koData;
@@ -9325,7 +9336,7 @@ async function loadMatchResultsFromBackendDb(bypassCache=false){
     // KO párok/schedule nem kell 30 mp-enként. Max 10 percenként vagy első betöltéskor.
     wc26LoadKoPairsFromWorker(false).catch(()=>{});
     if(data?.results){
-      Object.entries(data.results).forEach(([id,r])=>{if(id.startsWith('KO-')&&r&&r.date&&r.time&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=r.date;KO_SCHEDULE[id].t=r.time;}});
+      Object.entries(data.results).forEach(([id,r])=>{if(id.startsWith('KO-')&&r&&r.date&&r.time&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=r.date;KO_SCHEDULE[id].t=r.time;}applyKoScheduleHotfix();});
       return mergeLiveResults(data.results);
     }
     return false;
@@ -9394,7 +9405,7 @@ async function loadMatchResultsFromBackendDb(bypassCache=false){
     const data=await fetch(WC26_RESULTS_READ_URL+sep+bust,{cache:bypassCache?'reload':'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
     wc26LoadKoPairsFromWorker(false).catch(()=>{});
     if(data&&data.results){
-      Object.entries(data.results).forEach(([id,r])=>{if(id.startsWith('KO-')&&r&&r.date&&r.time&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=r.date;KO_SCHEDULE[id].t=r.time;}});
+      Object.entries(data.results).forEach(([id,r])=>{if(id.startsWith('KO-')&&r&&r.date&&r.time&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=r.date;KO_SCHEDULE[id].t=r.time;}applyKoScheduleHotfix();});
       return mergeLiveResults(data.results);
     }
     return false;
@@ -13178,6 +13189,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
           if(r.date) KO_SCHEDULE[id].date = r.date;
           if(r.time) KO_SCHEDULE[id].t = r.time;
         }
+        applyKoScheduleHotfix();
       });
       if(Object.keys(pairs).length) window.__WC26_KO_PAIRS__ = Object.assign({}, window.__WC26_KO_PAIRS__ || {}, pairs);
     }catch(e){}
