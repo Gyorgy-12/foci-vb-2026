@@ -14378,4 +14378,70 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 /* ===== /WC26 v174 ===== */
 
+
+
+/* ===== WC26 v175: KO modal self-reopen freeze killer =====
+   Root cause: old KO modal opener tried to refresh missing KO LIVE_RESULTS by calling
+   loadMatchResultsFromBackendDb().then(ok => closeTip(); openKoTip(id)).
+   After v170 the results loader may legitimately return true while throttled / unchanged,
+   so future KO cards without LIVE_RESULTS could close+reopen themselves forever.
+   This wrapper prevents that old self-reopen branch from arming, while keeping the existing modal UI.
+*/
+(function(){
+  if(window.__WC26_V175_KO_MODAL_SELF_REOPEN_KILLER__) return;
+  window.__WC26_V175_KO_MODAL_SELF_REOPEN_KILLER__ = true;
+
+  const baseOpenKoTip = typeof openKoTip === 'function' ? openKoTip : null;
+  if(!baseOpenKoTip) return;
+
+  let opening = false;
+  let lastId = '';
+  let lastAt = 0;
+
+  function now(){ return Date.now ? Date.now() : +new Date(); }
+  function koModalFor(id){
+    try{ return document.querySelector('.tip-overlay[data-tip-kind="ko"][data-tip-id="'+String(id).replace(/"/g,'\\"')+'"]'); }catch(e){ return null; }
+  }
+
+  openKoTip = function(id){
+    const n = now();
+
+    // Hard re-entrancy brake: the same KO modal must not reopen itself in the same frame/tick loop.
+    if(opening && id === lastId) return false;
+    if(id === lastId && n - lastAt < 450 && koModalFor(id)) return false;
+
+    opening = true;
+    lastId = id;
+    lastAt = n;
+
+    const originalResultsLoader = (typeof loadMatchResultsFromBackendDb === 'function') ? loadMatchResultsFromBackendDb : null;
+
+    try{
+      // During KO modal construction, the old opener contains a "missing LIVE_RESULTS -> reload -> close -> openKoTip" branch.
+      // Disable ONLY that synchronous arming call. Normal startup/tab results loading remains unchanged outside this opener.
+      if(originalResultsLoader){
+        loadMatchResultsFromBackendDb = function(){ return Promise.resolve(false); };
+      }
+      const out = baseOpenKoTip.apply(this, arguments);
+      try{ if(typeof syncModalOpenClass === 'function') syncModalOpenClass(); }catch(e){}
+      try{ if(typeof refreshModal === 'function') setTimeout(function(){ try{ refreshModal(); }catch(_e){} }, 40); }catch(e){}
+      return out;
+    }finally{
+      if(originalResultsLoader) loadMatchResultsFromBackendDb = originalResultsLoader;
+      setTimeout(function(){ opening = false; }, 650);
+    }
+  };
+
+  // KO card click should be handled once, by the card's own onclick. Background live refresh after click is pointless here.
+  document.addEventListener('click', function(e){
+    try{
+      const card = e.target && e.target.closest && e.target.closest('[data-koid]');
+      if(card){ window.__WC26_LAST_KO_CARD_CLICK_AT__ = now(); }
+    }catch(_e){}
+  }, true);
+
+  try{ window.WC26_V175_DEBUG = { route:'v175-ko-modal-self-reopen-killer', installedAt:new Date().toISOString() }; }catch(e){}
+})();
+/* ===== /WC26 v175 ===== */
+
 </script></body></html>
