@@ -9372,70 +9372,7 @@ function ensureLivePaintLoop(){
   },WC26_SYNC_LIVE_MS);
 }
 
-/* ===== WC26 FIRESTORE LIVE-DOC v11 =====
-   Clean free-tier path for 10-20 users:
-   - live_matches/{matchId} realtime listener handles live rendering
-   - /results is only final/historical bootstrap, not 30s polling
-   - no frontend /sync, no KV, no full collection polling every live tick
-*/
-let wc26LiveMatchesUnsub=null;
-let wc26LiveFallbackTimer=null;
-function wc26PlainFirestoreData(doc){try{return doc&&typeof doc.data==='function'?doc.data():{};}catch(e){return{}}}
-function listenWc26LiveMatches(){
-  // v139 ZERO live DB: élőben nem nyitunk Firestore live listenert.
-  // A modal/kártya live adatát kizárólag a Worker /live-results adja.
-  return startWc26LiveWorkerFallback();
-}
 
-function startWc26LiveWorkerFallback(){
-  if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL)return;
-  const tick=()=>{
-    if(document.hidden)return;
-    const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/live-results')+'?t='+Date.now();
-    fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null).then(data=>{if(data&&data.results)mergeLiveResults(data.results)}).catch(()=>{});
-  };
-  tick();
-  wc26LiveFallbackTimer=setInterval(tick,WC26_SYNC_LIVE_MS);
-}
-async function loadMatchResultsFromBackendDb(bypassCache=false){
-  if(FROZEN_MODE||!WC26_RESULTS_READ_URL)return false;
-  try{
-    const bust=bypassCache?'t='+Date.now():'r='+Math.floor(Date.now()/120000);
-    const sep=WC26_RESULTS_READ_URL.includes('?')?'&':'?';
-    const data=await fetch(WC26_RESULTS_READ_URL+sep+bust,{cache:bypassCache?'reload':'default'}).then(r=>r.ok?r.json():null).catch(()=>null);
-    wc26LoadKoPairsFromWorker(false).catch(()=>{});
-    if(data&&data.results){
-      Object.entries(data.results).forEach(([id,r])=>{if(id.startsWith('KO-')&&r&&r.date&&r.time&&KO_SCHEDULE[id]){KO_SCHEDULE[id].date=r.date;KO_SCHEDULE[id].t=r.time;}applyKoScheduleHotfix();});
-      return mergeLiveResults(data.results);
-    }
-    return false;
-  }catch(e){return false;}
-}
-function scheduleLiveSync(delay){
-  if(FROZEN_MODE)return;
-  clearTimeout(wc26SyncTimer);
-  // Live közben a Worker /live-results frissít. Ez csak ritka final/historikus bootstrap.
-  const d=delay??WC26_SYNC_IDLE_MS;
-  wc26SyncTimer=setTimeout(async()=>{
-    try{await loadMatchResultsFromBackendDb(false);}
-    finally{scheduleLiveSync(WC26_SYNC_IDLE_MS);}
-  },d);
-}
-async function syncLiveResults(opts={}){
-  // NINCS frontend /sync. Láthatóság/tabváltáskor csak final results bootstrap + listener fallback.
-  if(syncLiveResults._running)return false;
-  syncLiveResults._running=true;
-  try{
-    if(wc26Db&&!wc26LiveMatchesUnsub)listenWc26LiveMatches();
-    if(opts.force)return await loadMatchResultsFromBackendDb(true);
-    return true;
-  }finally{syncLiveResults._running=false;}
-}
-function ensureLivePaintLoop(){
-  // v139: élőben nincs Firestore live listener; csak Worker /live-results polling fut.
-  if(wc26Db&&!wc26LiveMatchesUnsub)listenWc26LiveMatches();
-}
-/* ===== /WC26 FIRESTORE LIVE-DOC v11 ===== */
 
 /* ===== /WC26 LIVE SMOOTH 30S FIX v4 ===== */
 function topScorersList(){let counts={};FX.forEach(x=>{let r=LIVE_RESULTS[x.id];if(!r||!Array.isArray(r.scorers))return;r.scorers.forEach(s=>{if(!s.player||s.og)return;let team=s.team==='a'?x.a:x.h,key=s.player+'|'+team;if(!counts[key])counts[key]={player:s.player,team,goals:0};counts[key].goals++})});return Object.values(counts).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player)).slice(0,20)}
@@ -11905,281 +11842,6 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v134/v139: Worker live leader + lazy community reads ===== */
-(function(){
-  if(window.__WC26_V134_FIRESTORE_READ_OPT__) return;
-  window.__WC26_V134_FIRESTORE_READ_OPT__ = true;
-
-  /*
-    Firebase read-opt cél:
-    - ne legyen live Firestore live listener; leader tab csak Worker /live-results pollingot futtat
-    - hidden tab ne tartson live listenert
-    - Community lista csak akkor olvasson, amikor tényleg megnyitod
-    - Community profilmodal live része továbbra is frissüljön
-  */
-
-  const WC26_LIVE_BC_V134 = 'wc26-live-results-v134';
-  const WC26_LIVE_LEASE_KEY_V134 = 'wc26_live_listener_lease_v134';
-  const wc26TabIdV134 = Math.random().toString(36).slice(2)+Date.now().toString(36);
-  const wc26LiveBCV134 = ('BroadcastChannel' in window) ? new BroadcastChannel(WC26_LIVE_BC_V134) : null;
-
-  let wc26LockReleaseV134 = null;
-  let wc26LockRunningV134 = false;
-  let wc26FallbackLeaseTimerV134 = null;
-
-  function wc26StopLiveListenerV134(){
-    try{
-      if(wc26LiveMatchesUnsub){
-        wc26LiveMatchesUnsub();
-        wc26LiveMatchesUnsub=null;
-      }
-    }catch(e){
-      wc26LiveMatchesUnsub=null;
-    }
-  }
-
-  function wc26StopLiveFallbackV134(){
-    try{
-      if(wc26LiveFallbackTimer){
-        clearInterval(wc26LiveFallbackTimer);
-        wc26LiveFallbackTimer=null;
-      }
-    }catch(e){}
-  }
-
-  function wc26BroadcastLiveV134(incoming){
-    if(!incoming || !Object.keys(incoming).length)return;
-    try{
-      if(wc26LiveBCV134)wc26LiveBCV134.postMessage({type:'live-results',from:wc26TabIdV134,results:incoming,ts:Date.now()});
-    }catch(e){}
-  }
-
-  if(wc26LiveBCV134){
-    wc26LiveBCV134.onmessage=function(ev){
-      const msg=ev&&ev.data||{};
-      if(!msg || msg.from===wc26TabIdV134)return;
-      if(msg.type==='live-results' && msg.results){
-        try{mergeLiveResults(msg.results);}catch(e){}
-      }
-      if(msg.type==='leader-ping'){
-        try{wc26LiveBCV134.postMessage({type:'tab-alive',from:wc26TabIdV134,ts:Date.now()});}catch(e){}
-      }
-    };
-  }
-
-  function wc26AttachLeaderListenerV134(){
-    // v139 ZERO live DB: nincs Firestore live listener, csak Worker /live-results polling.
-    if(FROZEN_MODE||document.hidden)return false;
-    wc26StartLeaderFallbackV134();
-    try{if(wc26LiveBCV134)wc26LiveBCV134.postMessage({type:'leader-started-worker-live',from:wc26TabIdV134,ts:Date.now()});}catch(e){}
-    return true;
-  }
-
-
-  function wc26StartLeaderFallbackV134(){
-    if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL||document.hidden)return;
-    const tick=()=>{
-      if(document.hidden)return;
-      const url=WC26_RESULTS_READ_URL.replace(/\/results$/,'/live-results')+'?t='+Date.now();
-      fetch(url,{cache:'no-store'})
-        .then(r=>r.ok?r.json():null)
-        .then(data=>{
-          if(data&&data.results){
-            mergeLiveResults(data.results);
-            wc26BroadcastLiveV134(data.results);
-          }
-        })
-        .catch(()=>{});
-    };
-    tick();
-    wc26LiveFallbackTimer=setInterval(tick,WC26_SYNC_LIVE_MS);
-  }
-
-  function wc26ReleaseLeaderV134(){
-    wc26StopLiveListenerV134();
-    wc26StopLiveFallbackV134();
-
-    if(wc26LockReleaseV134){
-      try{wc26LockReleaseV134();}catch(e){}
-      wc26LockReleaseV134=null;
-    }
-
-    if(wc26FallbackLeaseTimerV134){
-      clearInterval(wc26FallbackLeaseTimerV134);
-      wc26FallbackLeaseTimerV134=null;
-    }
-
-    try{
-      const raw=localStorage.getItem(WC26_LIVE_LEASE_KEY_V134);
-      const lease=raw?JSON.parse(raw):null;
-      if(lease&&lease.id===wc26TabIdV134)localStorage.removeItem(WC26_LIVE_LEASE_KEY_V134);
-    }catch(e){}
-  }
-
-  function wc26TryWebLockLeaderV134(){
-    if(!navigator.locks||!navigator.locks.request)return false;
-    if(wc26LockRunningV134)return true;
-    wc26LockRunningV134=true;
-
-    navigator.locks.request('wc26-worker-live-poller-v139',{ifAvailable:true},async lock=>{
-      if(!lock){
-        wc26LockRunningV134=false;
-        return;
-      }
-
-      if(document.hidden){
-        wc26LockRunningV134=false;
-        return;
-      }
-
-      wc26AttachLeaderListenerV134();
-
-      await new Promise(resolve=>{
-        wc26LockReleaseV134=resolve;
-      });
-
-      wc26StopLiveListenerV134();
-      wc26StopLiveFallbackV134();
-      wc26LockRunningV134=false;
-    }).catch(()=>{
-      wc26LockRunningV134=false;
-      wc26TryLocalLeaseLeaderV134();
-    });
-
-    return true;
-  }
-
-  function wc26TryLocalLeaseLeaderV134(){
-    if(wc26FallbackLeaseTimerV134||document.hidden)return true;
-
-    const renew=()=>{
-      if(document.hidden){
-        wc26ReleaseLeaderV134();
-        return;
-      }
-
-      const now=Date.now();
-      let lease=null;
-      try{lease=JSON.parse(localStorage.getItem(WC26_LIVE_LEASE_KEY_V134)||'null');}catch(e){}
-
-      if(!lease || !lease.id || lease.expires<now || lease.id===wc26TabIdV134){
-        try{
-          localStorage.setItem(WC26_LIVE_LEASE_KEY_V134,JSON.stringify({id:wc26TabIdV134,expires:now+9000}));
-          wc26AttachLeaderListenerV134();
-        }catch(e){
-          /*
-            Ha a fallback lease nem elérhető, akkor inkább 1 listener legyen ebben a tabban,
-            ne full polling.
-          */
-          wc26AttachLeaderListenerV134();
-        }
-      }else{
-        wc26StopLiveListenerV134();
-        wc26StopLiveFallbackV134();
-      }
-    };
-
-    renew();
-    wc26FallbackLeaseTimerV134=setInterval(renew,3000);
-    return true;
-  }
-
-  function wc26EnsureLiveLeaderV134(){
-    if(FROZEN_MODE)return false;
-    if(document.hidden){
-      wc26ReleaseLeaderV134();
-      return false;
-    }
-
-    if(navigator.locks&&navigator.locks.request){
-      return wc26TryWebLockLeaderV134();
-    }
-
-    return wc26TryLocalLeaseLeaderV134();
-  }
-
-  /*
-    Átírjuk a live listener belépési pontokat.
-    A korábbi, azonnali live DB listenert is leállítjuk, hogy ne duplázzon.
-  */
-  wc26StopLiveListenerV134();
-  wc26StopLiveFallbackV134();
-
-  listenWc26LiveMatches=function(){
-    return wc26EnsureLiveLeaderV134();
-  };
-
-  ensureLivePaintLoop=function(){
-    return wc26EnsureLiveLeaderV134();
-  };
-
-  window.addEventListener('beforeunload',wc26ReleaseLeaderV134);
-  document.addEventListener('visibilitychange',()=>{
-    if(document.hidden)wc26ReleaseLeaderV134();
-    else setTimeout(wc26EnsureLiveLeaderV134,120);
-  });
-
-  setTimeout(wc26EnsureLiveLeaderV134,1500);
-
-  /*
-    Community: nincs háttér-read.
-    A lista csak community tab megnyitáskor olvas egyszer.
-  */
-  let wc26CommunityLoadTokenV134=false;
-  let wc26CommunityRenderedV134=false;
-
-  const __wc26LoadCommunityTipsV134=loadCommunityTips;
-  loadCommunityTips=async function(){
-    if(S.tab!=='community' && !wc26CommunityLoadTokenV134){
-      return true;
-    }
-
-    if(S.tab==='community' && wc26CommunityRenderedV134 && !wc26CommunityLoadTokenV134){
-      return true;
-    }
-
-    wc26CommunityLoadTokenV134=false;
-    return await __wc26LoadCommunityTipsV134.apply(this,arguments);
-  };
-
-  const __wc26RenderCommunityV134=renderCommunity;
-  renderCommunity=function(){
-    if(S.tab==='community' && wc26CommunityRenderedV134 && !wc26CommunityLoadTokenV134){
-      return;
-    }
-    const out=__wc26RenderCommunityV134.apply(this,arguments);
-    if(S.tab==='community')wc26CommunityRenderedV134=true;
-    return out;
-  };
-
-  function wc26AllowCommunityOnceV134(){
-    wc26CommunityLoadTokenV134=true;
-    wc26CommunityRenderedV134=false;
-  }
-
-  document.addEventListener('click',e=>{
-    if(e.target.closest('.tab[data-tab="community"]')){
-      wc26AllowCommunityOnceV134();
-    }
-  },true);
-
-  /*
-    Ha live eredmény változik, community fül nem renderel újra.
-    Nyitott community profilmodal viszont kap célzott live patch-et,
-    mert refreshCommunityPreviews v132 már DOM-sor patch-re van cserélve.
-  */
-  const __wc26MergeLiveResultsV134=mergeLiveResults;
-  mergeLiveResults=function(next){
-    const beforeTab=S.tab;
-    const ret=__wc26MergeLiveResultsV134.apply(this,arguments);
-    if(beforeTab==='community'){
-      try{refreshCommunityPreviews();}catch(e){}
-    }
-    return ret;
-  };
-})();
-
-
 /* ===== WC26 v135 SAFE: no buildKO/calcFairPlay recursion on overview ===== */
 (function(){
   if(window.__WC26_V135_SAFE_NO_FREEZE__) return;
@@ -12300,237 +11962,6 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       +'</div></section>';
   };
 })();
-
-/* ===== WC26 v136: one-shot community load + modal-driven stat refresh ===== */
-(function(){
-  if(window.__WC26_V136_COMMUNITY_MODAL_REFRESH__) return;
-  window.__WC26_V136_COMMUNITY_MODAL_REFRESH__ = true;
-
-  let wc26CommunityBusyV136 = false;
-  let wc26CommunityLoadingV136 = null;
-  let wc26DirtyAfterModalV136 = false;
-  let wc26RefreshTimerV136 = null;
-
-  function v136EscName(){
-    try{return wc26User && (wc26User.displayName || wc26User.email) || 'Játékos';}
-    catch(e){return 'Játékos';}
-  }
-
-  function v136UpsertOwnCommunityCache(){
-    if(!wc26User) return;
-    const item={
-      id:wc26User.uid,
-      uid:wc26User.uid,
-      displayName:v136EscName(),
-      photoURL:wc26User.photoURL||'',
-      pred:wc26CleanTips(PRED||{}),
-      ko:wc26CleanTips(KO_PRED||{}),
-      summary:communitySummary(PRED||{},KO_PRED||{}),
-      updatedAt:new Date(),
-      version:4,
-      storage:'firebase'
-    };
-    if(!Array.isArray(wc26CommunityItems)) wc26CommunityItems=[];
-    const i=wc26CommunityItems.findIndex(x=>x && (x.id===item.id || x.uid===item.uid));
-    if(i>=0) wc26CommunityItems[i]=Object.assign({},wc26CommunityItems[i],item);
-    else wc26CommunityItems.unshift(item);
-  }
-
-  function v136SortCommunityRows(a,b){
-    const ea=communitySummary((a&&a.pred)||{},(a&&a.ko)||{}).eff;
-    const eb=communitySummary((b&&b.pred)||{},(b&&b.ko)||{}).eff;
-    return (eb.pct-ea.pct) || (eb.pts-ea.pts) || (eb.exact-ea.exact) || (eb.diff-ea.diff) || String((a&&a.displayName)||'').localeCompare(String((b&&b.displayName)||''));
-  }
-
-  /* Teljes community collection egyetlen .get()-tel. Nincs limit(40), nincs lapozgatás, nincs live listener. */
-  loadCommunityTips=async function(force){
-    if(!wc26Db){wc26CommunityItems=[];return false;}
-    if(wc26CommunityLoadingV136) return wc26CommunityLoadingV136;
-    wc26CommunityLoadingV136=(async()=>{
-      try{
-        const snap=await wc26Db.collection(WC26_COMMUNITY_COLLECTION).get();
-        const rows=[];
-        snap.forEach(doc=>{rows.push({id:doc.id,...doc.data()});});
-        wc26CommunityItems=rows.sort(v136SortCommunityRows);
-        v136UpsertOwnCommunityCache();
-        return true;
-      }catch(e){
-        wc26BackendError=e && e.message ? e.message : String(e||'community load error');
-        return false;
-      }finally{
-        wc26CommunityLoadingV136=null;
-      }
-    })();
-    return wc26CommunityLoadingV136;
-  };
-
-  renderCommunity=function(){
-    const m=document.getElementById('main');
-    if(!m)return;
-    v136UpsertOwnCommunityCache();
-    m.className='main community-main';
-    const mine=communitySummary(PRED||{},KO_PRED||{});
-    const configured=wc26FirebaseConfigured();
-    let setupHtml='', authHtml='';
-
-    if(!configured){
-      setupHtml='<section class="card community-card"><h1 class="community-title">Külön VB Firebase backend</h1><p class="community-lead">Illeszd be az új projekt adatait a <b>WC26_FIREBASE_CONFIG</b> blokkba. A közösségi tippek külön Firestore gyűjteménybe mennek: <b>'+WC26_COMMUNITY_COLLECTION+'</b>.</p></section>';
-    }
-
-    if(wc26User){
-      authHtml='<div class="community-user"><img class="community-avatar" src="'+esc(wc26User.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(v136EscName())+'</div><div class="community-meta">Bejelentkezve · saját tippjeid automatikusan mentődnek</div></div></div><div class="community-actions"><button class="community-btn" id="wc26RenameBtn">Név módosítása</button><button class="community-btn" id="wc26LogoutBtn">Kilépés</button></div>';
-    }else{
-      authHtml='<div class="community-actions"><button class="community-btn primary" id="wc26LoginBtn" '+(!configured?'disabled':'')+'>Belépés Google-lel</button></div>';
-    }
-
-    const rows=(Array.isArray(wc26CommunityItems)?wc26CommunityItems.slice():[]).filter(Boolean).sort(v136SortCommunityRows);
-    let listHtml='';
-    if(wc26CommunityBusyV136){
-      listHtml='<div class="community-empty">Közösségi tippek betöltése egyben…</div>';
-    }else if(rows.length){
-      listHtml=rows.map((item,i)=>{
-        const s=communitySummary(item.pred||{},item.ko||{}), e=s.eff;
-        return '<div class="community-row"><div class="community-rank">'+(i+1)+'.</div><div class="community-user"><img class="community-avatar" src="'+esc(item.photoURL||'')+'" alt=""><div><div class="community-name">'+esc(item.displayName||'Játékos')+'</div><div class="community-meta">'+communityRankMeta(e)+' · frissítve: '+esc(communityDate(item.updatedAt))+'</div></div></div><div><div class="community-score">'+(e.max?e.pct+'%':'-')+'</div><button class="community-btn" data-community-view="'+esc(item.id||item.uid)+'">Megnézés</button></div></div>';
-      }).join('');
-    }else{
-      listHtml='<div class="community-empty">Még nincs publikus VB-tipp a külön backendben.</div>';
-    }
-
-    const errHtml=wc26BackendError?'<div class="community-empty" style="margin-top:10px">Backend jelzés: '+esc(wc26BackendError)+'</div>':'';
-    m.innerHTML=setupHtml+'<section class="card community-card community-top-card"><h1 class="community-title">Közösség</h1>'+authHtml+communityStatsHtml(mine)+errHtml+'</section><section class="card community-card"><h2 class="community-section-title" style="margin-top:0">Rangsor pontosság szerint</h2>'+listHtml+'</section>';
-
-    m.querySelector('#wc26LoginBtn')?.addEventListener('click',wc26SignIn);
-    m.querySelector('#wc26LogoutBtn')?.addEventListener('click',wc26SignOut);
-    m.querySelector('#wc26RenameBtn')?.addEventListener('click',wc26RenameProfile);
-    m.querySelectorAll('[data-community-view]').forEach(b=>b.addEventListener('click',()=>openCommunityTips(b.dataset.communityView)));
-    activateCrests();
-    syncSpacer();
-  };
-
-  const __wc26RenderV136=render;
-  render=function(){
-    if(S.tab==='community'){
-      renderCommunity();
-      return;
-    }
-    return __wc26RenderV136.apply(this,arguments);
-  };
-
-  async function wc26LoadCommunityTabOnceV136(){
-    if(S.tab!=='community')return;
-    wc26CommunityBusyV136=true;
-    renderCommunity();
-    await loadCommunityTips(true);
-    wc26CommunityBusyV136=false;
-    if(S.tab==='community')renderCommunity();
-  }
-
-  document.addEventListener('click',e=>{
-    if(e.target.closest('.tab[data-tab="community"]')){
-      setTimeout(wc26LoadCommunityTabOnceV136,90);
-    }
-  },true);
-
-  function wc26RefreshActiveStatsV136(reason){
-    if(document.querySelector('.tip-overlay,.community-preview')){
-      wc26DirtyAfterModalV136=true;
-      return;
-    }
-    clearTimeout(wc26RefreshTimerV136);
-    wc26RefreshTimerV136=setTimeout(()=>{
-      try{
-        if(S.tab==='overview') renderOverview();
-        else if(S.tab==='stats') renderStats();
-        else if(S.tab==='table') renderTables();
-        else if(S.tab==='matches') { renderMatches(); try{patchLiveRows(LIVE_RESULTS||{});}catch(e){} }
-        else if(S.tab==='knockout') renderKO();
-        else if(S.tab==='community') renderCommunity();
-        activateCrests();
-        syncSpacer();
-      }catch(e){console.warn('WC26 v136 refresh failed',reason,e);}
-    },80);
-  }
-
-  function wc26AfterOwnTipMutationV136(){
-    v136UpsertOwnCommunityCache();
-    if(S.tab==='community'){
-      renderCommunity();
-      loadCommunityTips(true).then(()=>{if(S.tab==='community')renderCommunity();}).catch(()=>{});
-      return;
-    }
-    wc26RefreshActiveStatsV136('own-tip');
-  }
-
-  const __wc26SaveTipV136=saveTip;
-  saveTip=async function(){
-    const out=await __wc26SaveTipV136.apply(this,arguments);
-    setTimeout(wc26AfterOwnTipMutationV136,0);
-    setTimeout(wc26AfterOwnTipMutationV136,220);
-    return out;
-  };
-
-  const __wc26SaveKoTipV136=saveKoTip;
-  saveKoTip=function(){
-    const out=__wc26SaveKoTipV136.apply(this,arguments);
-    setTimeout(wc26AfterOwnTipMutationV136,0);
-    setTimeout(wc26AfterOwnTipMutationV136,220);
-    return out;
-  };
-
-  const __wc26DeleteGroupTipV136=wc26DeleteGroupTip;
-  wc26DeleteGroupTip=async function(){
-    const out=await __wc26DeleteGroupTipV136.apply(this,arguments);
-    setTimeout(wc26AfterOwnTipMutationV136,0);
-    return out;
-  };
-
-  const __wc26DeleteKoTipV136=wc26DeleteKoTip;
-  wc26DeleteKoTip=async function(){
-    const out=await __wc26DeleteKoTipV136.apply(this,arguments);
-    setTimeout(wc26AfterOwnTipMutationV136,0);
-    return out;
-  };
-
-  const __wc26MergeLiveResultsV136=mergeLiveResults;
-  mergeLiveResults=function(next){
-    const ret=__wc26MergeLiveResultsV136.apply(this,arguments);
-    if(ret){
-      v136UpsertOwnCommunityCache();
-      if(S.tab==='overview'||S.tab==='stats'||S.tab==='community') wc26RefreshActiveStatsV136('live-results');
-    }
-    return ret;
-  };
-
-  const __wc26RefreshOpenTipModalV136=refreshOpenTipModal;
-  refreshOpenTipModal=function(){
-    const out=__wc26RefreshOpenTipModalV136.apply(this,arguments);
-    if(S.tab==='overview'||S.tab==='stats'||S.tab==='community') wc26DirtyAfterModalV136=true;
-    return out;
-  };
-
-  const __wc26CloseTipV136=closeTip;
-  closeTip=function(){
-    const out=__wc26CloseTipV136.apply(this,arguments);
-    if(wc26DirtyAfterModalV136){
-      wc26DirtyAfterModalV136=false;
-      wc26RefreshActiveStatsV136('modal-close');
-    }
-    return out;
-  };
-
-  const __wc26CloseAllModalsV136=closeAllModals;
-  closeAllModals=function(){
-    const out=__wc26CloseAllModalsV136.apply(this,arguments);
-    if(wc26DirtyAfterModalV136){
-      wc26DirtyAfterModalV136=false;
-      wc26RefreshActiveStatsV136('modal-close-all');
-    }
-    return out;
-  };
-
-  if(S.tab==='community') setTimeout(wc26LoadCommunityTabOnceV136,120);
-})();
-
 
 /* ===== WC26 v137: KO live match-card exact group parity + red PEN modal pill ===== */
 (function(){
@@ -13080,490 +12511,6 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 
 
-/* ===== WC26 v148 CLEAN STARTUP REBASE: one controller, no stacked query wrappers =====
-   This replaces the v141-v147 pile with one startup path:
-   - one /results loader with session TTL + in-flight guard
-   - one /live-results poller only while the page is visible and a live window exists
-   - no /ko-pairs fetch on startup
-   - Firebase Auth only on startup; own tips/community use Firestore REST, not WebChannel listeners
-   - localStorage can never rehydrate tips for a logged-in user
-*/
-(function(){
-  if(window.__WC26_V148_CLEAN_STARTUP__) return;
-  window.__WC26_V148_CLEAN_STARTUP__ = true;
-  window.__WC26_V151_BACKEND_FIRST__ = true;
-
-  const K_RESULTS = 'wc26_v148_results';
-  const K_OWN_PREFIX = 'wc26_v148_own_';
-  const K_COMMUNITY = 'wc26_v148_community';
-  const K_LAST_UID = 'wc26_v148_last_uid';
-  const RESULTS_TTL = 2 * 60 * 1000;
-  const RESULTS_STALE_TTL = 30 * 60 * 1000;
-  const OWN_TTL = 2 * 60 * 1000;
-  const OWN_STALE_TTL = 30 * 60 * 1000;
-  const COMMUNITY_TTL = 5 * 60 * 1000;
-  const LIVE_MIN_GAP = 22 * 1000;
-  const IDLE_SYNC_MS = 5 * 60 * 1000;
-
-  let authInitPromise = null;
-  let authHooked = false;
-  let resultsInFlight = null;
-  let liveInFlight = null;
-  let ownInFlight = null;
-  let communityInFlight = null;
-  let publishInFlight = null;
-  let lastLiveAt = 0;
-  let lastResultsAt = 0;
-  let lastOwnAt = 0;
-
-  function now(){ return Date.now ? Date.now() : +new Date(); }
-  function visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
-  function tab(){ try { return (S && S.tab) || ''; } catch(e){ return ''; } }
-  function matchish(){ return ['matches','overview','table','stats','knockout'].includes(tab()); }
-  function configured(){ try { return !!(wc26FirebaseConfigured && wc26FirebaseConfigured()); } catch(e){ return false; } }
-  function uid(){ try { return wc26User && wc26User.uid ? String(wc26User.uid) : ''; } catch(e){ return ''; } }
-  function sj(k){ try { const v=sessionStorage.getItem(k); return v ? JSON.parse(v) : null; } catch(e){ return null; } }
-  function ss(k,v){ try { sessionStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
-  function fresh(x,ttl){ return !!(x && x.ts && now() - (+x.ts) < ttl); }
-  function cleanTips(o){ try { return wc26CleanTips(o || {}); } catch(e){ return o || {}; } }
-  function ownKey(id){ return K_OWN_PREFIX + String(id || 'guest'); }
-  function clearLocalTips(){ try { wc26ClearLocalPreds(); } catch(e){ try{ localStorage.removeItem(STORE_KEY); localStorage.removeItem(KO_STORE_KEY); }catch(_e){} } }
-  function saveLastUid(id){ try { if(id) sessionStorage.setItem(K_LAST_UID, String(id)); } catch(e){} }
-  function lastUid(){ try { return sessionStorage.getItem(K_LAST_UID) || ''; } catch(e){ return ''; } }
-
-  function activeLive(){
-    try { if(typeof liveSyncInfo === 'function' && liveSyncInfo().active) return true; } catch(e){}
-    try { return Object.values(LIVE_RESULTS || {}).some(r => r && r.started && !r.finished); } catch(e){ return false; }
-  }
-  function liveUrl(){ try { return WC26_RESULTS_READ_URL ? WC26_RESULTS_READ_URL.replace(/\/results$/, '/live-results') : ''; } catch(e){ return ''; } }
-
-  function fromFs(v){
-    if(!v || typeof v !== 'object') return undefined;
-    if('stringValue' in v) return v.stringValue;
-    if('integerValue' in v) return Number(v.integerValue);
-    if('doubleValue' in v) return Number(v.doubleValue);
-    if('booleanValue' in v) return !!v.booleanValue;
-    if('timestampValue' in v) return v.timestampValue;
-    if('nullValue' in v) return null;
-    if(v.arrayValue) return (v.arrayValue.values || []).map(fromFs);
-    if(v.mapValue){ const o={}; Object.entries(v.mapValue.fields || {}).forEach(([k,val]) => { o[k]=fromFs(val); }); return o; }
-    return undefined;
-  }
-  function docData(doc){ const out={}; Object.entries((doc && doc.fields) || {}).forEach(([k,v]) => { out[k]=fromFs(v); }); return out; }
-  function docId(doc){ try { return String(doc.name || '').split('/').pop() || ''; } catch(e){ return ''; } }
-  function toFs(v){
-    if(v === undefined || v === null) return { nullValue: null };
-    if(v instanceof Date) return { timestampValue: v.toISOString() };
-    if(Array.isArray(v)) return { arrayValue: { values: v.map(toFs) } };
-    const t = typeof v;
-    if(t === 'string') return { stringValue: v };
-    if(t === 'boolean') return { booleanValue: !!v };
-    if(t === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
-    if(t === 'object'){
-      const fields = {};
-      Object.keys(v || {}).forEach(k => { if(v[k] !== undefined) fields[k] = toFs(v[k]); });
-      return { mapValue: { fields } };
-    }
-    return { stringValue: String(v) };
-  }
-  function fields(obj){ const out={}; Object.keys(obj || {}).forEach(k => { if(obj[k] !== undefined) out[k] = toFs(obj[k]); }); return out; }
-  function project(){ return (WC26_FIREBASE_CONFIG && WC26_FIREBASE_CONFIG.projectId) || ''; }
-  function baseUrl(){ return 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(project()) + '/databases/(default)/documents/'; }
-  function docUrl(col,id){ return baseUrl() + encodeURIComponent(col) + '/' + encodeURIComponent(id); }
-  function colUrl(col){ return baseUrl() + encodeURIComponent(col) + '?pageSize=300'; }
-  async function token(){ try { return wc26User && wc26User.getIdToken ? await wc26User.getIdToken(false) : ''; } catch(e){ return ''; } }
-  async function rest(url, opts){
-    const t = await token();
-    const headers = Object.assign({ 'Accept':'application/json' }, (opts && opts.headers) || {});
-    if(t) headers.Authorization = 'Bearer ' + t;
-    return fetch(url, Object.assign({}, opts || {}, { headers }));
-  }
-
-  function deriveKoFromResults(results){
-    try{
-      const pairs = {};
-      Object.entries(results || {}).forEach(([id,r]) => {
-        if(!String(id).startsWith('KO-') || !r) return;
-        if(r.homeTeam && r.awayTeam) pairs[id] = { home:r.homeTeam, away:r.awayTeam, espnId:r.espnId || null };
-        if(KO_SCHEDULE && KO_SCHEDULE[id]){
-          if(r.date) KO_SCHEDULE[id].date = r.date;
-          if(r.time) KO_SCHEDULE[id].t = r.time;
-        }
-        applyKoScheduleHotfix();
-      });
-      if(Object.keys(pairs).length) window.__WC26_KO_PAIRS__ = Object.assign({}, window.__WC26_KO_PAIRS__ || {}, pairs);
-    }catch(e){}
-  }
-  function saveResults(results){
-    try{
-      const map = {};
-      Object.entries(results || LIVE_RESULTS || {}).forEach(([id,r]) => { if(id && r) map[id]=r; });
-      if(Object.keys(map).length) ss(K_RESULTS, { ts: now(), results: map });
-    }catch(e){}
-  }
-  function applyResultsCache(ttl){
-    const c = sj(K_RESULTS) || sj('wc26_v146_results_session') || sj('wc26_v145_results_cache') || sj('wc26_v144_session_results');
-    if(!fresh(c, ttl) || !c.results) return false;
-    try { deriveKoFromResults(c.results); mergeLiveResults(c.results); } catch(e){}
-    return true;
-  }
-
-  try{
-    const baseMerge = mergeLiveResults;
-    mergeLiveResults = function(next){
-      const out = baseMerge.apply(this, arguments);
-      try { if(next && Object.keys(next || {}).length) saveResults(next); } catch(e){}
-      return out;
-    };
-  }catch(e){}
-
-  loadMatchResultsOnceFromFirestore = async function(){ return false; };
-  wc26LoadKoPairsFromWorker = async function(force){
-    // /ko-pairs was expensive because the Worker rebuilt it from stored results.
-    // We derive the currently needed KO pairs from /results instead.
-    applyResultsCache(RESULTS_STALE_TTL);
-    return true;
-  };
-
-  loadMatchResultsFromBackendDb = async function(force){
-    if(FROZEN_MODE || !WC26_RESULTS_READ_URL) return false;
-    // V151: backend-first. Session cache csak hiba/fallback, nem első render-forrás.
-    if(!force && resultsInFlight) return resultsInFlight;
-    if(!force && lastResultsAt && now() - lastResultsAt < 12000) return true;
-    const run = (async() => {
-      lastResultsAt = now();
-      try{
-        const data = await fetch(WC26_RESULTS_READ_URL, force ? { cache:'reload' } : { cache:'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
-        if(data && data.results){
-          deriveKoFromResults(data.results);
-          const ok = mergeLiveResults(data.results);
-          saveResults(data.results);
-          try{ if(matchish()) render(); }catch(_e){}
-          return ok !== false;
-        }
-      }catch(e){}
-      // Csak akkor nyúlunk sessionhöz, ha a backend nem adott használható választ.
-      return applyResultsCache(RESULTS_STALE_TTL);
-    })();
-    if(!force) resultsInFlight = run.finally(() => { resultsInFlight = null; });
-    return force ? run : resultsInFlight;
-  };
-
-  async function liveTick(force){
-    if(FROZEN_MODE || !WC26_RESULTS_READ_URL || !visible()) return false;
-    const url = liveUrl();
-    if(!url) return false;
-    if(!force && now() - lastLiveAt < LIVE_MIN_GAP) return true;
-    if(!force && liveInFlight) return liveInFlight;
-    const run = (async() => {
-      lastLiveAt = now();
-      try{
-        const data = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + now(), { cache:'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
-        if(data && data.results) return mergeLiveResults(data.results) !== false;
-      }catch(e){}
-      return false;
-    })();
-    if(!force) liveInFlight = run.finally(() => { liveInFlight = null; });
-    return force ? run : liveInFlight;
-  }
-
-  syncLiveResults = async function(opts){
-    if(syncLiveResults._running) return false;
-    syncLiveResults._running = true;
-    try{
-      if(activeLive()) return await liveTick(!!(opts && opts.forceLive));
-      return await loadMatchResultsFromBackendDb(false);
-    }finally{ syncLiveResults._running = false; }
-  };
-  listenWc26LiveMatches = function(){ return false; };
-  ensureLivePaintLoop = function(){ return activeLive() ? liveTick(false) : false; };
-  scheduleLiveSync = function(delay){
-    if(FROZEN_MODE) return;
-    try { clearTimeout(wc26SyncTimer); } catch(e){}
-    const d = activeLive() ? Math.max(LIVE_MIN_GAP, delay || 0) : Math.max(IDLE_SYNC_MS, delay || 0);
-    wc26SyncTimer = setTimeout(async() => {
-      try { if(visible()) await syncLiveResults({ skipRetry:true }); } catch(e){}
-      scheduleLiveSync();
-    }, d);
-  };
-
-  function saveOwnCache(id){
-    id = id || uid();
-    if(!id) return;
-    saveLastUid(id);
-    ss(ownKey(id), { ts: now(), pred: cleanTips(PRED || {}), ko: cleanTips(KO_PRED || {}) });
-  }
-  function applyOwnCache(id, ttl){
-    id = id || uid() || lastUid();
-    if(!id) return false;
-    const c = sj(ownKey(id)) || sj('wc26_v146_own_tips_' + id) || sj('wc26_v144_own_tips_' + id);
-    if(!fresh(c, ttl || OWN_TTL)) return false;
-    PRED = cleanTips(c.pred || {});
-    KO_PRED = cleanTips(c.ko || {});
-    wc26OwnTipsLoaded = true;
-    wc26OwnTipsLoadFailed = false;
-    wc26RemoteDocExists = true;
-    clearLocalTips();
-    try { if(matchish() || tab() === 'community') setTimeout(() => render(), 10); } catch(e){}
-    return true;
-  }
-  function ownItem(){
-    if(!wc26User) return null;
-    let summary = {};
-    try { summary = communitySummary(PRED || {}, KO_PRED || {}); } catch(e){}
-    return {
-      id: wc26User.uid,
-      uid: wc26User.uid,
-      displayName: wc26User.displayName || wc26User.email || 'Játékos',
-      photoURL: wc26User.photoURL || '',
-      pred: cleanTips(PRED || {}),
-      ko: cleanTips(KO_PRED || {}),
-      summary,
-      updatedAt: new Date().toISOString(),
-      version: 8,
-      storage: 'firebase-rest-v148'
-    };
-  }
-  function upsertOwn(){
-    const item = ownItem();
-    if(!item) return;
-    if(!Array.isArray(wc26CommunityItems)) wc26CommunityItems = [];
-    const i = wc26CommunityItems.findIndex(x => x && (x.id === item.id || x.uid === item.uid));
-    if(i >= 0) wc26CommunityItems[i] = Object.assign({}, wc26CommunityItems[i], item);
-    else wc26CommunityItems.unshift(item);
-  }
-  function sortCommunity(rows){
-    try{
-      return rows.slice().sort((a,b) => {
-        const ea = communitySummary((a && a.pred) || {}, (a && a.ko) || {}).eff;
-        const eb = communitySummary((b && b.pred) || {}, (b && b.ko) || {}).eff;
-        return (eb.pct - ea.pct) || (eb.pts - ea.pts) || (eb.exact - ea.exact) || String((a && a.displayName) || '').localeCompare(String((b && b.displayName) || ''));
-      });
-    }catch(e){ return rows || []; }
-  }
-  function applyCommunityCache(ttl){
-    const c = sj(K_COMMUNITY) || sj('wc26_v146_community_session') || sj('wc26_v145_community_cache') || sj('wc26_v141_community_cache');
-    if(!fresh(c, ttl || COMMUNITY_TTL) || !Array.isArray(c.items)) return false;
-    wc26CommunityItems = sortCommunity(c.items);
-    upsertOwn();
-    return true;
-  }
-  function saveCommunityCache(){ ss(K_COMMUNITY, { ts: now(), items: Array.isArray(wc26CommunityItems) ? wc26CommunityItems : [] }); }
-
-  loadOwnTipsFromFirebase = async function(force){
-    if(!wc26User) return false;
-    const id = uid();
-    clearLocalTips();
-    // V151: saját tippeknél is backend-first. Session cache csak fallback, ha REST elhasal.
-    if(!force && ownInFlight) return ownInFlight;
-    if(!force && lastOwnAt && now() - lastOwnAt < 12000) return true;
-    const run = (async() => {
-      wc26OwnTipsLoaded = false;
-      wc26OwnTipsLoadFailed = false;
-      lastOwnAt = now();
-      try{
-        const res = await rest(docUrl(WC26_COMMUNITY_COLLECTION, id), { method:'GET', cache:'no-store' });
-        if(res.status === 404){
-          PRED = {}; KO_PRED = {}; wc26RemoteDocExists = false;
-        }else if(!res.ok){
-          throw new Error('own tips REST ' + res.status);
-        }else{
-          const d = docData(await res.json());
-          PRED = cleanTips(wc26PickObj(d, ['pred','predictions','tips','groupPred','groupPredictions','PRED']));
-          KO_PRED = cleanTips(wc26PickObj(d, ['ko','knockout','knockoutPredictions','koPred','KO_PRED']));
-          wc26RemoteDocExists = true;
-        }
-        wc26OwnTipsLoaded = true;
-        wc26OwnTipsLoadFailed = false;
-        saveOwnCache(id);
-        upsertOwn();
-        try { if(matchish() || tab() === 'community') render(); } catch(e){}
-        return wc26RemoteDocExists;
-      }catch(e){
-        wc26OwnTipsLoadFailed = true;
-        wc26BackendError = e && e.message ? e.message : String(e || 'own tips load error');
-        if(applyOwnCache(id, OWN_STALE_TTL)) return true;
-        return false;
-      }
-    })();
-    if(!force) ownInFlight = run.finally(() => { ownInFlight = null; });
-    return force ? run : ownInFlight;
-  };
-
-  publishCommunityTips = async function(silent, opts){
-    opts = opts || {};
-    if(!wc26User) return false;
-    clearLocalTips();
-    if(wc26OwnTipsLoadFailed && !opts.force && !opts.forceManual){ return false; }
-    if(opts.allowEmpty === false && !wc26HasTips(PRED) && !wc26HasTips(KO_PRED)) return false;
-    if(publishInFlight && !opts.forceManual) return publishInFlight;
-    const run = (async() => {
-      const item = ownItem();
-      if(!item) return false;
-      try{
-        const res = await rest(docUrl(WC26_COMMUNITY_COLLECTION, wc26User.uid), {
-          method:'PATCH',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({ fields: fields(item) })
-        });
-        if(!res.ok) throw new Error('publish REST ' + res.status);
-        wc26RemoteDocExists = true;
-        wc26OwnTipsLoaded = true;
-        saveOwnCache(wc26User.uid);
-        upsertOwn();
-        saveCommunityCache();
-        if(!silent && tab() === 'community') await loadCommunityTips(true);
-        return true;
-      }catch(e){
-        wc26BackendError = e && e.message ? e.message : String(e || 'publish error');
-        return false;
-      }
-    })();
-    publishInFlight = run.finally(() => { publishInFlight = null; });
-    return publishInFlight;
-  };
-  queueCommunityAutosave = function(){
-    if(!wc26User) return;
-    clearTimeout(wc26AutosaveTimer);
-    saveOwnCache(uid());
-    wc26AutosaveTimer = setTimeout(() => publishCommunityTips(true, { allowEmpty:true }), 1100);
-  };
-  savePred = function(){
-    if(FROZEN_MODE) return;
-    if(wc26User){ clearLocalTips(); saveOwnCache(uid()); queueCommunityAutosave(); return; }
-    // Guest mode may use localStorage, but it is never reused after login.
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify(PRED || {})); localStorage.setItem(KO_STORE_KEY, JSON.stringify(KO_PRED || {})); }catch(e){}
-  };
-  wc26PersistTipsNow = async function(){ savePred(); return wc26User ? await publishCommunityTips(true, { allowEmpty:true, force:true }) : true; };
-
-  loadCommunityTips = async function(force){
-    if(!force && tab() !== 'community') { applyCommunityCache(COMMUNITY_TTL); return true; }
-    if(!force && applyCommunityCache(COMMUNITY_TTL)) return true;
-    if(!force && communityInFlight) return communityInFlight;
-    const run = (async() => {
-      try{
-        const res = await rest(colUrl(WC26_COMMUNITY_COLLECTION), { method:'GET', cache:'no-store' });
-        if(!res.ok) throw new Error('community REST ' + res.status);
-        const data = await res.json();
-        wc26CommunityItems = sortCommunity((data.documents || []).map(d => Object.assign({ id: docId(d) }, docData(d))));
-        upsertOwn();
-        saveCommunityCache();
-        return true;
-      }catch(e){
-        wc26BackendError = e && e.message ? e.message : String(e || 'community load error');
-        return applyCommunityCache(30 * 60 * 1000);
-      }
-    })();
-    if(!force) communityInFlight = run.finally(() => { communityInFlight = null; });
-    return force ? run : communityInFlight;
-  };
-
-  wc26RenameProfile = async function(){
-    if(!wc26User) return;
-    const current = wc26User.displayName || wc26User.email || 'Játékos';
-    let name = prompt('Új közösségi név', current);
-    if(!name) return;
-    name = name.trim().slice(0,42);
-    if(!name) return;
-    try{ if(wc26User.updateProfile) await wc26User.updateProfile({ displayName:name }); }catch(e){}
-    await publishCommunityTips(false, { allowEmpty:true, forceManual:true });
-    try{ renderCommunity(); }catch(e){}
-  };
-
-  async function initAuthOnly(){
-    if(authInitPromise) return authInitPromise;
-    authInitPromise = (async() => {
-      if(FROZEN_MODE || !configured()) return false;
-      try{
-        if(!window.firebase || !firebase.initializeApp) await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
-        if(!firebase.auth) await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js');
-        const app = (firebase.apps || []).find(a => a.name === 'wc26-backend') || firebase.initializeApp(WC26_FIREBASE_CONFIG, 'wc26-backend');
-        wc26Auth = app.auth();
-        wc26Db = null;
-        wc26BackendReady = true;
-        if(!authHooked){
-          authHooked = true;
-          wc26Auth.onAuthStateChanged(u => {
-            wc26User = u || null;
-            wc26OwnTipsLoadFailed = false;
-            wc26RemoteDocExists = false;
-            if(u){
-              clearLocalTips();
-              saveLastUid(u.uid);
-              PRED = {}; KO_PRED = {}; wc26OwnTipsLoaded = false;
-              try{ if(matchish()) render(); }catch(e){}
-              setTimeout(() => loadOwnTipsFromFirebase(false).catch(() => {}), 0);
-            }else{
-              PRED = {}; KO_PRED = {}; wc26OwnTipsLoaded = true; wc26RemoteDocExists = false; clearLocalTips();
-              try{ if(matchish() || tab() === 'community') render(); }catch(e){}
-            }
-            if(tab() === 'community') setTimeout(() => loadCommunityTips(false).then(() => { try{ renderCommunity(); }catch(e){} }).catch(() => {}), 220);
-          });
-        }
-        return true;
-      }catch(e){ wc26BackendError = e && e.message ? e.message : String(e || 'firebase auth init error'); return false; }
-    })();
-    return authInitPromise;
-  }
-
-  loadWc26Firebase = async function(){ return initAuthOnly(); };
-  initWc26Firebase = function(){ return initAuthOnly(); };
-  listenCommunityTips = function(){ try{ if(wc26CommunityUnsub){ wc26CommunityUnsub(); wc26CommunityUnsub=null; } }catch(e){} return false; };
-
-  try{
-    // V151: nincs induláskori session-cache repaint. Előbb a Worker/Firebase adat jön;
-    // session csak hálózati hiba esetén fallbackel a loader függvényekben.
-  }catch(e){}
-  // Keep the v143 UI fix after stripping the stacked late wrappers.
-  try{
-    const st = document.createElement('style');
-    st.textContent = `
-      .tip-overlay .wc26-modal-pill,
-      .tip-overlay .wc26-modal-pill[data-state="live"],
-      .tip-overlay .wc26-modal-pill[data-state="ht"],
-      .tip-overlay .wc26-modal-pill[data-state="pen"],
-      .tip-overlay .wc26-modal-pill[data-state="aet"],
-      .tip-overlay .wc26-status-pill.ht,
-      .tip-overlay .wc26-status-pill.pen,
-      .tip-overlay .wc26-status-pill.aet{
-        background:rgba(255,104,128,.16)!important;
-        border-color:rgba(255,104,128,.44)!important;
-        color:#ff7b92!important;
-      }
-      html.modal-open{overflow:hidden!important;scrollbar-gutter:stable;}
-      body.modal-open{position:static!important;top:auto!important;left:auto!important;right:auto!important;width:auto!important;overflow:hidden!important;}
-      .overlay.tip-overlay{overscroll-behavior:contain;touch-action:none;}
-      .overlay.tip-overlay .sheet{touch-action:auto;}
-    `;
-    document.head.appendChild(st);
-    const originalModalSync = typeof syncModalOpenClass === 'function' ? syncModalOpenClass : null;
-    syncModalOpenClass = function(){
-      const open = !!document.querySelector('.tip-overlay,.community-preview');
-      const body = document.body, html = document.documentElement;
-      const wasOpen = body.classList.contains('modal-open');
-      if(open){
-        if(!wasOpen) body.dataset.scrollY = String(window.scrollY || html.scrollTop || 0);
-        body.style.top = body.style.left = body.style.right = body.style.width = '';
-        html.classList.add('modal-open');
-        body.classList.add('modal-open');
-        return;
-      }
-      if(wasOpen){
-        const y = +(body.dataset.scrollY || 0);
-        body.classList.remove('modal-open');
-        html.classList.remove('modal-open');
-        body.style.top = body.style.left = body.style.right = body.style.width = '';
-        delete body.dataset.scrollY;
-        requestAnimationFrame(() => window.scrollTo(0, y));
-        return;
-      }
-      if(originalModalSync){ try{ originalModalSync(); }catch(e){} }
-    };
-  }catch(e){}
-
-})();
-
-
 /* ===== WC26 v151: backend-first hydration, session only fallback =====
    V151 keeps the v148/v149 cleanup, but removes session-first painting.
    Worker/Firebase is the first source; sessionStorage is only a fallback if backend fails.
@@ -13821,306 +12768,485 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 
 
-/* ===== WC26 v162 runtime freeze brake: single live loop + cheap merge/render =====
-   Purpose:
-   - old v120-v161 layers left multiple timers/wrappers alive
-   - stop duplicate live loops / leader loops
-   - make live merging O(changed ids), no sessionStorage full-result writes per tick
-   - throttle modal refresh and full render so clicks/F12 don't get eaten by JS
+
+/* ===== WC26 v167: surgical runtime cleanup, UI untouched =====
+   V166 UI is preserved. This block replaces only runtime plumbing:
+   - one Worker /results loader
+   - one Worker /live-results loop
+   - one Firebase Auth + REST own-tip path
+   - no Firestore SDK/WebChannel/listeners
+   - no community direct Firestore scan; V155 Worker /community remains in charge
+   - old leader/fallback entry points become controlled no-ops into this loop
 */
 (function(){
-  if(window.__WC26_V162_RUNTIME_FREEZE_BRAKE__) return;
-  window.__WC26_V162_RUNTIME_FREEZE_BRAKE__ = true;
-
-  const LIVE_GAP_MS = 18000;
-  const IDLE_GAP_MS = 120000;
-  const RESULTS_GAP_MS = 90000;
-  const RENDER_GAP_MS = 260;
-  const MODAL_REFRESH_GAP_MS = 650;
-
-  let liveTimer = null;
-  let liveInFlight = null;
-  let lastLiveAt = 0;
-  let resultsInFlight = null;
-  let lastResultsAt = 0;
-  let renderQueued = false;
-  let lastRenderAt = 0;
-  let lastModalRefreshAt = 0;
-  let mergeDepth = 0;
-
-  function now(){ return Date.now ? Date.now() : +new Date(); }
-  function visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
-  function modalOpen(){ return !!document.querySelector('.tip-overlay,.community-preview'); }
-  function currentTab(){ try{return (S&&S.tab)||''}catch(e){return ''} }
-  function isLiveActive(){
-    try{ if(typeof liveSyncInfo==='function' && liveSyncInfo().active) return true; }catch(e){}
-    try{ return Object.values(LIVE_RESULTS||{}).some(r=>r&&r.started&&!r.finished); }catch(e){ return false; }
-  }
-  function workerBase(){ try{return String(WC26_RESULTS_READ_URL||'').replace(/\/results(?:\?.*)?$/,'')}catch(e){return ''} }
-  function liveUrl(){ const b=workerBase(); return b ? b + '/live-results' : ''; }
-  function resultsUrl(){ return WC26_RESULTS_READ_URL || ''; }
-  function shallowSig(r){
-    if(!r) return '';
-    return [r.h,r.a,r.pH,r.pA,r.started?1:0,r.finished?1:0,r.minute||'',r.status||'',r.date||'',r.time||'',r.oddsUpdatedAt||''].join('|');
-  }
-  function resolveMatch(id){
-    try{ return FX_BY_ID && FX_BY_ID[id] ? FX_BY_ID[id] : (String(id).startsWith('KO-') && typeof findKoMatch==='function' ? findKoMatch(id) : null); }catch(e){ return null; }
-  }
-  function normalizeIncoming(id,o){
-    try{
-      const x = resolveMatch(id);
-      let r = (typeof normalizeLiveResult==='function') ? normalizeLiveResult(id, (typeof attachOdds==='function' ? attachOdds(id,o,x) : o)) : o;
-      if(!r) return null;
-      if(typeof attachOdds==='function') r = attachOdds(id,r,x);
-      return r;
-    }catch(e){ return null; }
-  }
-  function queueRender(reason){
-    if(renderQueued) return;
-    const wait = Math.max(0, RENDER_GAP_MS - (now() - lastRenderAt));
-    renderQueued = true;
-    setTimeout(()=>{
-      renderQueued = false;
-      lastRenderAt = now();
-      try{ __wc26V162BaseRender(); }catch(e){ console.warn('v162 render failed', reason, e); }
-    }, wait);
-  }
-  function refreshModalThrottled(){
-    if(now() - lastModalRefreshAt < MODAL_REFRESH_GAP_MS) return;
-    lastModalRefreshAt = now();
-    try{ if(typeof refreshOpenTipModal==='function') refreshOpenTipModal(); }catch(e){}
-    try{ if(typeof refreshModal==='function') refreshModal(); }catch(e){}
-    try{ if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews(); }catch(e){}
-  }
-
-  // Clear every known legacy timer we can reach. Anonymous syncSpacer interval is harmless.
-  ['wc26SyncTimer','wc26LivePaintLoopTimer','wc26LiveFallbackTimer','wc26FallbackLeaseTimerV134','communityTimer','matchAutoScrollTimer','wc26AutosaveTimer'].forEach(k=>{
-    try{ if(window[k]){ clearTimeout(window[k]); clearInterval(window[k]); window[k]=null; } }catch(e){}
-  });
-
-  // Save base render once, then throttle all later full renders.
-  const __wc26V162BaseRender = (typeof render==='function') ? render : function(){};
-  render = function(){
-    if(mergeDepth || renderQueued){ queueRender('wrapped'); return; }
-    if(now() - lastRenderAt < RENDER_GAP_MS){ queueRender('too-soon'); return; }
-    lastRenderAt = now();
-    return __wc26V162BaseRender.apply(this, arguments);
-  };
-
-  // Cheap live merge. No JSON.stringify on whole result objects, no sessionStorage full map writes.
-  mergeLiveResults = function(next){
-    if(!next || typeof next !== 'object') return false;
-    mergeDepth++;
-    let changed=false, prune=false, fixed={};
-    try{
-      Object.entries(next).forEach(([id,o])=>{
-        const r = normalizeIncoming(id,o);
-        if(!r) return;
-        const old = LIVE_RESULTS[id];
-        try{ if(typeof wc26IncomingIsStale==='function' && wc26IncomingIsStale(id,r,old)) return; }catch(e){}
-        if(old && old.finished && !r.finished) return;
-        if(shallowSig(old) === shallowSig(r)) return;
-        LIVE_RESULTS[id]=r;
-        fixed[id]=r;
-        changed=true;
-        if(r.finished && (!old || !old.finished || old.h!==r.h || old.a!==r.a || old.pH!==r.pH || old.pA!==r.pA)) prune=true;
-      });
-    } finally { mergeDepth--; }
-    if(!changed) return false;
-    try{ if(prune && typeof pruneStaleKoPred==='function') pruneStaleKoPred(true); }catch(e){}
-
-    const tab=currentTab();
-    const mo=modalOpen();
-    if((tab==='matches'||tab==='overview') && !mo){
-      let patched=false;
-      try{ patched = typeof patchLiveRows==='function' ? patchLiveRows(fixed) : false; }catch(e){ patched=false; }
-      if(!patched || prune) queueRender('live-merge');
-    }else if(tab==='knockout' && !mo){
-      try{ if(typeof patchKoCards==='function') patchKoCards(); }catch(e){}
-      if(prune) queueRender('ko-prune');
-    }else if(['table','stats'].includes(tab) && !mo){
-      queueRender('stats-table');
-    }
-    if(mo) refreshModalThrottled();
-    return true;
-  };
-
-  async function fetchJson(url, opts){
-    try{ const r = await fetch(url, opts || {cache:'no-store'}); return r.ok ? await r.json() : null; }catch(e){ return null; }
-  }
-
-  loadMatchResultsFromBackendDb = async function(force){
-    const url = resultsUrl();
-    if(FROZEN_MODE || !url) return false;
-    if(!force && resultsInFlight) return resultsInFlight;
-    if(!force && lastResultsAt && now() - lastResultsAt < RESULTS_GAP_MS) return true;
-    const run=(async()=>{
-      lastResultsAt=now();
-      const data = await fetchJson(url + (url.includes('?')?'&':'?') + 'v162=' + Math.floor(now()/60000), {cache:'no-store'});
-      if(data && data.results){
-        try{
-          Object.entries(data.results).forEach(([id,r])=>{
-            if(String(id).startsWith('KO-') && r && r.date && r.time && typeof KO_SCHEDULE!=='undefined' && KO_SCHEDULE[id]){
-              KO_SCHEDULE[id].date=r.date; KO_SCHEDULE[id].t=r.time;
-            }
-          });
-          if(typeof applyKoScheduleHotfix==='function') applyKoScheduleHotfix();
-        }catch(e){}
-        const ok = mergeLiveResults(data.results);
-        if(['matches','overview','table','stats','knockout'].includes(currentTab()) && !modalOpen()) queueRender('backend-results');
-        return ok !== false;
-      }
-      return false;
-    })();
-    if(!force) resultsInFlight = run.finally(()=>{resultsInFlight=null;});
-    return force ? run : resultsInFlight;
-  };
-
-  async function oneLiveTick(force){
-    if(FROZEN_MODE || !visible()) return false;
-    const url = liveUrl();
-    if(!url) return false;
-    if(!force && liveInFlight) return liveInFlight;
-    if(!force && now() - lastLiveAt < LIVE_GAP_MS) return true;
-    const run=(async()=>{
-      lastLiveAt=now();
-      const data = await fetchJson(url + (url.includes('?')?'&':'?') + 't=' + now(), {cache:'no-store'});
-      if(data && data.results) return mergeLiveResults(data.results) !== false;
-      return false;
-    })();
-    if(!force) liveInFlight = run.finally(()=>{liveInFlight=null;});
-    return force ? run : liveInFlight;
-  }
-
-  syncLiveResults = async function(opts){
-    if(syncLiveResults._running) return false;
-    syncLiveResults._running=true;
-    try{
-      if(isLiveActive() || (opts && opts.forceLive)) return await oneLiveTick(!!(opts&&opts.forceLive));
-      return await loadMatchResultsFromBackendDb(false);
-    }finally{ syncLiveResults._running=false; }
-  };
-
-  scheduleLiveSync = function(delay){
-    try{ if(liveTimer) clearTimeout(liveTimer); }catch(e){}
-    const d = isLiveActive() ? Math.max(LIVE_GAP_MS, delay||0) : Math.max(IDLE_GAP_MS, delay||0);
-    liveTimer = setTimeout(async()=>{
-      try{ if(visible()) await syncLiveResults({skipRetry:true}); }catch(e){}
-      scheduleLiveSync();
-    }, d);
-    return liveTimer;
-  };
-
-  // Kill old live subsystems. Old intervals may still call syncLiveResults, now gated above.
-  listenWc26LiveMatches = function(){ return false; };
-  startLiveWorkerFallback = function(){ scheduleLiveSync(LIVE_GAP_MS); return true; };
-  ensureLivePaintLoop = function(){ scheduleLiveSync(isLiveActive()?LIVE_GAP_MS:IDLE_GAP_MS); return true; };
-  wc26StartLiveFallbackV134 = function(){ scheduleLiveSync(LIVE_GAP_MS); return true; };
-  wc26EnsureLiveLeaderV134 = function(){ scheduleLiveSync(LIVE_GAP_MS); return true; };
-  wc26ReleaseLeaderV134 = function(){ return true; };
-
-  document.addEventListener('visibilitychange',()=>{
-    if(visible()){
-      lastLiveAt=0;
-      syncLiveResults({skipRetry:true}).catch(()=>{});
-      scheduleLiveSync(1000);
-    }
-  }, {passive:true});
-
-  scheduleLiveSync(1200);
-})();
-
-
-
-/* ===== WC26 v163 live kickoff feedback restore =====
-   v162 reduced runtime load, but it only hit /live-results when its local active-window check was true.
-   If KO schedule/provider timing shifts, the card can show locked/live by kickoff while no provider poll runs.
-   This block keeps a single cheap worker poller alive on match-related tabs and never touches Firestore directly.
-*/
-(function(){
-  if(window.__WC26_V163_LIVE_FEEDBACK_RESTORE__) return;
-  window.__WC26_V163_LIVE_FEEDBACK_RESTORE__ = true;
+  if(window.__WC26_V167_RUNTIME_SURGERY__) return;
+  window.__WC26_V167_RUNTIME_SURGERY__ = true;
 
   const LIVE_GAP_MS = 12000;
   const MATCH_TAB_GAP_MS = 18000;
   const IDLE_GAP_MS = 90000;
-  let timer = null;
-  let inflight = null;
-  let lastTick = 0;
+  const RESULTS_GAP_MS = 90000;
+  const OWN_GAP_MS = 9000;
+  const AUTOSAVE_MS = 900;
+  let liveTimer = null;
+  let liveInFlight = null;
+  let resultsInFlight = null;
+  let ownInFlight = null;
+  let publishInFlight = null;
+  let lastLiveAt = 0;
+  let lastResultsAt = 0;
+  let lastOwnAt = 0;
+  let authInitPromise = null;
+  let authHooked = false;
+  let renderQueued = false;
+  let lastRenderAt = 0;
+  let modalRefreshAt = 0;
 
   function now(){ return Date.now ? Date.now() : +new Date(); }
   function visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
-  function tab(){ try{return (S&&S.tab)||''}catch(e){return ''} }
-  function matchish(){ const t=tab(); return t==='matches'||t==='overview'||t==='knockout'; }
-  function activeLocal(){
-    try{ if(typeof liveSyncInfo==='function' && liveSyncInfo().active) return true; }catch(e){}
-    try{ return Object.values(LIVE_RESULTS||{}).some(r=>r&&r.started&&!r.finished); }catch(e){ return false; }
-  }
-  function workerBase(){ try{return String(WC26_RESULTS_READ_URL||'').replace(/\/results(?:\?.*)?$/,'')}catch(e){return ''} }
-  function liveEndpoint(){ const b=workerBase(); return b ? b + '/live-results' : ''; }
-  async function fetchJson(url){ try{ const r=await fetch(url,{cache:'no-store'}); return r.ok?await r.json():null; }catch(e){return null;} }
-  function cheapRenderIfNeeded(changed){
-    if(!changed) return;
-    try{ if(typeof patchLiveRows==='function' && tab()==='matches'){ if(patchLiveRows(LIVE_RESULTS)) return; } }catch(e){}
-    try{ if(typeof render==='function') render(); }catch(e){}
+  function currentTab(){ try { return (S && S.tab) || ''; } catch(e){ return ''; } }
+  function isMatchTab(){ const t=currentTab(); return t==='matches' || t==='overview' || t==='knockout'; }
+  function isStatsTab(){ const t=currentTab(); return t==='table' || t==='stats'; }
+  function modalOpen(){ return !!document.querySelector('.tip-overlay,.community-preview'); }
+  function configured(){ try { return !!(wc26FirebaseConfigured && wc26FirebaseConfigured()); } catch(e){ return false; } }
+  function userId(){ try { return wc26User && wc26User.uid ? String(wc26User.uid) : ''; } catch(e){ return ''; } }
+  function baseWorker(){ try { return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); } catch(e){ return ''; } }
+  function resultsUrl(){ return WC26_RESULTS_READ_URL || ''; }
+  function liveUrl(){ const b=baseWorker(); return b ? b + '/live-results' : ''; }
+  function cleanTips(o){ try { return wc26CleanTips(o || {}); } catch(e){ return o || {}; } }
+  function escSafe(x){ try { return esc(x); } catch(e){ return String(x == null ? '' : x); } }
+
+  function clearLoggedInLocalStorage(){
+    try{ wc26ClearLocalPreds(); }catch(e){
+      try{ localStorage.removeItem(STORE_KEY); localStorage.removeItem(KO_STORE_KEY); }catch(_e){}
+    }
   }
 
-  async function pollLive(force=false){
-    if(FROZEN_MODE || !visible()) return false;
-    const url=liveEndpoint();
-    if(!url) return false;
-    if(inflight) return inflight;
-    const gap = activeLocal()?LIVE_GAP_MS:(matchish()?MATCH_TAB_GAP_MS:IDLE_GAP_MS);
-    if(!force && now()-lastTick<gap) return true;
-    inflight=(async()=>{
-      lastTick=now();
-      const data=await fetchJson(url + (url.includes('?')?'&':'?') + 't=' + now() + '&src=v163');
+  function fromFs(v){
+    if(!v || typeof v !== 'object') return undefined;
+    if('stringValue' in v) return v.stringValue;
+    if('integerValue' in v) return Number(v.integerValue);
+    if('doubleValue' in v) return Number(v.doubleValue);
+    if('booleanValue' in v) return !!v.booleanValue;
+    if('timestampValue' in v) return v.timestampValue;
+    if('nullValue' in v) return null;
+    if(v.arrayValue) return (v.arrayValue.values || []).map(fromFs);
+    if(v.mapValue){ const out={}; Object.entries(v.mapValue.fields || {}).forEach(([k,val])=>{ out[k]=fromFs(val); }); return out; }
+    return undefined;
+  }
+  function docData(doc){ const out={}; Object.entries((doc && doc.fields) || {}).forEach(([k,v])=>{ out[k]=fromFs(v); }); return out; }
+  function toFs(v){
+    if(v === undefined || v === null) return { nullValue:null };
+    if(v instanceof Date) return { timestampValue:v.toISOString() };
+    if(Array.isArray(v)) return { arrayValue:{ values:v.map(toFs) } };
+    const t=typeof v;
+    if(t==='string') return { stringValue:v };
+    if(t==='boolean') return { booleanValue:!!v };
+    if(t==='number') return Number.isInteger(v) ? { integerValue:String(v) } : { doubleValue:v };
+    if(t==='object'){
+      const fields={};
+      Object.keys(v || {}).forEach(k=>{ if(v[k] !== undefined) fields[k]=toFs(v[k]); });
+      return { mapValue:{ fields } };
+    }
+    return { stringValue:String(v) };
+  }
+  function fsFields(obj){ const out={}; Object.keys(obj || {}).forEach(k=>{ if(obj[k] !== undefined) out[k]=toFs(obj[k]); }); return out; }
+  function projectId(){ return (WC26_FIREBASE_CONFIG && WC26_FIREBASE_CONFIG.projectId) || ''; }
+  function fsDocUrl(col,id){ return 'https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(projectId())+'/databases/(default)/documents/'+encodeURIComponent(col)+'/'+encodeURIComponent(id); }
+  async function idToken(){ try { return wc26User && wc26User.getIdToken ? await wc26User.getIdToken(false) : ''; } catch(e){ return ''; } }
+  async function fsFetch(url, opts){
+    const tok=await idToken();
+    const headers=Object.assign({'Accept':'application/json'}, (opts&&opts.headers)||{});
+    if(tok) headers.Authorization='Bearer '+tok;
+    return fetch(url, Object.assign({}, opts||{}, { headers }));
+  }
+
+  function activeLiveLocal(){
+    try { if(typeof liveSyncInfo==='function' && liveSyncInfo().active) return true; } catch(e){}
+    try { return Object.values(LIVE_RESULTS || {}).some(r=>r && r.started && !r.finished); } catch(e){ return false; }
+  }
+  function shallowSig(r){
+    if(!r) return '';
+    return [r.h,r.a,r.pH,r.pA,r.started?1:0,r.finished?1:0,r.minute||'',r.status||'',r.date||'',r.time||'',r.oddsUpdatedAt||'',r.updatedAt||''].join('|');
+  }
+  function resolveMatch(id){
+    try{ return FX_BY_ID && FX_BY_ID[id] ? FX_BY_ID[id] : (String(id).startsWith('KO-') && typeof findKoMatch==='function' ? findKoMatch(id) : null); }
+    catch(e){ return null; }
+  }
+  function normalizeIncoming(id,obj){
+    try{
+      const x=resolveMatch(id);
+      let r = (typeof attachOdds==='function') ? attachOdds(id,obj,x) : obj;
+      r = (typeof normalizeLiveResult==='function') ? normalizeLiveResult(id,r) : r;
+      if(r && typeof attachOdds==='function') r=attachOdds(id,r,x);
+      return r || null;
+    }catch(e){ return null; }
+  }
+  function applyKoFromResult(id,r){
+    try{
+      if(!String(id).startsWith('KO-') || !r) return;
+      if(KO_SCHEDULE && KO_SCHEDULE[id] && r.date && r.time){ KO_SCHEDULE[id].date=r.date; KO_SCHEDULE[id].t=r.time; }
+      if(r.homeTeam && r.awayTeam){
+        window.__WC26_KO_PAIRS__ = Object.assign({}, window.__WC26_KO_PAIRS__ || {}, { [id]:{ home:r.homeTeam, away:r.awayTeam, espnId:r.espnId||null } });
+      }
+    }catch(e){}
+  }
+  function applyAllKoFromResults(results){
+    try{ Object.entries(results || {}).forEach(([id,r])=>applyKoFromResult(id,r)); if(typeof applyKoScheduleHotfix==='function') applyKoScheduleHotfix(); }catch(e){}
+  }
+  function refreshModalCheap(){
+    if(!modalOpen()) return;
+    if(now()-modalRefreshAt<550) return;
+    modalRefreshAt=now();
+    try{ if(typeof refreshOpenTipModal==='function') refreshOpenTipModal(); }catch(e){}
+    try{ if(typeof refreshModal==='function') refreshModal(); }catch(e){}
+    try{ if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews(); }catch(e){}
+  }
+  function requestRender(reason){
+    if(renderQueued) return;
+    const wait=Math.max(0,220-(now()-lastRenderAt));
+    renderQueued=true;
+    setTimeout(()=>{
+      renderQueued=false;
+      lastRenderAt=now();
+      try{ if(typeof render==='function') render(); }catch(e){ console.warn('v167 render failed', reason, e); }
+    }, wait);
+  }
+
+  // Final, cheap live merge. UI renderers stay untouched; only merge/polling is centralized.
+  mergeLiveResults = function(next){
+    if(!next || typeof next !== 'object') return false;
+    let changed=false, prune=false, fixed={};
+    Object.entries(next).forEach(([id,obj])=>{
+      const r=normalizeIncoming(id,obj);
+      if(!r) return;
+      const old=LIVE_RESULTS[id];
+      try{ if(typeof wc26IncomingIsStale==='function' && wc26IncomingIsStale(id,r,old)) return; }catch(e){}
+      if(old && old.finished && !r.finished) return;
+      if(shallowSig(old)===shallowSig(r)) return;
+      LIVE_RESULTS[id]=r;
+      fixed[id]=r;
+      changed=true;
+      applyKoFromResult(id,r);
+      if(r.finished && (!old || !old.finished || old.h!==r.h || old.a!==r.a || old.pH!==r.pH || old.pA!==r.pA)) prune=true;
+    });
+    if(!changed) return false;
+    try{ if(prune && typeof pruneStaleKoPred==='function') pruneStaleKoPred(true); }catch(e){}
+    try{ if(typeof applyKoScheduleHotfix==='function') applyKoScheduleHotfix(); }catch(e){}
+
+    const t=currentTab();
+    if(modalOpen()) refreshModalCheap();
+    else if(t==='matches' || t==='overview'){
+      let patched=false;
+      try{ patched = typeof patchLiveRows==='function' ? !!patchLiveRows(fixed) : false; }catch(e){ patched=false; }
+      if(!patched || prune) requestRender('live-'+t);
+    }else if(t==='knockout'){
+      try{ if(typeof patchKoCards==='function') patchKoCards(); }catch(e){}
+      if(prune) requestRender('ko-prune');
+    }else if(t==='table' || t==='stats') requestRender('stats-table');
+    else if(t==='community'){
+      try{ if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews(); }catch(e){}
+    }
+    return true;
+  };
+
+  async function fetchJson(url, opts){ try{ const r=await fetch(url, opts || { cache:'no-store' }); return r.ok ? await r.json() : null; }catch(e){ return null; } }
+
+  wc26LoadKoPairsFromWorker = async function(force){
+    // Avoid separate /ko-pairs rebuilds on startup. Worker /results carries KO teams/schedule in result docs.
+    try{ applyAllKoFromResults(LIVE_RESULTS || {}); }catch(e){}
+    return true;
+  };
+  loadMatchResultsOnceFromFirestore = async function(){ return false; };
+  loadMatchResultsOnceFromSdk = async function(){ return false; };
+  listenMatchResults = function(){ return false; };
+
+  loadMatchResultsFromBackendDb = async function(force){
+    const url=resultsUrl();
+    if(FROZEN_MODE || !url) return false;
+    if(!force && resultsInFlight) return resultsInFlight;
+    if(!force && lastResultsAt && now()-lastResultsAt<RESULTS_GAP_MS) return true;
+    const run=(async()=>{
+      lastResultsAt=now();
+      const sep=url.includes('?')?'&':'?';
+      const data=await fetchJson(url+sep+'rt=v167_'+Math.floor(now()/60000), { cache:'no-store' });
       if(data && data.results){
-        let changed=false;
-        try{ changed = (typeof mergeLiveResults==='function') ? !!mergeLiveResults(data.results) : false; }catch(e){ changed=false; }
-        cheapRenderIfNeeded(changed);
-        return changed || true;
+        applyAllKoFromResults(data.results);
+        const ok=mergeLiveResults(data.results);
+        if(!modalOpen() && ['matches','overview','table','stats','knockout'].includes(currentTab())) requestRender('backend-results');
+        return ok !== false;
       }
       return false;
-    })().finally(()=>{inflight=null;});
-    return inflight;
-  }
+    })();
+    if(!force) resultsInFlight=run.finally(()=>{ resultsInFlight=null; });
+    return force ? run : resultsInFlight;
+  };
 
-  function schedule(delay){
-    try{ if(timer) clearTimeout(timer); }catch(e){}
-    const d = delay ?? (activeLocal()?LIVE_GAP_MS:(matchish()?MATCH_TAB_GAP_MS:IDLE_GAP_MS));
-    timer=setTimeout(async()=>{
-      try{ await pollLive(false); }catch(e){}
-      schedule();
+  async function liveTick(force){
+    const url=liveUrl();
+    if(FROZEN_MODE || !url || !visible()) return false;
+    if(!force && liveInFlight) return liveInFlight;
+    const gap=activeLiveLocal()?LIVE_GAP_MS:(isMatchTab()?MATCH_TAB_GAP_MS:IDLE_GAP_MS);
+    if(!force && lastLiveAt && now()-lastLiveAt<gap) return true;
+    const run=(async()=>{
+      lastLiveAt=now();
+      const sep=url.includes('?')?'&':'?';
+      const data=await fetchJson(url+sep+'t='+now()+'&src=v167', { cache:'no-store' });
+      if(data && data.results) return mergeLiveResults(data.results) !== false;
+      return false;
+    })();
+    if(!force) liveInFlight=run.finally(()=>{ liveInFlight=null; });
+    return force ? run : liveInFlight;
+  }
+  function nextLiveDelay(){ return activeLiveLocal()?LIVE_GAP_MS:(isMatchTab()?MATCH_TAB_GAP_MS:IDLE_GAP_MS); }
+  scheduleLiveSync = function(delay){
+    if(FROZEN_MODE) return null;
+    try{ if(liveTimer) clearTimeout(liveTimer); }catch(e){}
+    try{ if(window.wc26SyncTimer) clearTimeout(window.wc26SyncTimer); }catch(e){}
+    const d = Number.isFinite(+delay) ? Math.max(600,+delay) : nextLiveDelay();
+    liveTimer=setTimeout(async()=>{
+      try{ await syncLiveResults({ skipRetry:true }); }catch(e){}
+      scheduleLiveSync();
     }, d);
-    return timer;
-  }
-
-  const oldSync = typeof syncLiveResults==='function' ? syncLiveResults : null;
+    window.wc26SyncTimer=liveTimer;
+    return liveTimer;
+  };
   syncLiveResults = async function(opts={}){
     if(syncLiveResults._running) return false;
     syncLiveResults._running=true;
     try{
-      // First ask the worker live provider. If it has no event yet, fall back to final/public results once.
-      const liveOk = await pollLive(!!(opts.force||opts.forceLive||opts.skipRetry));
-      if(!liveOk && oldSync && opts.force) return await oldSync(opts);
+      const liveOk=await liveTick(!!(opts.force || opts.forceLive));
+      if(!liveOk && (opts.force || !opts.skipRetry)) return await loadMatchResultsFromBackendDb(!!opts.force);
       return liveOk;
     }finally{ syncLiveResults._running=false; }
   };
+  listenWc26LiveMatches = function(){ scheduleLiveSync(800); return true; };
+  startWc26LiveWorkerFallback = function(){ scheduleLiveSync(800); return true; };
+  startLiveWorkerFallback = function(){ scheduleLiveSync(800); return true; };
+  ensureLivePaintLoop = function(){ scheduleLiveSync(800); return true; };
+  wc26EnsureLiveLeaderV134 = function(){ scheduleLiveSync(800); return true; };
+  wc26StartLiveFallbackV134 = function(){ scheduleLiveSync(800); return true; };
+  wc26ReleaseLeaderV134 = function(){ return true; };
 
-  listenWc26LiveMatches = function(){ schedule(500); return true; };
-  startWc26LiveWorkerFallback = function(){ schedule(500); return true; };
-  startLiveWorkerFallback = function(){ schedule(500); return true; };
-  ensureLivePaintLoop = function(){ schedule(500); return true; };
+  function ownItem(){
+    if(!wc26User) return null;
+    let summary={};
+    try{ summary=communitySummary(PRED || {}, KO_PRED || {}); }catch(e){}
+    return {
+      uid:wc26User.uid,
+      displayName:wc26User.displayName || wc26User.email || 'Játékos',
+      photoURL:wc26User.photoURL || '',
+      pred:cleanTips(PRED || {}),
+      ko:cleanTips(KO_PRED || {}),
+      summary,
+      updatedAt:new Date().toISOString(),
+      version:167,
+      storage:'firebase-rest-v167'
+    };
+  }
+  function upsertOwnCommunity(){
+    try{
+      const item=ownItem(); if(!item) return;
+      if(!Array.isArray(wc26CommunityItems)) wc26CommunityItems=[];
+      const id=item.uid;
+      const row=Object.assign({id}, item);
+      const i=wc26CommunityItems.findIndex(x=>x && (x.id===id || x.uid===id));
+      if(i>=0) wc26CommunityItems[i]=Object.assign({}, wc26CommunityItems[i], row);
+      else wc26CommunityItems.unshift(row);
+    }catch(e){}
+  }
+  loadOwnTipsFromFirebase = async function(force){
+    const id=userId();
+    if(!id) return false;
+    clearLoggedInLocalStorage();
+    if(!force && ownInFlight) return ownInFlight;
+    if(!force && lastOwnAt && now()-lastOwnAt<OWN_GAP_MS) return true;
+    const run=(async()=>{
+      lastOwnAt=now();
+      wc26OwnTipsLoaded=false;
+      wc26OwnTipsLoadFailed=false;
+      try{
+        const res=await fsFetch(fsDocUrl(WC26_COMMUNITY_COLLECTION,id), { method:'GET', cache:'no-store' });
+        if(res.status===404){
+          PRED={}; KO_PRED={}; wc26RemoteDocExists=false;
+        }else if(!res.ok){
+          throw new Error('own tips REST '+res.status);
+        }else{
+          const d=docData(await res.json());
+          PRED=cleanTips(wc26PickObj(d,['pred','predictions','tips','groupPred','groupPredictions','PRED']));
+          KO_PRED=cleanTips(wc26PickObj(d,['ko','knockout','knockoutPredictions','koPred','KO_PRED']));
+          wc26RemoteDocExists=true;
+        }
+        wc26OwnTipsLoaded=true;
+        wc26OwnTipsLoadFailed=false;
+        clearLoggedInLocalStorage();
+        upsertOwnCommunity();
+        try{ if(['matches','overview','knockout','table','stats','community'].includes(currentTab())) requestRender('own-tips'); }catch(e){}
+        return wc26RemoteDocExists;
+      }catch(e){
+        wc26OwnTipsLoaded=false;
+        wc26OwnTipsLoadFailed=true;
+        wc26BackendError=e && e.message ? e.message : String(e || 'own tips error');
+        return false;
+      }
+    })();
+    if(!force) ownInFlight=run.finally(()=>{ ownInFlight=null; });
+    return force ? run : ownInFlight;
+  };
+  publishCommunityTips = async function(silent, opts={}){
+    const id=userId();
+    if(!id) return false;
+    clearLoggedInLocalStorage();
+    if(opts.allowEmpty===false && !wc26HasTips(PRED) && !wc26HasTips(KO_PRED)) return false;
+    if(publishInFlight && !opts.forceManual) return publishInFlight;
+    const run=(async()=>{
+      try{
+        const item=ownItem(); if(!item) return false;
+        const res=await fsFetch(fsDocUrl(WC26_COMMUNITY_COLLECTION,id), {
+          method:'PATCH',
+          headers:{ 'Content-Type':'application/json' },
+          body:JSON.stringify({ fields:fsFields(item) })
+        });
+        if(!res.ok) throw new Error('publish REST '+res.status);
+        wc26RemoteDocExists=true;
+        wc26OwnTipsLoaded=true;
+        wc26OwnTipsLoadFailed=false;
+        upsertOwnCommunity();
+        if(!silent && currentTab()==='community'){
+          try{ await loadCommunityTips(true); }catch(e){}
+          try{ renderCommunity(); }catch(e){}
+        }
+        return true;
+      }catch(e){
+        wc26BackendError=e && e.message ? e.message : String(e || 'publish error');
+        return false;
+      }
+    })();
+    publishInFlight=run.finally(()=>{ publishInFlight=null; });
+    return publishInFlight;
+  };
+  queueCommunityAutosave = function(){
+    if(!wc26User) return;
+    clearLoggedInLocalStorage();
+    clearTimeout(wc26AutosaveTimer);
+    wc26AutosaveTimer=setTimeout(()=>publishCommunityTips(true,{allowEmpty:true}), AUTOSAVE_MS);
+  };
+  savePred = function(){
+    if(FROZEN_MODE) return;
+    if(wc26User){ clearLoggedInLocalStorage(); queueCommunityAutosave(); return; }
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(PRED||{})); localStorage.setItem(KO_STORE_KEY, JSON.stringify(KO_PRED||{})); }catch(e){}
+  };
+  wc26PersistTipsNow = async function(){ savePred(); return wc26User ? await publishCommunityTips(true,{allowEmpty:true,force:true}) : true; };
+  wc26RenameProfile = async function(){
+    if(!wc26User) return;
+    let name=prompt('Új közösségi név', wc26User.displayName || wc26User.email || 'Játékos');
+    if(!name) return;
+    name=name.trim().slice(0,42);
+    if(!name) return;
+    try{ if(wc26User.updateProfile) await wc26User.updateProfile({displayName:name}); }catch(e){}
+    await publishCommunityTips(false,{allowEmpty:true,forceManual:true});
+    try{ if(currentTab()==='community') renderCommunity(); }catch(e){}
+  };
 
-  document.addEventListener('visibilitychange',()=>{ if(visible()){ lastTick=0; pollLive(true).catch(()=>{}); schedule(1000); } },{passive:true});
-  document.addEventListener('click',(e)=>{ if(e.target&&e.target.closest&&e.target.closest('[data-mid],[data-ko-mid],[data-koid],.tab')){ setTimeout(()=>pollLive(true).catch(()=>{}),80); } },true);
+  async function initAuthOnlyV167(){
+    if(authInitPromise) return authInitPromise;
+    authInitPromise=(async()=>{
+      if(FROZEN_MODE || !configured()) return false;
+      try{
+        if(!window.firebase || !firebase.initializeApp) await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+        if(!firebase.auth) await wc26LoadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js');
+        const app=(firebase.apps || []).find(a=>a.name==='wc26-backend') || firebase.initializeApp(WC26_FIREBASE_CONFIG,'wc26-backend');
+        wc26Auth=app.auth();
+        wc26Db=null;
+        wc26BackendReady=true;
+        if(!authHooked){
+          authHooked=true;
+          wc26Auth.onAuthStateChanged(u=>{
+            wc26User=u || null;
+            wc26OwnTipsLoadFailed=false;
+            wc26RemoteDocExists=false;
+            if(u){
+              clearLoggedInLocalStorage();
+              PRED={}; KO_PRED={}; wc26OwnTipsLoaded=false;
+              requestRender('auth-user');
+              setTimeout(()=>loadOwnTipsFromFirebase(false).catch(()=>{}),0);
+            }else{
+              PRED={}; KO_PRED={}; wc26OwnTipsLoaded=true; wc26RemoteDocExists=false;
+              clearLoggedInLocalStorage();
+              requestRender('auth-none');
+            }
+            if(currentTab()==='community') setTimeout(()=>{ try{ loadCommunityTips(false).then(()=>renderCommunity()).catch(()=>renderCommunity()); }catch(e){} },100);
+          });
+        }
+        return true;
+      }catch(e){ wc26BackendError=e && e.message ? e.message : String(e || 'auth init error'); return false; }
+    })();
+    return authInitPromise;
+  }
+  loadWc26Firebase = async function(){ return initAuthOnlyV167(); };
+  initWc26Firebase = function(){ return initAuthOnlyV167(); };
+  listenCommunityTips = function(){ try{ if(wc26CommunityUnsub){ wc26CommunityUnsub(); wc26CommunityUnsub=null; } }catch(e){} return false; };
 
-  schedule(700);
-  setTimeout(()=>pollLive(true).catch(()=>{}),250);
+  function syncChrome(){
+    try{
+      const current=currentTab();
+      document.querySelectorAll('#tabs .tab').forEach(btn=>btn.classList.toggle('active', btn.dataset && btn.dataset.tab===current));
+      const tbl=document.getElementById('tblCtrl'), ko=document.getElementById('koCtrl'), mc=document.getElementById('mCtrl'), rb=document.getElementById('mRoundBar'), tb=document.getElementById('mTeamBar');
+      if(tbl) tbl.classList.toggle('hidden', current!=='table');
+      if(ko) ko.classList.toggle('hidden', current!=='knockout');
+      if(mc) mc.classList.toggle('hidden', current!=='matches');
+      if(rb) rb.classList.toggle('hidden', !(current==='matches' && MS && MS.filt==='round'));
+      if(tb) tb.classList.toggle('hidden', !(current==='matches' && MS && MS.filt==='team'));
+      if(current==='community') [tbl,ko,mc,rb,tb].forEach(el=>{ if(el) el.classList.add('hidden'); });
+      if(typeof syncSpacer==='function') syncSpacer();
+    }catch(e){}
+  }
+  const prevRenderCommunityV167=typeof renderCommunity==='function'?renderCommunity:null;
+  if(prevRenderCommunityV167){
+    renderCommunity=function(){ syncChrome(); const out=prevRenderCommunityV167.apply(this,arguments); syncChrome(); return out; };
+  }
+  const prevRenderV167=typeof render==='function'?render:null;
+  if(prevRenderV167){
+    render=function(){ const out=prevRenderV167.apply(this,arguments); syncChrome(); return out; };
+  }
+
+  // Modal pill + scroll lock retained from earlier UI fixes, without a runtime wrapper pile.
+  try{
+    const st=document.createElement('style');
+    st.textContent=`
+      .tip-overlay .wc26-modal-pill,
+      .tip-overlay .wc26-modal-pill[data-state="live"],
+      .tip-overlay .wc26-modal-pill[data-state="ht"],
+      .tip-overlay .wc26-modal-pill[data-state="pen"],
+      .tip-overlay .wc26-modal-pill[data-state="aet"],
+      .tip-overlay .wc26-status-pill.ht,
+      .tip-overlay .wc26-status-pill.pen,
+      .tip-overlay .wc26-status-pill.aet{background:rgba(255,104,128,.16)!important;border-color:rgba(255,104,128,.44)!important;color:#ff7b92!important;}
+      html.modal-open{overflow:hidden!important;scrollbar-gutter:stable;}
+      body.modal-open{position:static!important;top:auto!important;left:auto!important;right:auto!important;width:auto!important;overflow:hidden!important;}
+      .overlay.tip-overlay{overscroll-behavior:contain;touch-action:none;}
+      .overlay.tip-overlay .sheet{touch-action:auto;}
+    `;
+    document.head.appendChild(st);
+    const oldSyncModal=typeof syncModalOpenClass==='function'?syncModalOpenClass:null;
+    syncModalOpenClass=function(){
+      const open=!!document.querySelector('.tip-overlay,.community-preview');
+      const body=document.body, html=document.documentElement;
+      const was=body.classList.contains('modal-open');
+      if(open){ if(!was) body.dataset.scrollY=String(window.scrollY||html.scrollTop||0); body.style.top=body.style.left=body.style.right=body.style.width=''; html.classList.add('modal-open'); body.classList.add('modal-open'); return; }
+      if(was){ const y=+(body.dataset.scrollY||0); body.classList.remove('modal-open'); html.classList.remove('modal-open'); body.style.top=body.style.left=body.style.right=body.style.width=''; delete body.dataset.scrollY; requestAnimationFrame(()=>window.scrollTo(0,y)); return; }
+      if(oldSyncModal) try{ oldSyncModal(); }catch(e){}
+    };
+  }catch(e){}
+
+  document.addEventListener('visibilitychange',()=>{ if(visible()){ lastLiveAt=0; syncLiveResults({forceLive:true,skipRetry:true}).catch(()=>{}); scheduleLiveSync(900); } },{passive:true});
+  document.addEventListener('click',e=>{ if(e.target && e.target.closest && e.target.closest('[data-mid],[data-ko-mid],[data-koid],.tab')) setTimeout(()=>syncLiveResults({forceLive:true,skipRetry:true}).catch(()=>{}),80); },true);
+
+  try{ if(window.wc26LiveFallbackTimer){ clearInterval(window.wc26LiveFallbackTimer); window.wc26LiveFallbackTimer=null; } }catch(e){}
+  try{ if(window.wc26LivePaintLoopTimer){ clearInterval(window.wc26LivePaintLoopTimer); window.wc26LivePaintLoopTimer=null; } }catch(e){}
+  setTimeout(()=>{ loadWc26Firebase().catch(()=>{}); loadMatchResultsFromBackendDb(true).finally(()=>scheduleLiveSync(900)); },0);
 })();
-/* ===== /WC26 v163 live kickoff feedback restore ===== */
-
+/* ===== /WC26 v167 surgical runtime cleanup ===== */
 
 /* ===== WC26 v164: live penalty-tip match-card right side breathing room =====
    Élő meccseknél, ahol a felhasználó tizenegyeseket is tippelt,
