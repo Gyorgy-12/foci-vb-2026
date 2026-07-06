@@ -13819,4 +13819,215 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   };
 })();
 
+
+
+/* ===== WC26 v162 runtime freeze brake: single live loop + cheap merge/render =====
+   Purpose:
+   - old v120-v161 layers left multiple timers/wrappers alive
+   - stop duplicate live loops / leader loops
+   - make live merging O(changed ids), no sessionStorage full-result writes per tick
+   - throttle modal refresh and full render so clicks/F12 don't get eaten by JS
+*/
+(function(){
+  if(window.__WC26_V162_RUNTIME_FREEZE_BRAKE__) return;
+  window.__WC26_V162_RUNTIME_FREEZE_BRAKE__ = true;
+
+  const LIVE_GAP_MS = 18000;
+  const IDLE_GAP_MS = 120000;
+  const RESULTS_GAP_MS = 90000;
+  const RENDER_GAP_MS = 260;
+  const MODAL_REFRESH_GAP_MS = 650;
+
+  let liveTimer = null;
+  let liveInFlight = null;
+  let lastLiveAt = 0;
+  let resultsInFlight = null;
+  let lastResultsAt = 0;
+  let renderQueued = false;
+  let lastRenderAt = 0;
+  let lastModalRefreshAt = 0;
+  let mergeDepth = 0;
+
+  function now(){ return Date.now ? Date.now() : +new Date(); }
+  function visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
+  function modalOpen(){ return !!document.querySelector('.tip-overlay,.community-preview'); }
+  function currentTab(){ try{return (S&&S.tab)||''}catch(e){return ''} }
+  function isLiveActive(){
+    try{ if(typeof liveSyncInfo==='function' && liveSyncInfo().active) return true; }catch(e){}
+    try{ return Object.values(LIVE_RESULTS||{}).some(r=>r&&r.started&&!r.finished); }catch(e){ return false; }
+  }
+  function workerBase(){ try{return String(WC26_RESULTS_READ_URL||'').replace(/\/results(?:\?.*)?$/,'')}catch(e){return ''} }
+  function liveUrl(){ const b=workerBase(); return b ? b + '/live-results' : ''; }
+  function resultsUrl(){ return WC26_RESULTS_READ_URL || ''; }
+  function shallowSig(r){
+    if(!r) return '';
+    return [r.h,r.a,r.pH,r.pA,r.started?1:0,r.finished?1:0,r.minute||'',r.status||'',r.date||'',r.time||'',r.oddsUpdatedAt||''].join('|');
+  }
+  function resolveMatch(id){
+    try{ return FX_BY_ID && FX_BY_ID[id] ? FX_BY_ID[id] : (String(id).startsWith('KO-') && typeof findKoMatch==='function' ? findKoMatch(id) : null); }catch(e){ return null; }
+  }
+  function normalizeIncoming(id,o){
+    try{
+      const x = resolveMatch(id);
+      let r = (typeof normalizeLiveResult==='function') ? normalizeLiveResult(id, (typeof attachOdds==='function' ? attachOdds(id,o,x) : o)) : o;
+      if(!r) return null;
+      if(typeof attachOdds==='function') r = attachOdds(id,r,x);
+      return r;
+    }catch(e){ return null; }
+  }
+  function queueRender(reason){
+    if(renderQueued) return;
+    const wait = Math.max(0, RENDER_GAP_MS - (now() - lastRenderAt));
+    renderQueued = true;
+    setTimeout(()=>{
+      renderQueued = false;
+      lastRenderAt = now();
+      try{ __wc26V162BaseRender(); }catch(e){ console.warn('v162 render failed', reason, e); }
+    }, wait);
+  }
+  function refreshModalThrottled(){
+    if(now() - lastModalRefreshAt < MODAL_REFRESH_GAP_MS) return;
+    lastModalRefreshAt = now();
+    try{ if(typeof refreshOpenTipModal==='function') refreshOpenTipModal(); }catch(e){}
+    try{ if(typeof refreshModal==='function') refreshModal(); }catch(e){}
+    try{ if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews(); }catch(e){}
+  }
+
+  // Clear every known legacy timer we can reach. Anonymous syncSpacer interval is harmless.
+  ['wc26SyncTimer','wc26LivePaintLoopTimer','wc26LiveFallbackTimer','wc26FallbackLeaseTimerV134','communityTimer','matchAutoScrollTimer','wc26AutosaveTimer'].forEach(k=>{
+    try{ if(window[k]){ clearTimeout(window[k]); clearInterval(window[k]); window[k]=null; } }catch(e){}
+  });
+
+  // Save base render once, then throttle all later full renders.
+  const __wc26V162BaseRender = (typeof render==='function') ? render : function(){};
+  render = function(){
+    if(mergeDepth || renderQueued){ queueRender('wrapped'); return; }
+    if(now() - lastRenderAt < RENDER_GAP_MS){ queueRender('too-soon'); return; }
+    lastRenderAt = now();
+    return __wc26V162BaseRender.apply(this, arguments);
+  };
+
+  // Cheap live merge. No JSON.stringify on whole result objects, no sessionStorage full map writes.
+  mergeLiveResults = function(next){
+    if(!next || typeof next !== 'object') return false;
+    mergeDepth++;
+    let changed=false, prune=false, fixed={};
+    try{
+      Object.entries(next).forEach(([id,o])=>{
+        const r = normalizeIncoming(id,o);
+        if(!r) return;
+        const old = LIVE_RESULTS[id];
+        try{ if(typeof wc26IncomingIsStale==='function' && wc26IncomingIsStale(id,r,old)) return; }catch(e){}
+        if(old && old.finished && !r.finished) return;
+        if(shallowSig(old) === shallowSig(r)) return;
+        LIVE_RESULTS[id]=r;
+        fixed[id]=r;
+        changed=true;
+        if(r.finished && (!old || !old.finished || old.h!==r.h || old.a!==r.a || old.pH!==r.pH || old.pA!==r.pA)) prune=true;
+      });
+    } finally { mergeDepth--; }
+    if(!changed) return false;
+    try{ if(prune && typeof pruneStaleKoPred==='function') pruneStaleKoPred(true); }catch(e){}
+
+    const tab=currentTab();
+    const mo=modalOpen();
+    if((tab==='matches'||tab==='overview') && !mo){
+      let patched=false;
+      try{ patched = typeof patchLiveRows==='function' ? patchLiveRows(fixed) : false; }catch(e){ patched=false; }
+      if(!patched || prune) queueRender('live-merge');
+    }else if(tab==='knockout' && !mo){
+      try{ if(typeof patchKoCards==='function') patchKoCards(); }catch(e){}
+      if(prune) queueRender('ko-prune');
+    }else if(['table','stats'].includes(tab) && !mo){
+      queueRender('stats-table');
+    }
+    if(mo) refreshModalThrottled();
+    return true;
+  };
+
+  async function fetchJson(url, opts){
+    try{ const r = await fetch(url, opts || {cache:'no-store'}); return r.ok ? await r.json() : null; }catch(e){ return null; }
+  }
+
+  loadMatchResultsFromBackendDb = async function(force){
+    const url = resultsUrl();
+    if(FROZEN_MODE || !url) return false;
+    if(!force && resultsInFlight) return resultsInFlight;
+    if(!force && lastResultsAt && now() - lastResultsAt < RESULTS_GAP_MS) return true;
+    const run=(async()=>{
+      lastResultsAt=now();
+      const data = await fetchJson(url + (url.includes('?')?'&':'?') + 'v162=' + Math.floor(now()/60000), {cache:'no-store'});
+      if(data && data.results){
+        try{
+          Object.entries(data.results).forEach(([id,r])=>{
+            if(String(id).startsWith('KO-') && r && r.date && r.time && typeof KO_SCHEDULE!=='undefined' && KO_SCHEDULE[id]){
+              KO_SCHEDULE[id].date=r.date; KO_SCHEDULE[id].t=r.time;
+            }
+          });
+          if(typeof applyKoScheduleHotfix==='function') applyKoScheduleHotfix();
+        }catch(e){}
+        const ok = mergeLiveResults(data.results);
+        if(['matches','overview','table','stats','knockout'].includes(currentTab()) && !modalOpen()) queueRender('backend-results');
+        return ok !== false;
+      }
+      return false;
+    })();
+    if(!force) resultsInFlight = run.finally(()=>{resultsInFlight=null;});
+    return force ? run : resultsInFlight;
+  };
+
+  async function oneLiveTick(force){
+    if(FROZEN_MODE || !visible()) return false;
+    const url = liveUrl();
+    if(!url) return false;
+    if(!force && liveInFlight) return liveInFlight;
+    if(!force && now() - lastLiveAt < LIVE_GAP_MS) return true;
+    const run=(async()=>{
+      lastLiveAt=now();
+      const data = await fetchJson(url + (url.includes('?')?'&':'?') + 't=' + now(), {cache:'no-store'});
+      if(data && data.results) return mergeLiveResults(data.results) !== false;
+      return false;
+    })();
+    if(!force) liveInFlight = run.finally(()=>{liveInFlight=null;});
+    return force ? run : liveInFlight;
+  }
+
+  syncLiveResults = async function(opts){
+    if(syncLiveResults._running) return false;
+    syncLiveResults._running=true;
+    try{
+      if(isLiveActive() || (opts && opts.forceLive)) return await oneLiveTick(!!(opts&&opts.forceLive));
+      return await loadMatchResultsFromBackendDb(false);
+    }finally{ syncLiveResults._running=false; }
+  };
+
+  scheduleLiveSync = function(delay){
+    try{ if(liveTimer) clearTimeout(liveTimer); }catch(e){}
+    const d = isLiveActive() ? Math.max(LIVE_GAP_MS, delay||0) : Math.max(IDLE_GAP_MS, delay||0);
+    liveTimer = setTimeout(async()=>{
+      try{ if(visible()) await syncLiveResults({skipRetry:true}); }catch(e){}
+      scheduleLiveSync();
+    }, d);
+    return liveTimer;
+  };
+
+  // Kill old live subsystems. Old intervals may still call syncLiveResults, now gated above.
+  listenWc26LiveMatches = function(){ return false; };
+  startLiveWorkerFallback = function(){ scheduleLiveSync(LIVE_GAP_MS); return true; };
+  ensureLivePaintLoop = function(){ scheduleLiveSync(isLiveActive()?LIVE_GAP_MS:IDLE_GAP_MS); return true; };
+  wc26StartLiveFallbackV134 = function(){ scheduleLiveSync(LIVE_GAP_MS); return true; };
+  wc26EnsureLiveLeaderV134 = function(){ scheduleLiveSync(LIVE_GAP_MS); return true; };
+  wc26ReleaseLeaderV134 = function(){ return true; };
+
+  document.addEventListener('visibilitychange',()=>{
+    if(visible()){
+      lastLiveAt=0;
+      syncLiveResults({skipRetry:true}).catch(()=>{});
+      scheduleLiveSync(1000);
+    }
+  }, {passive:true});
+
+  scheduleLiveSync(1200);
+})();
+
 </script></body></html>
