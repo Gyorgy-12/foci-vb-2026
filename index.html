@@ -14781,136 +14781,247 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 /* ===== /WC26 v176 ===== */
 
 
-
-/* ===== WC26 v179 - direct 30s live poll + score column right tune =====
-   - Live polling bypasses bootstrap-light after first paint and calls /live-results directly.
-   - Visible match/KO/overview pages poll every 30s; hidden tabs slow down.
-   - Score/right block is moved a bit back to the right vs v176.
+/* ===== WC26 v181 - live endpoint fresh + hard row patch =====
+   Fix: live card sometimes came in late or then froze at the old minute/score.
+   This bypasses bootstrap for live ticks, asks Worker V10 /live-results?fresh=1,
+   canonicalizes payload ids by team names when needed, and patches visible rows from LIVE_RESULTS directly.
 */
 (function(){
-  if(window.__WC26_V179_LIVE_30S_RIGHT_TUNE__) return;
-  window.__WC26_V179_LIVE_30S_RIGHT_TUNE__ = true;
+  if(window.__WC26_V181_LIVE_FRESH_HARD_PATCH__) return;
+  window.__WC26_V181_LIVE_FRESH_HARD_PATCH__ = true;
 
-  // Visual correction: v176 pulled live score blocks too far left on wide screens.
-  try{
-    const st=document.createElement('style');
-    st.textContent=`
-      .matches-main .match-row.live-locked .mr-scores{
-        transform:translateX(calc(-1 * clamp(6px,1.55vw,34px)))!important;
-        will-change:auto!important;
-      }
-      @media (max-width:720px){
-        .matches-main .match-row.live-locked .mr-scores{
-          transform:translateX(calc(-1 * clamp(4px,1.8vw,12px)))!important;
-        }
-      }
-      @media (min-width:1100px){
-        .matches-main .match-row.live-locked .mr-scores{
-          transform:translateX(calc(-1 * clamp(14px,1.8vw,36px)))!important;
-        }
-      }
-      @media (min-width:1450px){
-        .matches-main .match-row.live-locked .mr-scores{
-          transform:translateX(calc(-1 * clamp(20px,1.9vw,42px)))!important;
-        }
-      }
-    `;
-    document.head.appendChild(st);
-  }catch(e){}
+  const VISIBLE_MS = 30000;
+  const HIDDEN_MS = 90000;
+  const FORCE_GAP_MS = 1000;
+  const NORMAL_GAP_MS = 13500;
+  let timer = null;
+  let inflight = null;
+  let lastStart = 0;
+  let renderQueued = false;
 
-  const LIVE_VISIBLE_MS = 30000;
-  const LIVE_OTHER_VISIBLE_MS = 45000;
-  const LIVE_HIDDEN_MS = 90000;
-  const FORCE_GAP_MS = 1200;
-  const NORMAL_GAP_MS = 25000;
-  let timer=null;
-  let inFlight=null;
-  let lastStart=0;
-  let lastOk=0;
-  let lastChanged=false;
-  let lastError='';
-
-  function workerBase(){
-    try{ return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); }catch(e){ return ''; }
-  }
-  function liveUrl(){
-    const b=workerBase();
-    if(!b) return '';
-    return b + '/live-results?nocache=1&t=' + Date.now();
-  }
+  function baseWorker(){ try{ return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); }catch(e){ return ''; } }
+  function liveUrl(){ const b=baseWorker(); return b ? b + '/live-results?fresh=1&live=1&t=' + Date.now() : ''; }
   function tab(){ try{ return S && S.tab ? S.tab : ''; }catch(e){ return ''; } }
   function visible(){ return !(document.hidden || document.visibilityState === 'hidden'); }
-  function onLiveRelevantTab(){ const t=tab(); return t==='matches' || t==='knockout' || t==='overview'; }
   function modalOpen(){ try{ return !!document.querySelector('.tip-overlay,.sheet.tip-sheet'); }catch(e){ return false; } }
-  function clearKnownTimers(){
+  function normName(v){
+    try{
+      if(typeof normalizeTeamName==='function') v=normalizeTeamName(v);
+      return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+    }catch(e){ return String(v||'').toLowerCase().trim(); }
+  }
+  function resultSig(r){
+    if(!r) return '';
+    const sc = Array.isArray(r.scorers) ? r.scorers.length : (r.scorers ? String(r.scorers).length : 0);
+    const rc = Array.isArray(r.redCards) ? r.redCards.length : (r.redCards ? String(r.redCards).length : 0);
+    const yc = Array.isArray(r.yellowCards) ? r.yellowCards.length : (r.yellowCards ? String(r.yellowCards).length : 0);
+    return [r.started?1:0,r.finished?1:0,r.h,r.a,r.pH,r.pA,r.minute||'',r.status||'',r.homeTeam||'',r.awayTeam||'',r.date||'',r.time||'',sc,rc,yc,r.updatedAt||''].join('|');
+  }
+  function rowFor(id){
+    try{
+      return document.querySelector(
+        '[data-mid="'+id+'"],'+
+        '[data-ko-mid="'+id+'"],'+
+        '[data-ko-match-id="'+id+'"],'+
+        '[data-ko-parity-id="'+id+'"],'+
+        '[data-ko-group-id="'+id+'"]'
+      );
+    }catch(e){ return null; }
+  }
+  function allKoMatchesSafe(){
+    try{ if(typeof wc26AllKoMatches==='function') return wc26AllKoMatches(); }catch(e){}
+    try{ const r=buildKO(), b=buildBronze(r); return r.flatMap(x=>x.matches).concat([b]).filter(Boolean); }catch(e){ return []; }
+  }
+  function matchFor(id){
+    try{ if(FX_BY_ID && FX_BY_ID[id]) return FX_BY_ID[id]; }catch(e){}
+    try{ if(typeof wc26FindAnyMatch==='function') return wc26FindAnyMatch(id); }catch(e){}
+    try{ if(typeof findKoMatch==='function') return findKoMatch(id); }catch(e){}
+    try{ if(typeof findKoSafe==='function') return findKoSafe(id); }catch(e){}
+    return null;
+  }
+  function knownMatches(){
+    let out=[];
+    try{ out=out.concat(FX || []); }catch(e){}
+    out=out.concat(allKoMatchesSafe());
+    return out.filter(Boolean);
+  }
+  function canonicalId(id, raw){
+    id = String((raw && raw.id) || id || '');
+    if(id && rowFor(id)) return id;
+    if(id && matchFor(id)) return id;
+    const hn = normName(raw && (raw.homeTeam || raw.hTeam || raw.home || raw.hName));
+    const an = normName(raw && (raw.awayTeam || raw.aTeam || raw.away || raw.aName));
+    if(!hn || !an) return id;
+    const found = knownMatches().find(function(m){ return normName(m.h||m.home||m.homeTeam)===hn && normName(m.a||m.away||m.awayTeam)===an; });
+    return found && found.id ? found.id : id;
+  }
+  function canonicalize(results){
+    const out={};
+    Object.entries(results || {}).forEach(function(pair){
+      const id = canonicalId(pair[0], pair[1]);
+      if(!id) return;
+      out[id] = Object.assign({}, pair[1] || {}, { id:id });
+    });
+    return out;
+  }
+  function normalizeIncoming(id, obj){
+    try{
+      const m=matchFor(id);
+      let r=obj;
+      try{ if(typeof attachOdds==='function') r=attachOdds(id,r,m); }catch(e){}
+      try{ if(typeof normalizeLiveResult==='function') r=normalizeLiveResult(id,r); }catch(e){}
+      if(!r) return null;
+      try{
+        if(String(id).startsWith('KO-')){
+          if(KO_SCHEDULE && KO_SCHEDULE[id]){
+            if(r.date) KO_SCHEDULE[id].date=r.date;
+            if(r.time) KO_SCHEDULE[id].t=r.time;
+          }
+          if(r.homeTeam && r.awayTeam){
+            window.__WC26_KO_PAIRS__ = Object.assign({}, window.__WC26_KO_PAIRS__ || {}, { [id]:{ home:r.homeTeam, away:r.awayTeam, espnId:r.espnId || null } });
+          }
+        }
+      }catch(e){}
+      return r;
+    }catch(e){ return null; }
+  }
+  function safeNotStale(id,r,old){
+    try{ if(typeof wc26IncomingIsStale==='function' && wc26IncomingIsStale(id,r,old)) return false; }catch(e){}
+    if(old && old.finished && !r.finished) return false;
+    return true;
+  }
+  function hardMerge(results){
+    const fixed={};
+    const skipped=[];
+    Object.entries(results || {}).forEach(function(pair){
+      const id=pair[0];
+      const r=normalizeIncoming(id,pair[1]);
+      if(!r){ skipped.push(id+':normalize'); return; }
+      const old = LIVE_RESULTS ? LIVE_RESULTS[id] : null;
+      if(!safeNotStale(id,r,old)){ skipped.push(id+':stale'); return; }
+      if(resultSig(old)===resultSig(r)) return;
+      try{ LIVE_RESULTS[id]=r; fixed[id]=r; }catch(e){ skipped.push(id+':assign'); }
+    });
+    return { fixed, skipped };
+  }
+  function bindRow(row,id){
+    if(!row || !id) return;
+    try{
+      if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return;
+      if(String(id).startsWith('KO-')) row.onclick=function(e){ e.stopPropagation(); if(typeof openKoTip==='function') openKoTip(id); };
+      else row.onclick=function(e){ e.stopPropagation(); if(typeof openTip==='function') openTip(id); };
+    }catch(e){}
+  }
+  function buildRow(id){
+    const m=matchFor(id);
+    if(!m) return '';
+    try{ if(String(id).startsWith('KO-') && typeof koMatchRow==='function') return koMatchRow(m); }catch(e){}
+    try{ if(typeof mrow==='function') return mrow(m); }catch(e){}
+    return '';
+  }
+  function patchOne(id){
+    const row=rowFor(id);
+    if(!row) return false;
+    const html=buildRow(id);
+    if(!html) return false;
+    try{
+      const tmp=document.createElement('div');
+      tmp.innerHTML=html.trim();
+      const fresh=tmp.firstElementChild;
+      if(!fresh) return false;
+      row.replaceWith(fresh);
+      bindRow(fresh,id);
+      return true;
+    }catch(e){ return false; }
+  }
+  function requestRender(reason){
+    if(renderQueued || modalOpen()) return;
+    renderQueued=true;
+    setTimeout(function(){
+      renderQueued=false;
+      try{ if(typeof render==='function') render(); }catch(e){ try{ console.warn('v181 render failed',reason,e); }catch(_e){} }
+    },120);
+  }
+  function patchFixed(fixed){
+    const ids=Object.keys(fixed || {});
+    if(!ids.length) return true;
+    if(modalOpen()){
+      try{ if(typeof refreshOpenTipModal==='function') refreshOpenTipModal(); }catch(e){}
+      try{ if(typeof refreshModal==='function') refreshModal(); }catch(e){}
+      return true;
+    }
+    let allOk=true, anyRow=false;
+    ids.forEach(function(id){
+      if(rowFor(id)) anyRow=true;
+      if(rowFor(id) && !patchOne(id)) allOk=false;
+    });
+    try{ if(typeof applyLivePenCardRoom==='function') applyLivePenCardRoom(); }catch(e){}
+    const t=tab();
+    if((!allOk || !anyRow) && (t==='matches' || t==='knockout' || t==='overview')) requestRender('v181-live-no-row-or-patch-fail');
+    return allOk;
+  }
+  async function fetchLive(){
+    const url=liveUrl();
+    if(!url) return { ok:false, results:{}, error:'no-live-url' };
+    const res=await fetch(url,{ cache:'no-store', credentials:'omit', headers:{ 'Accept':'application/json' } });
+    if(!res.ok) throw new Error('live-results HTTP '+res.status);
+    const data=await res.json().catch(function(){ return null; });
+    const raw=(data && data.results && typeof data.results==='object') ? data.results : {};
+    return { ok:!!data, data:data||{}, results:canonicalize(raw) };
+  }
+  async function sync(opts){
+    opts=opts||{};
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return false;
+    const now=Date.now();
+    const gap=(opts.forceLive||opts.force) ? FORCE_GAP_MS : NORMAL_GAP_MS;
+    if(inflight) return inflight;
+    if(now-lastStart<gap) return false;
+    lastStart=now;
+    inflight=(async function(){
+      let data=null, fixed={}, skipped=[];
+      try{
+        data=await fetchLive();
+        const merged=hardMerge(data.results);
+        fixed=merged.fixed; skipped=merged.skipped;
+        patchFixed(fixed);
+        try{
+          window.WC26_LIVE_DEBUG={
+            controller:'v181-live-fresh-hard-patch',
+            count:Object.keys(data.results||{}).length,
+            changed:Object.keys(fixed).length,
+            skipped:skipped.slice(0,8),
+            source:data.data && data.data.source || '',
+            workerCache:data.data && (data.data.workerCache || data.data.cache) || '',
+            at:new Date().toISOString(),
+            nextInMs:visible()?VISIBLE_MS:HIDDEN_MS,
+            tab:tab()
+          };
+        }catch(e){}
+        return Object.keys(fixed).length>0;
+      }catch(e){
+        try{ window.WC26_LIVE_DEBUG={controller:'v181-live-fresh-hard-patch',error:e&&e.message?e.message:String(e),at:new Date().toISOString(),tab:tab()}; }catch(_e){}
+        return false;
+      }finally{ inflight=null; }
+    })();
+    return inflight;
+  }
+  function clearOldTimers(){
     try{ if(timer){ clearTimeout(timer); clearInterval(timer); timer=null; } }catch(e){}
     try{ if(window.wc26SyncTimer){ clearTimeout(window.wc26SyncTimer); clearInterval(window.wc26SyncTimer); window.wc26SyncTimer=null; } }catch(e){}
     try{ if(window.wc26LiveFallbackTimer){ clearTimeout(window.wc26LiveFallbackTimer); clearInterval(window.wc26LiveFallbackTimer); window.wc26LiveFallbackTimer=null; } }catch(e){}
     try{ if(window.wc26LivePaintLoopTimer){ clearTimeout(window.wc26LivePaintLoopTimer); clearInterval(window.wc26LivePaintLoopTimer); window.wc26LivePaintLoopTimer=null; } }catch(e){}
     try{ if(typeof wc26SyncTimer!=='undefined' && wc26SyncTimer){ clearTimeout(wc26SyncTimer); clearInterval(wc26SyncTimer); wc26SyncTimer=null; } }catch(e){}
-    try{ if(typeof wc26LivePaintLoopTimer!=='undefined' && wc26LivePaintLoopTimer){ clearTimeout(wc26LivePaintLoopTimer); clearInterval(wc26LivePaintLoopTimer); wc26LivePaintLoopTimer=null; } }catch(e){}
-  }
-  function nextDelay(delay){
-    if(!visible()) return LIVE_HIDDEN_MS;
-    if(Number.isFinite(+delay) && +delay > 0) return +delay;
-    return onLiveRelevantTab() ? LIVE_VISIBLE_MS : LIVE_OTHER_VISIBLE_MS;
   }
   function schedule(delay){
     if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return null;
-    clearKnownTimers();
-    const d=Math.max(1000,nextDelay(delay));
+    clearOldTimers();
+    const d=Number.isFinite(+delay) ? Math.max(900,+delay) : (visible()?VISIBLE_MS:HIDDEN_MS);
     timer=setTimeout(function(){
       timer=null;
-      syncLiveResults({source:'v179-timer'}).catch(function(){}).finally(function(){ schedule(); });
+      sync({source:'v181-timer'}).catch(function(){}).finally(function(){ schedule(); });
     },d);
-    window.wc26SyncTimer=timer;
-    try{ window.WC26_LIVE_30S_TIMER_DEBUG={nextInMs:d,tab:tab(),at:new Date().toISOString()}; }catch(e){}
+    try{ window.wc26SyncTimer=timer; }catch(e){}
     return timer;
-  }
-  async function sync(opts){
-    opts=opts||{};
-    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return false;
-    const url=liveUrl();
-    if(!url) return false;
-    const now=Date.now();
-    const gap=(opts.forceLive||opts.force) ? FORCE_GAP_MS : NORMAL_GAP_MS;
-    if(inFlight) return inFlight;
-    if(now-lastStart<gap) return false;
-    lastStart=now;
-    inFlight=(async function(){
-      try{
-        const res=await fetch(url,{cache:'no-store',headers:{'Accept':'application/json'},credentials:'omit'});
-        if(!res.ok) throw new Error('live-results HTTP '+res.status);
-        const data=await res.json().catch(function(){return null;});
-        const results=(data && data.results && typeof data.results==='object') ? data.results : {};
-        let changed=false;
-        try{ changed = typeof mergeLiveResults==='function' ? !!mergeLiveResults(results) : false; }catch(e){ changed=false; }
-        // If the merge path decided there was no signature change, do not force a full render.
-        // But keep card room markers fresh after row patches.
-        try{ if(changed && !modalOpen() && typeof applyLivePenCardRoom==='function') applyLivePenCardRoom(); }catch(e){}
-        lastOk=Date.now();
-        lastChanged=!!changed;
-        lastError=data && data.degraded && data.error ? String(data.error) : '';
-        try{
-          window.WC26_LIVE_DEBUG={
-            controller:'v179-direct-30s-live-poll',
-            lastStart,lastOk,lastChanged,lastError,
-            count:Object.keys(results).length,
-            source:data && data.source || '',
-            workerCache:data && (data.workerCache || data.cache) || '',
-            nextDelay:nextDelay(),
-            tab:tab(),
-            at:new Date().toISOString()
-          };
-        }catch(e){}
-        return changed;
-      }catch(e){
-        lastError=e && e.message ? e.message : String(e || 'live error');
-        try{ window.WC26_LIVE_DEBUG={controller:'v179-direct-30s-live-poll',lastStart,lastOk,lastChanged:false,lastError,count:0,nextDelay:LIVE_VISIBLE_MS,tab:tab(),at:new Date().toISOString()}; }catch(_e){}
-        return false;
-      }finally{ inFlight=null; }
-    })();
-    return inFlight;
   }
 
   syncLiveResults=sync;
@@ -14921,20 +15032,33 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   listenWc26LiveMatches=function(){ schedule(1200); return true; };
 
   document.addEventListener('visibilitychange',function(){
-    if(visible()) sync({forceLive:true,source:'v179-visible'}).catch(function(){}).finally(function(){ schedule(30000); });
-    else schedule(LIVE_HIDDEN_MS);
+    if(visible()) sync({forceLive:true,source:'v181-visible'}).catch(function(){}).finally(function(){ schedule(VISIBLE_MS); });
+    else schedule(HIDDEN_MS);
   },{passive:true});
   document.addEventListener('click',function(e){
     try{
-      if(e.target && e.target.closest && e.target.closest('.tab,[data-mid],[data-ko-mid],[data-koid],.match-row')){
-        setTimeout(function(){ sync({forceLive:true,source:'v179-click'}).catch(function(){}).finally(function(){ schedule(30000); }); },120);
+      if(e.target && e.target.closest && e.target.closest('.tab,[data-mid],[data-ko-mid],[data-ko-match-id],[data-ko-parity-id],[data-ko-group-id],.match-row')){
+        setTimeout(function(){ sync({forceLive:true,source:'v181-click'}).catch(function(){}).finally(function(){ schedule(VISIBLE_MS); }); },90);
       }
     }catch(_e){}
   },true);
 
-  setTimeout(function(){ sync({forceLive:true,source:'v179-start'}).catch(function(){}).finally(function(){ schedule(30000); }); },900);
-  try{ window.WC26_V179_DEBUG={route:'v179-live-30s-right-tune',installedAt:new Date().toISOString()}; }catch(e){}
+  // Small layout stabilizer only; no score block transform yank.
+  try{
+    const st=document.createElement('style');
+    st.textContent=`
+      .matches-main .match-row.live-locked .mr-scores{transform:none!important;right:auto!important;overflow:visible!important;}
+      .matches-main .match-row.live-locked .mr-date>.mr-live-state.live{display:none!important;}
+      .matches-main .match-row.live-locked{grid-template-columns:clamp(64px,17vw,76px) 1px minmax(0,1fr) clamp(96px,8.2vw,132px) clamp(8px,1.5vw,14px)!important;}
+      .matches-main .match-row.live-locked .mr-score-wrap{display:grid!important;grid-template-columns:minmax(44px,auto) minmax(34px,50px)!important;gap:clamp(6px,.55vw,10px)!important;align-items:center!important;justify-content:end!important;justify-items:end!important;}
+      @media(max-width:720px){.matches-main .match-row.live-locked{grid-template-columns:clamp(61px,17vw,72px) 1px minmax(0,1fr) clamp(88px,22vw,108px) clamp(8px,2.5vw,14px)!important;}}
+    `;
+    document.head.appendChild(st);
+  }catch(e){}
+
+  setTimeout(function(){ sync({forceLive:true,source:'v181-start'}).catch(function(){}).finally(function(){ schedule(VISIBLE_MS); }); },650);
+  try{ window.WC26_V181_DEBUG={route:'v181-live-fresh-hard-patch',installedAt:new Date().toISOString()}; }catch(e){}
 })();
-/* ===== /WC26 v179 ===== */
+/* ===== /WC26 v181 ===== */
 
 </script></body></html>
