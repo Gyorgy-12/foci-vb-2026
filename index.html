@@ -15236,134 +15236,106 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 /* ===== /WC26 v182 ===== */
 
-</script></body></html>
 
-/* ===== WC26 v180 - live match card balanced right block =====
-   Fixes the ugly V179 live layout: no transform yank, proper wide score column,
-   right-side live pill stays near the score, left-side duplicate "Élő" hidden.
+
+/* ===== WC26 v183 - odds auto sync client kicker =====
+   Nem UI-blokkoló: csak háttérben rugdossa meg az új Worker V12 /odds-sync-et,
+   ha látható / frissen nyitott meccsekhez nincs piaci odds.
 */
 (function(){
-  if(window.__WC26_V180_LIVE_CARD_BALANCE__) return;
-  window.__WC26_V180_LIVE_CARD_BALANCE__ = true;
+  if(window.__WC26_V183_ODDS_AUTO_CLIENT__) return;
+  window.__WC26_V183_ODDS_AUTO_CLIENT__ = true;
+  const API='https://wc26-results-sync.wc26-guesses.workers.dev';
+  const KEY='wc26_odds_auto_last_v183';
+  const TTL=4*60*1000;
+  let inFlight=false;
 
-  try{
-    const st=document.createElement('style');
-    st.textContent = `
-      /* Live rows: don't drag the score block with transforms. Give it a real column. */
-      .matches-main .match-row.live-locked{
-        grid-template-columns:clamp(64px,17.2vw,76px) 1px minmax(0,1fr) clamp(104px,8.9vw,148px) clamp(10px,2vw,16px)!important;
+  function now(){return Date.now();}
+  function canRun(force){
+    if(force) return true;
+    try{ const last=+(sessionStorage.getItem(KEY)||0); if(last && now()-last<TTL) return false; }catch(e){}
+    return true;
+  }
+  function markRun(){ try{ sessionStorage.setItem(KEY,String(now())); }catch(e){} }
+  function hasOdds(id){
+    try{
+      const r=(typeof LIVE_RESULTS!=='undefined' && LIVE_RESULTS) ? LIVE_RESULTS[id] : null;
+      const o=r&&r.odds;
+      return !!(o && Number.isFinite(+o.h) && Number.isFinite(+o.d) && Number.isFinite(+o.a) && +o.h>1 && +o.d>1 && +o.a>1);
+    }catch(e){ return false; }
+  }
+  function realTeamsForId(id){
+    try{
+      let x=(typeof FX_BY_ID!=='undefined' && FX_BY_ID) ? FX_BY_ID[id] : null;
+      if(!x && typeof findKoSafe==='function') x=findKoSafe(id);
+      if(!x) return false;
+      const h=String(x.h||x.home||'');
+      const a=String(x.a||x.away||'');
+      if(!h||!a) return false;
+      return !/^(TBD|\?|W\d|L\d|Winner|Loser|Gy\.|Vesz\.|Nyertes|Vesztes)/i.test(h) && !/^(TBD|\?|W\d|L\d|Winner|Loser|Gy\.|Vesz\.|Nyertes|Vesztes)/i.test(a);
+    }catch(e){ return false; }
+  }
+  function visibleMissingOddsIds(){
+    const ids=[];
+    try{
+      const nodes=[].slice.call(document.querySelectorAll('[data-mid],[data-ko-mid],[data-koid],[data-tip-id]'));
+      for(const el of nodes){
+        const id=el.getAttribute('data-mid')||el.getAttribute('data-ko-mid')||el.getAttribute('data-koid')||el.getAttribute('data-tip-id');
+        if(!id || ids.includes(id)) continue;
+        if(hasOdds(id)) continue;
+        if(!realTeamsForId(id)) continue;
+        ids.push(id);
+        if(ids.length>=8) break;
       }
-      .matches-main .match-row.live-locked .mr-date > .mr-live-state.live{
-        display:none!important;
+    }catch(e){}
+    return ids;
+  }
+  async function reloadResultsAfterOdds(updated){
+    if(!updated) return;
+    try{
+      if(typeof loadMatchResultsFromBackendDb==='function') await loadMatchResultsFromBackendDb(true);
+      else {
+        const r=await fetch(API+'/results?v=odds-'+Date.now(),{cache:'no-store',credentials:'omit'});
+        const d=r.ok?await r.json():null;
+        if(d&&d.results&&typeof mergeLiveResults==='function') mergeLiveResults(d.results);
       }
-      .matches-main .match-row.live-locked .mr-scores{
-        position:relative!important;
-        right:0!important;
-        transform:none!important;
-        width:100%!important;
-        min-width:clamp(104px,8.9vw,148px)!important;
-        max-width:clamp(104px,8.9vw,148px)!important;
-        justify-self:end!important;
-        overflow:visible!important;
-        will-change:auto!important;
-      }
-      .matches-main .match-row.live-locked .mr-score-wrap{
-        width:100%!important;
-        display:grid!important;
-        grid-template-columns:minmax(46px,auto) minmax(34px,52px)!important;
-        align-items:center!important;
-        justify-content:end!important;
-        justify-items:end!important;
-        gap:clamp(7px,.68vw,12px)!important;
-      }
-      .matches-main .match-row.live-locked .mr-clock-row{
-        justify-content:end!important;
-        min-width:0!important;
-      }
-      .matches-main .match-row.live-locked .mr-score-lines{
-        min-width:clamp(32px,2.9vw,50px)!important;
-        width:100%!important;
-      }
-      .matches-main .match-row.live-locked .mr-score-row,
-      .matches-main .match-row.live-locked .mr-score-actual-only .mr-score-row,
-      .matches-main .match-row.live-locked .mr-score-tip-only .mr-score-row,
-      .matches-main .match-row.live-locked .mr-score-compare .mr-score-row{
-        justify-content:end!important;
-        text-align:right!important;
-      }
-      .matches-main .match-row.live-locked .mr-live-state.live{
-        white-space:nowrap!important;
-        flex:0 0 auto!important;
-      }
+    }catch(e){}
+    try{ if(typeof render==='function' && !document.querySelector('.tip-overlay')) render(); }catch(e){}
+    try{ if(typeof refreshModal==='function') refreshModal(); }catch(e){}
+    try{ if(typeof refreshOpenTipModal==='function') refreshOpenTipModal(); }catch(e){}
+  }
+  async function kick(reason, force){
+    if(inFlight || !canRun(force)) return false;
+    inFlight=true; markRun();
+    const ids=visibleMissingOddsIds();
+    const params=new URLSearchParams();
+    if(ids.length) params.set('ids',ids.join(','));
+    params.set('limit', ids.length?String(ids.length):'10');
+    params.set('auto','1');
+    params.set('reason','client-'+(reason||'auto'));
+    params.set('_',String(Date.now()));
+    try{
+      const res=await fetch(API+'/odds-sync?'+params.toString(),{cache:'no-store',credentials:'omit'});
+      const data=res.ok?await res.json():null;
+      if(data&&data.updated>0) await reloadResultsAfterOdds(data.updated);
+      try{ window.WC26_V183_LAST_ODDS_SYNC=data||{ok:false,status:res.status}; }catch(e){}
+      return !!(data&&data.updated>0);
+    }catch(e){
+      try{ window.WC26_V183_LAST_ODDS_SYNC={ok:false,error:e&&e.message?e.message:String(e)}; }catch(_e){}
+      return false;
+    }finally{ inFlight=false; }
+  }
 
-      /* Live + penalty/tip compare needs a slightly wider final score column, but still not edge-floating. */
-      .matches-main .match-row.wc26-live-pen-tip-row,
-      .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen){
-        grid-template-columns:clamp(64px,17.2vw,76px) 1px minmax(0,1fr) clamp(122px,10.5vw,166px) clamp(10px,2vw,16px)!important;
+  window.wc26KickOddsSync=function(reason){ return kick(reason||'manual', true); };
+  setTimeout(function(){ kick('startup', false); }, 1600);
+  document.addEventListener('click',function(e){
+    try{
+      if(e.target&&e.target.closest&&e.target.closest('.tab,[data-mid],[data-ko-mid],[data-koid],[data-tip-id],.match-row,.ko-card')){
+        setTimeout(function(){ kick('ui', false); }, 850);
       }
-      .matches-main .match-row.wc26-live-pen-tip-row .mr-scores,
-      .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-scores{
-        right:0!important;
-        transform:none!important;
-        min-width:clamp(122px,10.5vw,166px)!important;
-        max-width:clamp(122px,10.5vw,166px)!important;
-      }
-      .matches-main .match-row.wc26-live-pen-tip-row .mr-score-wrap,
-      .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-score-wrap{
-        grid-template-columns:minmax(46px,auto) minmax(58px,78px)!important;
-      }
-
-      @media (max-width:720px){
-        .matches-main .match-row.live-locked{
-          grid-template-columns:clamp(61px,17vw,72px) 1px minmax(0,1fr) clamp(88px,21vw,110px) clamp(8px,2.5vw,14px)!important;
-        }
-        .matches-main .match-row.live-locked .mr-scores{
-          min-width:clamp(88px,21vw,110px)!important;
-          max-width:clamp(88px,21vw,110px)!important;
-        }
-        .matches-main .match-row.live-locked .mr-score-wrap{
-          grid-template-columns:minmax(40px,auto) minmax(30px,42px)!important;
-          gap:6px!important;
-        }
-        .matches-main .match-row.wc26-live-pen-tip-row,
-        .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen){
-          grid-template-columns:clamp(61px,17vw,72px) 1px minmax(0,1fr) clamp(102px,26vw,124px) clamp(8px,2.5vw,14px)!important;
-        }
-        .matches-main .match-row.wc26-live-pen-tip-row .mr-scores,
-        .matches-main .match-row.live-locked:has(.mr-score-compare.has-pen) .mr-scores{
-          min-width:clamp(102px,26vw,124px)!important;
-          max-width:clamp(102px,26vw,124px)!important;
-        }
-      }
-    `;
-    document.head.appendChild(st);
-  }catch(_e){}
-
-  // If liveClockLabel is temporarily empty, still put a compact live pill on the right side.
-  try{
-    const prevScoreHtml = (typeof scoreHtml==='function') ? scoreHtml : null;
-    if(prevScoreHtml && !prevScoreHtml.__wc26_v180_wrapped){
-      const wrapped = function(x){
-        let html = prevScoreHtml.apply(this, arguments);
-        try{
-          const id = String((x&&x.id)||'');
-          const r = id && typeof LIVE_RESULTS!=='undefined' ? LIVE_RESULTS[id] : null;
-          const st = typeof matchLockState==='function' ? matchLockState({id:id}) : '';
-          const isLive = !!((r && r.started && !r.finished) || st==='live');
-          if(isLive && html && html.indexOf('mr-clock-row')<0 && html.indexOf('match-empty')<0){
-            const labelRaw = (typeof liveClockLabel==='function' ? liveClockLabel(r||{}) : '') || 'Élő';
-            const label = (typeof esc==='function') ? esc(labelRaw) : String(labelRaw).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
-            html = '<div class="mr-score-wrap wc26-v180-live-wrap"><div class="mr-clock-row"><em class="mr-live-state live"><span></span>'+label+'</em></div><div class="mr-score-lines">'+html+'</div></div>';
-          }
-        }catch(_e){}
-        return html;
-      };
-      wrapped.__wc26_v180_wrapped = true;
-      scoreHtml = wrapped;
-    }
-  }catch(_e){}
-
-  try{ requestAnimationFrame(function(){ if(typeof render==='function') render(); }); }catch(_e){}
-  try{ window.WC26_V180_DEBUG={route:'v180-live-card-balanced-right-block',installedAt:new Date().toISOString()}; }catch(_e){}
+    }catch(_e){}
+  },true);
 })();
-/* ===== /WC26 v180 ===== */
+/* ===== /WC26 v183 ===== */
+
+</script></body></html>
