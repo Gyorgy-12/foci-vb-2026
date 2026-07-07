@@ -1,4 +1,4 @@
-<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><style>
+<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><link rel="preconnect" href="https://wc26-results-sync.wc26-guesses.workers.dev" crossorigin/><link rel="dns-prefetch" href="//wc26-results-sync.wc26-guesses.workers.dev"/><style>
 :root{
   --bg:#05090b;
   --surface:#0f161a;
@@ -14443,5 +14443,251 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   try{ window.WC26_V175_DEBUG = { route:'v175-ko-modal-self-reopen-killer', installedAt:new Date().toISOString() }; }catch(e){}
 })();
 /* ===== /WC26 v175 ===== */
+
+
+/* ===== WC26 v176: fast public boot + live score column left shift =====
+   Public data can start warming immediately, but UI safety stays:
+   - no extra community/debug text
+   - no modal reopen
+   - no full render loop
+   - score/right block of live match cards moves left responsively
+*/
+(function(){
+  if(window.__WC26_V176_FAST_BOOT_LIVE_SCORE_LEFT__) return;
+  window.__WC26_V176_FAST_BOOT_LIVE_SCORE_LEFT__ = true;
+
+  // 1) Responsive visual fix: live card right-side score/clock content should not sit on the far edge.
+  try{
+    const st=document.createElement('style');
+    st.textContent = `
+      .matches-main .match-row.live-locked .mr-scores{
+        transform:translateX(calc(-1 * clamp(12px,3.2vw,64px)))!important;
+        will-change:transform;
+      }
+      .matches-main .match-row.live-locked .mr-score-wrap{
+        justify-content:end!important;
+      }
+      .matches-main .match-row.live-locked .mr-clock-row{
+        justify-content:center!important;
+      }
+      @media (max-width:720px){
+        .matches-main .match-row.live-locked .mr-scores{
+          transform:translateX(calc(-1 * clamp(6px,3vw,18px)))!important;
+        }
+      }
+      @media (min-width:1100px){
+        .matches-main .match-row.live-locked .mr-scores{
+          transform:translateX(calc(-1 * clamp(30px,3.6vw,82px)))!important;
+        }
+      }
+      @media (min-width:1450px){
+        .matches-main .match-row.live-locked .mr-scores{
+          transform:translateX(calc(-1 * clamp(42px,3.9vw,96px)))!important;
+        }
+      }
+    `;
+    document.head.appendChild(st);
+  }catch(e){}
+
+  // 2) Start public Worker hydration as early as this final patch can.
+  // This does not add new data sources; it just kicks the existing single loaders without waiting for auth/community.
+  let booted=false;
+  function tab(){ try{return S&&S.tab?S.tab:'';}catch(e){return '';} }
+  function boot(){
+    if(booted) return; booted=true;
+    try{
+      const jobs=[];
+      if(typeof loadMatchResultsFromBackendDb==='function') jobs.push(Promise.resolve().then(()=>loadMatchResultsFromBackendDb(true)));
+      if(typeof syncLiveResults==='function') jobs.push(Promise.resolve().then(()=>syncLiveResults({forceLive:true,skipRetry:true,source:'v176-boot'})));
+      if(tab()==='knockout' && typeof wc26LoadKoPairsFromWorker==='function') jobs.push(Promise.resolve().then(()=>wc26LoadKoPairsFromWorker(false)));
+      Promise.allSettled(jobs).then(()=>{
+        try{
+          if(!document.querySelector('.tip-overlay') && ['matches','knockout','overview','table','stats'].includes(tab()) && typeof render==='function') render();
+        }catch(e){}
+      });
+    }catch(e){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,0),{once:true});
+  else setTimeout(boot,0);
+
+  try{ window.WC26_V176_DEBUG = { route:'v176-fast-public-boot-live-score-left', installedAt:new Date().toISOString() }; }catch(e){}
+})();
+
+/* ===== WC26 v177 - bootstrap-light public startup bundle =====
+   Needs Worker V9 /bootstrap-light. If the endpoint is not deployed yet,
+   it falls back to the previous /results + /live-results path.
+*/
+(function(){
+  if(window.__WC26_V177_BOOTSTRAP_LIGHT__) return;
+  window.__WC26_V177_BOOTSTRAP_LIGHT__ = true;
+
+  const oldResultsLoader = (typeof loadMatchResultsFromBackendDb === 'function') ? loadMatchResultsFromBackendDb : null;
+  const oldLiveSync = (typeof syncLiveResults === 'function') ? syncLiveResults : null;
+  let bootstrapInFlight = null;
+  let bootstrapDone = false;
+  let bootstrapFailed = false;
+  let oldFallbackInFlight = null;
+
+  function baseWorker(){
+    try{ return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); }catch(e){ return ''; }
+  }
+  function bootstrapUrl(){
+    const b = baseWorker();
+    return b ? b + '/bootstrap-light' : '';
+  }
+  function tab(){
+    try{ if(S && S.tab) return S.tab; }catch(e){}
+    return '';
+  }
+  function modalOpen(){
+    try{ return !!document.querySelector('.tip-overlay'); }catch(e){ return false; }
+  }
+  function applySchedule(schedule){
+    if(!schedule || typeof schedule !== 'object') return false;
+    let touched = false;
+    try{
+      if(typeof KO_SCHEDULE !== 'undefined' && KO_SCHEDULE){
+        for(const [id, sch] of Object.entries(schedule)){
+          if(!id || !sch || !KO_SCHEDULE[id]) continue;
+          if(sch.date && KO_SCHEDULE[id].date !== sch.date){ KO_SCHEDULE[id].date = sch.date; touched = true; }
+          const t = sch.t || sch.time;
+          if(t && KO_SCHEDULE[id].t !== t){ KO_SCHEDULE[id].t = t; touched = true; }
+        }
+      }
+      if(touched && typeof applyKoScheduleHotfix === 'function') applyKoScheduleHotfix();
+    }catch(e){}
+    return touched;
+  }
+  function applyKoPairs(pairs){
+    if(!pairs || typeof pairs !== 'object') return false;
+    try{
+      window.__WC26_KO_PAIRS__ = Object.assign({}, window.__WC26_KO_PAIRS__ || {}, pairs);
+      try{ wc26KoPairsLoadedAt = Date.now(); }catch(e){}
+      return true;
+    }catch(e){ return false; }
+  }
+  function applyKoFromResults(results){
+    if(!results || typeof results !== 'object') return false;
+    const pairs = {};
+    let touched = false;
+    for(const [id, r] of Object.entries(results)){
+      if(!String(id).startsWith('KO-') || !r) continue;
+      try{
+        if(typeof KO_SCHEDULE !== 'undefined' && KO_SCHEDULE && KO_SCHEDULE[id]){
+          if(r.date && KO_SCHEDULE[id].date !== r.date){ KO_SCHEDULE[id].date = r.date; touched = true; }
+          if((r.time || r.t) && KO_SCHEDULE[id].t !== (r.time || r.t)){ KO_SCHEDULE[id].t = r.time || r.t; touched = true; }
+        }
+        if(r.homeTeam && r.awayTeam){ pairs[id] = { home:r.homeTeam, away:r.awayTeam, espnId:r.espnId || null }; touched = true; }
+      }catch(e){}
+    }
+    if(Object.keys(pairs).length) applyKoPairs(pairs);
+    if(touched){ try{ if(typeof applyKoScheduleHotfix === 'function') applyKoScheduleHotfix(); }catch(e){} }
+    return touched;
+  }
+  function renderAfterBootstrap(reason){
+    try{
+      const t = tab();
+      if(!modalOpen() && ['matches','knockout','overview','table','stats'].includes(t) && typeof render === 'function'){
+        render();
+      }else if(t==='matches' && typeof patchLiveRows === 'function'){
+        patchLiveRows();
+      }
+    }catch(e){}
+  }
+  async function fallbackOld(force){
+    if(oldFallbackInFlight) return oldFallbackInFlight;
+    oldFallbackInFlight = (async function(){
+      let ok = false;
+      try{ if(oldResultsLoader) ok = !!(await oldResultsLoader(!!force)); }catch(e){}
+      try{ if(oldLiveSync) await oldLiveSync({ forceLive:true, skipRetry:true, source:'v177-fallback' }); }catch(e){}
+      return ok;
+    })().finally(function(){ oldFallbackInFlight = null; });
+    return oldFallbackInFlight;
+  }
+  async function loadBootstrap(opts){
+    opts = opts || {};
+    if(bootstrapDone) return true;
+    if(bootstrapInFlight) return bootstrapInFlight;
+    const url = bootstrapUrl();
+    if(!url || (bootstrapFailed && !opts.retry)) return opts.fallback === false ? false : fallbackOld(true);
+
+    bootstrapInFlight = (async function(){
+      const started = Date.now();
+      try{
+        const sep = url.includes('?') ? '&' : '?';
+        const res = await fetch(url + sep + 'v=177', { headers:{ 'Accept':'application/json' } });
+        if(!res.ok) throw new Error('bootstrap-light HTTP ' + res.status);
+        const data = await res.json().catch(function(){ return null; });
+        if(!data || data.ok === false) throw new Error((data && data.error) || 'bootstrap-light invalid payload');
+
+        const results = data.results && typeof data.results === 'object' ? data.results : {};
+        const live = data.live && typeof data.live === 'object' ? data.live : {};
+        applySchedule(data.schedule);
+        applyKoPairs(data.koPairs);
+        applyKoFromResults(results);
+
+        let changed = false;
+        try{ if(typeof mergeLiveResults === 'function') changed = !!mergeLiveResults(results); }catch(e){}
+        try{ if(Object.keys(live).length && typeof mergeLiveResults === 'function') changed = !!mergeLiveResults(live) || changed; }catch(e){}
+
+        bootstrapDone = true;
+        bootstrapFailed = false;
+        try{
+          window.WC26_BOOTSTRAP_DEBUG = {
+            route:'v177-bootstrap-light',
+            ok:true,
+            tookMs:Date.now() - started,
+            workerTookMs:data.tookMs || null,
+            resultsCount:data.resultsCount || Object.keys(results).length,
+            liveCount:data.liveCount || Object.keys(live).length,
+            resultsSource:data.resultsSource || '',
+            liveSource:data.liveSource || '',
+            changed:!!changed,
+            at:new Date().toISOString()
+          };
+        }catch(e){}
+        renderAfterBootstrap('bootstrap-light');
+        return true;
+      }catch(e){
+        bootstrapFailed = true;
+        try{ window.WC26_BOOTSTRAP_DEBUG = { route:'v177-bootstrap-light', ok:false, error:e && e.message ? e.message : String(e), at:new Date().toISOString() }; }catch(_e){}
+        return opts.fallback === false ? false : fallbackOld(true);
+      }finally{
+        bootstrapInFlight = null;
+      }
+    })();
+    return bootstrapInFlight;
+  }
+
+  loadMatchResultsFromBackendDb = async function(force){
+    if(!bootstrapDone && !bootstrapFailed){
+      const ok = await loadBootstrap({ fallback:true });
+      if(ok) return true;
+    }
+    return oldResultsLoader ? oldResultsLoader(!!force) : false;
+  };
+
+  syncLiveResults = async function(opts){
+    opts = opts || {};
+    if(!bootstrapDone && !bootstrapFailed){
+      const ok = await loadBootstrap({ fallback:true });
+      if(ok) return true;
+    }
+    return oldLiveSync ? oldLiveSync(opts) : false;
+  };
+
+  // Start the public bundle immediately. Community and own Firebase tips remain separate/lazy.
+  setTimeout(function(){ loadBootstrap({ fallback:true }).catch(function(){}); }, 0);
+
+  // Kill any visible community source/debug line if an older renderer recreates it.
+  try{
+    const st=document.createElement('style');
+    st.textContent='.community-hint{display:none!important}';
+    document.head.appendChild(st);
+  }catch(e){}
+})();
+/* ===== /WC26 v177 ===== */
+
+/* ===== /WC26 v176 ===== */
 
 </script></body></html>
