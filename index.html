@@ -14780,4 +14780,161 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 /* ===== /WC26 v176 ===== */
 
+
+
+/* ===== WC26 v179 - direct 30s live poll + score column right tune =====
+   - Live polling bypasses bootstrap-light after first paint and calls /live-results directly.
+   - Visible match/KO/overview pages poll every 30s; hidden tabs slow down.
+   - Score/right block is moved a bit back to the right vs v176.
+*/
+(function(){
+  if(window.__WC26_V179_LIVE_30S_RIGHT_TUNE__) return;
+  window.__WC26_V179_LIVE_30S_RIGHT_TUNE__ = true;
+
+  // Visual correction: v176 pulled live score blocks too far left on wide screens.
+  try{
+    const st=document.createElement('style');
+    st.textContent=`
+      .matches-main .match-row.live-locked .mr-scores{
+        transform:translateX(calc(-1 * clamp(6px,1.55vw,34px)))!important;
+        will-change:auto!important;
+      }
+      @media (max-width:720px){
+        .matches-main .match-row.live-locked .mr-scores{
+          transform:translateX(calc(-1 * clamp(4px,1.8vw,12px)))!important;
+        }
+      }
+      @media (min-width:1100px){
+        .matches-main .match-row.live-locked .mr-scores{
+          transform:translateX(calc(-1 * clamp(14px,1.8vw,36px)))!important;
+        }
+      }
+      @media (min-width:1450px){
+        .matches-main .match-row.live-locked .mr-scores{
+          transform:translateX(calc(-1 * clamp(20px,1.9vw,42px)))!important;
+        }
+      }
+    `;
+    document.head.appendChild(st);
+  }catch(e){}
+
+  const LIVE_VISIBLE_MS = 30000;
+  const LIVE_OTHER_VISIBLE_MS = 45000;
+  const LIVE_HIDDEN_MS = 90000;
+  const FORCE_GAP_MS = 1200;
+  const NORMAL_GAP_MS = 25000;
+  let timer=null;
+  let inFlight=null;
+  let lastStart=0;
+  let lastOk=0;
+  let lastChanged=false;
+  let lastError='';
+
+  function workerBase(){
+    try{ return String(WC26_RESULTS_READ_URL || '').replace(/\/results(?:\?.*)?$/, ''); }catch(e){ return ''; }
+  }
+  function liveUrl(){
+    const b=workerBase();
+    if(!b) return '';
+    return b + '/live-results?nocache=1&t=' + Date.now();
+  }
+  function tab(){ try{ return S && S.tab ? S.tab : ''; }catch(e){ return ''; } }
+  function visible(){ return !(document.hidden || document.visibilityState === 'hidden'); }
+  function onLiveRelevantTab(){ const t=tab(); return t==='matches' || t==='knockout' || t==='overview'; }
+  function modalOpen(){ try{ return !!document.querySelector('.tip-overlay,.sheet.tip-sheet'); }catch(e){ return false; } }
+  function clearKnownTimers(){
+    try{ if(timer){ clearTimeout(timer); clearInterval(timer); timer=null; } }catch(e){}
+    try{ if(window.wc26SyncTimer){ clearTimeout(window.wc26SyncTimer); clearInterval(window.wc26SyncTimer); window.wc26SyncTimer=null; } }catch(e){}
+    try{ if(window.wc26LiveFallbackTimer){ clearTimeout(window.wc26LiveFallbackTimer); clearInterval(window.wc26LiveFallbackTimer); window.wc26LiveFallbackTimer=null; } }catch(e){}
+    try{ if(window.wc26LivePaintLoopTimer){ clearTimeout(window.wc26LivePaintLoopTimer); clearInterval(window.wc26LivePaintLoopTimer); window.wc26LivePaintLoopTimer=null; } }catch(e){}
+    try{ if(typeof wc26SyncTimer!=='undefined' && wc26SyncTimer){ clearTimeout(wc26SyncTimer); clearInterval(wc26SyncTimer); wc26SyncTimer=null; } }catch(e){}
+    try{ if(typeof wc26LivePaintLoopTimer!=='undefined' && wc26LivePaintLoopTimer){ clearTimeout(wc26LivePaintLoopTimer); clearInterval(wc26LivePaintLoopTimer); wc26LivePaintLoopTimer=null; } }catch(e){}
+  }
+  function nextDelay(delay){
+    if(!visible()) return LIVE_HIDDEN_MS;
+    if(Number.isFinite(+delay) && +delay > 0) return +delay;
+    return onLiveRelevantTab() ? LIVE_VISIBLE_MS : LIVE_OTHER_VISIBLE_MS;
+  }
+  function schedule(delay){
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return null;
+    clearKnownTimers();
+    const d=Math.max(1000,nextDelay(delay));
+    timer=setTimeout(function(){
+      timer=null;
+      syncLiveResults({source:'v179-timer'}).catch(function(){}).finally(function(){ schedule(); });
+    },d);
+    window.wc26SyncTimer=timer;
+    try{ window.WC26_LIVE_30S_TIMER_DEBUG={nextInMs:d,tab:tab(),at:new Date().toISOString()}; }catch(e){}
+    return timer;
+  }
+  async function sync(opts){
+    opts=opts||{};
+    if(typeof FROZEN_MODE!=='undefined' && FROZEN_MODE) return false;
+    const url=liveUrl();
+    if(!url) return false;
+    const now=Date.now();
+    const gap=(opts.forceLive||opts.force) ? FORCE_GAP_MS : NORMAL_GAP_MS;
+    if(inFlight) return inFlight;
+    if(now-lastStart<gap) return false;
+    lastStart=now;
+    inFlight=(async function(){
+      try{
+        const res=await fetch(url,{cache:'no-store',headers:{'Accept':'application/json'},credentials:'omit'});
+        if(!res.ok) throw new Error('live-results HTTP '+res.status);
+        const data=await res.json().catch(function(){return null;});
+        const results=(data && data.results && typeof data.results==='object') ? data.results : {};
+        let changed=false;
+        try{ changed = typeof mergeLiveResults==='function' ? !!mergeLiveResults(results) : false; }catch(e){ changed=false; }
+        // If the merge path decided there was no signature change, do not force a full render.
+        // But keep card room markers fresh after row patches.
+        try{ if(changed && !modalOpen() && typeof applyLivePenCardRoom==='function') applyLivePenCardRoom(); }catch(e){}
+        lastOk=Date.now();
+        lastChanged=!!changed;
+        lastError=data && data.degraded && data.error ? String(data.error) : '';
+        try{
+          window.WC26_LIVE_DEBUG={
+            controller:'v179-direct-30s-live-poll',
+            lastStart,lastOk,lastChanged,lastError,
+            count:Object.keys(results).length,
+            source:data && data.source || '',
+            workerCache:data && (data.workerCache || data.cache) || '',
+            nextDelay:nextDelay(),
+            tab:tab(),
+            at:new Date().toISOString()
+          };
+        }catch(e){}
+        return changed;
+      }catch(e){
+        lastError=e && e.message ? e.message : String(e || 'live error');
+        try{ window.WC26_LIVE_DEBUG={controller:'v179-direct-30s-live-poll',lastStart,lastOk,lastChanged:false,lastError,count:0,nextDelay:LIVE_VISIBLE_MS,tab:tab(),at:new Date().toISOString()}; }catch(_e){}
+        return false;
+      }finally{ inFlight=null; }
+    })();
+    return inFlight;
+  }
+
+  syncLiveResults=sync;
+  scheduleLiveSync=schedule;
+  ensureLivePaintLoop=function(){ schedule(1200); return true; };
+  startLiveWorkerFallback=function(){ schedule(1200); return true; };
+  wc26EnsureLiveLeaderV134=function(){ schedule(1200); return true; };
+  listenWc26LiveMatches=function(){ schedule(1200); return true; };
+
+  document.addEventListener('visibilitychange',function(){
+    if(visible()) sync({forceLive:true,source:'v179-visible'}).catch(function(){}).finally(function(){ schedule(30000); });
+    else schedule(LIVE_HIDDEN_MS);
+  },{passive:true});
+  document.addEventListener('click',function(e){
+    try{
+      if(e.target && e.target.closest && e.target.closest('.tab,[data-mid],[data-ko-mid],[data-koid],.match-row')){
+        setTimeout(function(){ sync({forceLive:true,source:'v179-click'}).catch(function(){}).finally(function(){ schedule(30000); }); },120);
+      }
+    }catch(_e){}
+  },true);
+
+  setTimeout(function(){ sync({forceLive:true,source:'v179-start'}).catch(function(){}).finally(function(){ schedule(30000); }); },900);
+  try{ window.WC26_V179_DEBUG={route:'v179-live-30s-right-tune',installedAt:new Date().toISOString()}; }catch(e){}
+})();
+/* ===== /WC26 v179 ===== */
+
 </script></body></html>
