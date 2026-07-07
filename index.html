@@ -1,4 +1,15 @@
-<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><link rel="preconnect" href="https://wc26-results-sync.wc26-guesses.workers.dev" crossorigin/><link rel="dns-prefetch" href="//wc26-results-sync.wc26-guesses.workers.dev"/><style>
+<!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><link rel="preconnect" href="https://wc26-results-sync.wc26-guesses.workers.dev" crossorigin/><link rel="dns-prefetch" href="//wc26-results-sync.wc26-guesses.workers.dev"/><script>
+/* WC26 v178: head-start bootstrap-light while the large one-file app is still parsing. */
+window.__WC26_BOOTSTRAP_LIGHT_PREFETCH__=(function(){
+  try{
+    var started=Date.now();
+    return fetch('https://wc26-results-sync.wc26-guesses.workers.dev/bootstrap-light?v=178-head',{headers:{'Accept':'application/json'},credentials:'omit'})
+      .then(function(r){ if(!r.ok) throw new Error('bootstrap-light HTTP '+r.status); return r.json(); })
+      .then(function(d){ try{ window.__WC26_BOOTSTRAP_LIGHT_PREFETCH_META__={ok:true,tookMs:Date.now()-started,at:new Date().toISOString()}; }catch(e){} return d; })
+      .catch(function(e){ try{ window.__WC26_BOOTSTRAP_LIGHT_PREFETCH_META__={ok:false,error:e&&e.message?e.message:String(e),at:new Date().toISOString()}; }catch(_e){} return null; });
+  }catch(e){ return Promise.resolve(null); }
+})();
+</script><style>
 :root{
   --bg:#05090b;
   --surface:#0f161a;
@@ -14507,8 +14518,9 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       });
     }catch(e){}
   }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,0),{once:true});
-  else setTimeout(boot,0);
+  // v178: public hydration is owned by bootstrap-light below; keep only the responsive score-column CSS from v176.
+  // The old v176 boot kicker could still wake legacy loaders and make startup feel heavier.
+  booted=true;
 
   try{ window.WC26_V176_DEBUG = { route:'v176-fast-public-boot-live-score-left', installedAt:new Date().toISOString() }; }catch(e){}
 })();
@@ -14614,10 +14626,20 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     bootstrapInFlight = (async function(){
       const started = Date.now();
       try{
-        const sep = url.includes('?') ? '&' : '?';
-        const res = await fetch(url + sep + 'v=177', { headers:{ 'Accept':'application/json' } });
-        if(!res.ok) throw new Error('bootstrap-light HTTP ' + res.status);
-        const data = await res.json().catch(function(){ return null; });
+        let data = null;
+        let usedPrefetch = false;
+        try{
+          if(!opts.retry && window.__WC26_BOOTSTRAP_LIGHT_PREFETCH__ && typeof window.__WC26_BOOTSTRAP_LIGHT_PREFETCH__.then === 'function'){
+            data = await window.__WC26_BOOTSTRAP_LIGHT_PREFETCH__;
+            usedPrefetch = !!(data && data.ok !== false);
+          }
+        }catch(_prefetchErr){ data = null; }
+        if(!data){
+          const sep = url.includes('?') ? '&' : '?';
+          const res = await fetch(url + sep + 'v=178', { headers:{ 'Accept':'application/json' }, credentials:'omit' });
+          if(!res.ok) throw new Error('bootstrap-light HTTP ' + res.status);
+          data = await res.json().catch(function(){ return null; });
+        }
         if(!data || data.ok === false) throw new Error((data && data.error) || 'bootstrap-light invalid payload');
 
         const results = data.results && typeof data.results === 'object' ? data.results : {};
@@ -14642,6 +14664,8 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
             liveCount:data.liveCount || Object.keys(live).length,
             resultsSource:data.resultsSource || '',
             liveSource:data.liveSource || '',
+            usedPrefetch:!!usedPrefetch,
+            prefetchMeta:window.__WC26_BOOTSTRAP_LIGHT_PREFETCH_META__ || null,
             changed:!!changed,
             at:new Date().toISOString()
           };
@@ -14687,6 +14711,72 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }catch(e){}
 })();
 /* ===== /WC26 v177 ===== */
+
+/* ===== WC26 v178 - faster first paint: bootstrap prefetch + deferred Firebase auth =====
+   - bootstrap-light starts from <head>, before the large inline app finishes parsing
+   - v176 redundant startup kicker is disabled
+   - Firebase compat scripts are delayed briefly so public match data can paint first
+*/
+(function(){
+  if(window.__WC26_V178_FAST_FIRST_PAINT__) return;
+  window.__WC26_V178_FAST_FIRST_PAINT__ = true;
+
+  const oldLoadFirebase = (typeof loadWc26Firebase === 'function') ? loadWc26Firebase : null;
+  const oldInitFirebase = (typeof initWc26Firebase === 'function') ? initWc26Firebase : null;
+  let authPromise = null;
+  let authForced = false;
+
+  function runAuth(){
+    if(authPromise) return authPromise;
+    authPromise = Promise.resolve().then(function(){
+      return oldLoadFirebase ? oldLoadFirebase() : (oldInitFirebase ? oldInitFirebase() : false);
+    }).catch(function(e){ try{ wc26BackendError = e && e.message ? e.message : String(e); }catch(_e){} return false; });
+    return authPromise;
+  }
+  function scheduleAuth(delay){
+    if(authPromise || authForced) return authPromise || Promise.resolve(false);
+    delay = Number.isFinite(+delay) ? Math.max(0,+delay) : 900;
+    authPromise = new Promise(function(resolve){
+      const start = function(){
+        authPromise = null;
+        resolve(runAuth());
+      };
+      if('requestIdleCallback' in window){
+        try{ requestIdleCallback(start,{timeout:delay+900}); return; }catch(e){}
+      }
+      setTimeout(start,delay);
+    });
+    return authPromise;
+  }
+
+  if(oldLoadFirebase){
+    loadWc26Firebase = function(force){
+      if(force && force.force){ authForced=true; return runAuth(); }
+      return scheduleAuth(900);
+    };
+  }
+  if(oldInitFirebase){
+    initWc26Firebase = function(force){
+      if(force && force.force){ authForced=true; return runAuth(); }
+      return scheduleAuth(900);
+    };
+  }
+
+  if(typeof wc26SignIn === 'function'){
+    const oldSignIn = wc26SignIn;
+    wc26SignIn = async function(){
+      authForced = true;
+      await runAuth();
+      return oldSignIn.apply(this, arguments);
+    };
+  }
+
+  // Make sure auth still starts shortly after the public match paint, just not on the first CPU/network breath.
+  setTimeout(function(){ scheduleAuth(0); }, 1200);
+
+  try{ window.WC26_V178_DEBUG = { route:'v178-head-prefetch-defer-auth', installedAt:new Date().toISOString() }; }catch(e){}
+})();
+/* ===== /WC26 v178 ===== */
 
 /* ===== /WC26 v176 ===== */
 
