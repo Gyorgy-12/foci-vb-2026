@@ -15586,4 +15586,179 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 /* ===== /WC26 v186 ===== */
 
+
+
+/* ===== WC26 v187 - runtime circuit breaker (no full render from live) =====
+   Emergency fix after V185/V186 freezes:
+   - stop duplicate live controllers from hammering /live-results on heavy tabs
+   - one cheap merge path, without calling older merge wrappers that full-render stats/table
+   - live payload never deletes market odds
+   - visible match cards are patched directly; stats/table render only by user tab navigation
+*/
+(function(){
+  if(window.__WC26_V187_RUNTIME_CIRCUIT_BREAKER__) return;
+  window.__WC26_V187_RUNTIME_CIRCUIT_BREAKER__ = true;
+
+  function now(){ return Date.now(); }
+  function tab(){ try{return (S && S.tab) || '';}catch(e){return '';} }
+  function modalOpen(){ try{return !!document.querySelector('.tip-overlay,.tip-sheet,.modal-open');}catch(e){return false;} }
+  function relevantLiveTab(){ const t=tab(); return t==='matches' || t==='knockout' || t==='overview'; }
+
+  // 1) Network fuse: duplicate old live controllers may still be scheduled.
+  // Collapse them to one short live request, and suppress live polling on heavy tabs.
+  try{
+    const prevFetchV187 = window.fetch ? window.fetch.bind(window) : null;
+    if(prevFetchV187 && !window.__WC26_V187_FETCH_WRAPPED__){
+      window.__WC26_V187_FETCH_WRAPPED__ = true;
+      let livePack = null;
+      let livePackAt = 0;
+      let liveInFlight = null;
+      function packResponse(pack){
+        return new Response(pack.body, { status: pack.status || 200, statusText: pack.statusText || 'OK', headers: {'content-type':'application/json','x-wc26-client-cache':'v187'} });
+      }
+      function emptyLive(reason){
+        return Promise.resolve(new Response(JSON.stringify({ok:true,count:0,results:{},matches:[],source:'client-v187-'+reason}), {status:200, headers:{'content-type':'application/json','x-wc26-client-suppressed':'1'}}));
+      }
+      window.fetch = function(input, init){
+        let u='';
+        try{ u = (typeof input === 'string') ? input : (input && input.url) || ''; }catch(e){ u=''; }
+        if(u && u.indexOf('/live-results') !== -1){
+          if(!relevantLiveTab()) return emptyLive('heavy-tab-'+(tab()||'none'));
+          const age = now() - livePackAt;
+          if(livePack && age < 9000) return Promise.resolve(packResponse(livePack));
+          if(liveInFlight) return liveInFlight.then(packResponse).catch(function(){ return emptyLive('inflight-error'); });
+          liveInFlight = prevFetchV187(input, init).then(async function(res){
+            const body = await res.text();
+            const pack = { body, status: res.status, statusText: res.statusText || 'OK' };
+            livePack = pack;
+            livePackAt = now();
+            return pack;
+          }).finally(function(){ liveInFlight = null; });
+          return liveInFlight.then(packResponse).catch(function(){ return emptyLive('fetch-error'); });
+        }
+        return prevFetchV187(input, init);
+      };
+    }
+  }catch(e){}
+
+  // 2) Render fuse: no recursive render, and no live-triggered full render storm.
+  try{
+    const prevRenderV187 = typeof render === 'function' ? render : null;
+    if(prevRenderV187 && !window.__WC26_V187_RENDER_WRAPPED__){
+      window.__WC26_V187_RENDER_WRAPPED__ = true;
+      let inRender = false;
+      let lastRenderAt = 0;
+      render = function(){
+        const t = tab();
+        const n = now();
+        if(inRender) return;
+        // table/stats are expensive enough that stacked timers must not render them repeatedly.
+        if((t==='table' || t==='stats') && n - lastRenderAt < 700) return;
+        inRender = true;
+        try{ return prevRenderV187.apply(this, arguments); }
+        finally{ inRender = false; lastRenderAt = now(); }
+      };
+    }
+  }catch(e){}
+
+  function normalize(id, raw){
+    let r = raw;
+    try{ if(typeof normalizeLiveResult === 'function') r = normalizeLiveResult(id, raw); }catch(e){}
+    if(!r || typeof r !== 'object') return null;
+    try{ if(typeof window.wc26PreserveMarketOdds === 'function') r = window.wc26PreserveMarketOdds(id, r); }catch(e){}
+    return r;
+  }
+  function sig(r){
+    if(!r) return '';
+    const odds = r.odds && typeof r.odds === 'object' ? [r.odds.h,r.odds.d,r.odds.a,r.odds.provider].join('/') : '';
+    const sc = Array.isArray(r.scorers) ? r.scorers.length : (r.scorers ? String(r.scorers).length : 0);
+    const rc = Array.isArray(r.redCards) ? r.redCards.length : (r.redCards ? String(r.redCards).length : 0);
+    const yc = Array.isArray(r.yellowCards) ? r.yellowCards.length : (r.yellowCards ? String(r.yellowCards).length : 0);
+    return [r.started?1:0,r.finished?1:0,r.h,r.a,r.pH,r.pA,r.minute||'',r.status||'',r.homeTeam||'',r.awayTeam||'',odds,r.oddsUpdatedAt||'',sc,rc,yc].join('|');
+  }
+  function rowFor(id){ try{return document.querySelector('[data-mid="'+id+'"],[data-ko-mid="'+id+'"]');}catch(e){return null;} }
+  function matchFor(id){
+    try{ if(typeof FX_BY_ID !== 'undefined' && FX_BY_ID && FX_BY_ID[id]) return FX_BY_ID[id]; }catch(e){}
+    try{ if(String(id).startsWith('KO-') && typeof findKoMatch === 'function') return findKoMatch(id) || null; }catch(e){}
+    try{ if(String(id).startsWith('KO-') && typeof findKoSafe === 'function') return findKoSafe(id) || null; }catch(e){}
+    return null;
+  }
+  function rowHtml(id){
+    const m = matchFor(id);
+    if(!m) return '';
+    try{ if(String(id).startsWith('KO-') && typeof koMatchRow === 'function') return koMatchRow(m); }catch(e){}
+    try{ if(!String(id).startsWith('KO-') && typeof mrow === 'function') return mrow(m); }catch(e){}
+    return '';
+  }
+  function replaceRow(id){
+    if(!relevantLiveTab()) return true;
+    if(modalOpen()) return true;
+    const row = rowFor(id);
+    if(!row) return true;
+    const html = rowHtml(id);
+    if(!html) return false;
+    try{
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html.trim();
+      const fresh = tmp.firstElementChild;
+      if(!fresh) return false;
+      row.replaceWith(fresh);
+      return true;
+    }catch(e){ return false; }
+  }
+  let modalAt = 0;
+  function refreshModalTiny(){
+    if(!modalOpen()) return;
+    const n = now();
+    if(n - modalAt < 650) return;
+    modalAt = n;
+    try{ if(typeof refreshOpenTipModal === 'function') refreshOpenTipModal(); }catch(e){}
+    try{ if(typeof refreshModal === 'function') refreshModal(); }catch(e){}
+  }
+
+  // 3) Final patcher: do not delegate to old patch wrappers on heavy tabs.
+  patchLiveRows = function(next){
+    if(!next || typeof next !== 'object') return true;
+    if(!relevantLiveTab()) return true;
+    let ok = true;
+    Object.keys(next).forEach(function(id){ if(!replaceRow(id)) ok = false; });
+    try{ if(typeof applyLivePenCardRoom === 'function') applyLivePenCardRoom(); }catch(e){}
+    return ok;
+  };
+
+  // 4) Final live merge: no call-through to older mergeLiveResults, because that re-renders stats/table.
+  mergeLiveResults = function(next){
+    if(!next || typeof next !== 'object') return false;
+    if(typeof LIVE_RESULTS === 'undefined' || !LIVE_RESULTS) window.LIVE_RESULTS = LIVE_RESULTS = {};
+    const changed = {};
+    let any = false;
+    Object.entries(next).forEach(function(pair){
+      const id = pair[0];
+      const incoming = normalize(id, pair[1]);
+      if(!incoming) return;
+      const old = LIVE_RESULTS[id] || null;
+      try{ if(typeof wc26IncomingIsStale === 'function' && wc26IncomingIsStale(id, incoming, old)) return; }catch(e){}
+      if(old && old.finished && !incoming.finished) return;
+      if(sig(old) === sig(incoming)) return;
+      LIVE_RESULTS[id] = incoming;
+      changed[id] = incoming;
+      any = true;
+    });
+    if(!any) return false;
+    try{ if(typeof applyKoScheduleHotfix === 'function') applyKoScheduleHotfix(); }catch(e){}
+    try{ patchLiveRows(changed); }catch(e){}
+    refreshModalTiny();
+    try{ window.WC26_V187_LAST_MERGE={changed:Object.keys(changed).length,tab:tab(),at:new Date().toISOString()}; }catch(e){}
+    return true;
+  };
+
+  // 5) Kill currently exposed old timers once; their future callbacks are harmless because fetch/merge are fused.
+  try{ if(window.wc26SyncTimer){ clearTimeout(window.wc26SyncTimer); clearInterval(window.wc26SyncTimer); window.wc26SyncTimer=null; } }catch(e){}
+  try{ if(window.wc26LiveFallbackTimer){ clearTimeout(window.wc26LiveFallbackTimer); clearInterval(window.wc26LiveFallbackTimer); window.wc26LiveFallbackTimer=null; } }catch(e){}
+  try{ if(window.wc26LivePaintLoopTimer){ clearTimeout(window.wc26LivePaintLoopTimer); clearInterval(window.wc26LivePaintLoopTimer); window.wc26LivePaintLoopTimer=null; } }catch(e){}
+
+  try{ window.WC26_V187_STATUS={installedAt:new Date().toISOString(),mode:'runtime-circuit-breaker'}; }catch(e){}
+})();
+/* ===== /WC26 v187 ===== */
+
 </script></body></html>
