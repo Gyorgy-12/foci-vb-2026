@@ -15448,172 +15448,142 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 
 
-/* ===== WC26 v185 - live team-guard + modal event leak fix =====
-   A wrong provider/ESPN event must never be glued onto a KO slot with different teams.
-   This prevents Switzerland-Colombia type modals from showing Argentina/Egypt incidents,
-   and also stops wrong live payloads from masking market odds for the real fixture.
+/* ===== WC26 v186 - freeze rollback + soft live team guard =====
+   Built on V184 stable HTML. V185 aggressive buildKO wrapper is intentionally NOT included.
+   Goals:
+   - no buildKO() call during boot
+   - no render loop from live updates while Table/Stats/KO tabs are open
+   - soft reject wrong live payloads when provider team names do not match the expected fixture
 */
 (function(){
-  if(window.__WC26_V185_LIVE_TEAM_GUARD__) return;
-  window.__WC26_V185_LIVE_TEAM_GUARD__=true;
-  const EXPECTED=window.__WC26_EXPECTED_MATCH_BY_ID__=window.__WC26_EXPECTED_MATCH_BY_ID__||{};
+  if(window.__WC26_V186_FREEZE_ROLLBACK_SAFE_GUARD__) return;
+  window.__WC26_V186_FREEZE_ROLLBACK_SAFE_GUARD__=true;
 
+  function getTab(){try{return (S&&S.tab)||'';}catch(e){return '';}}
+  function hasModal(){try{return !!document.querySelector('.tip-overlay');}catch(e){return false;}}
+
+  // 1) Stop the main-thread killer: live ticks must not full-render Table/Stats/KO.
+  // Matches/Overview can still receive targeted row patches.
+  try{
+    const prevPatchLiveRowsV186 = typeof patchLiveRows==='function' ? patchLiveRows : null;
+    if(prevPatchLiveRowsV186){
+      patchLiveRows=function(next){
+        const t=getTab();
+        if(t==='table' || t==='stats' || t==='knockout'){
+          try{ if(typeof refreshModal==='function') refreshModal(); }catch(e){}
+          return true;
+        }
+        return prevPatchLiveRowsV186.call(this,next);
+      };
+    }
+  }catch(e){}
+
+  // 2) Safe team-name helpers. No boot-time buildKO. KO lookup happens lazily only for incoming live rows.
   function label(v){
     if(v==null) return '';
     if(typeof v==='object') return v.team || v.name || v.displayName || v.title || v.label || '';
     return String(v||'');
   }
   function norm(v){
-    try{ if(typeof normalizeTeamName==='function') v=normalizeTeamName(label(v)); }catch(e){ v=label(v); }
-    return String(v||'')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,' ')
-      .trim();
+    let s=label(v);
+    try{ if(typeof normalizeTeamName==='function') s=normalizeTeamName(s); }catch(e){}
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,' ').trim();
   }
   function placeholder(v){
-    const s=norm(v).toUpperCase();
-    return !s || s==='TBD' || s==='?' || s.includes('GYŐZTESE') || s.includes('GYOZTESE') || s.includes('WINNER') || s.includes('NYERTES') || s.includes('TO BE DETERMINED');
+    const s=norm(v);
+    return !s || s==='tbd' || s==='?' || s.includes('winner') || s.includes('gyoztese') || s.includes('nyertes') || s.includes('to be determined') || s.includes('elozetes');
   }
-  function expectedTeams(x){
-    return {
-      h: x && (x.h || x.homeTeam || x.home || x.homeName),
-      a: x && (x.a || x.awayTeam || x.away || x.awayName)
-    };
-  }
-  function storeExpected(x){
-    if(!x||!x.id) return;
-    const et=expectedTeams(x);
-    if(!placeholder(et.h)||!placeholder(et.a)) EXPECTED[x.id]={id:x.id,h:label(et.h),a:label(et.a)};
-  }
-  try{
-    (FX||[]).forEach(storeExpected);
-  }catch(e){}
-  try{
-    const prevBuild=buildKO;
-    buildKO=function(){
-      const rounds=prevBuild.apply(this,arguments);
-      try{(rounds||[]).forEach(r=>{(r.matches||[]).forEach(storeExpected);});}catch(e){}
-      return rounds;
-    };
-  }catch(e){}
-  try{
-    const prevBronze=buildBronze;
-    buildBronze=function(rounds){
-      const m=prevBronze.apply(this,arguments);
-      try{storeExpected(m);}catch(e){}
-      return m;
-    };
-  }catch(e){}
-  function expectedMatch(id){
+  function expectedFor(id){
+    if(!id) return null;
     try{ if(typeof FX_BY_ID!=='undefined' && FX_BY_ID && FX_BY_ID[id]) return FX_BY_ID[id]; }catch(e){}
-    return EXPECTED[id] || null;
+    if(String(id).startsWith('KO-')){
+      try{ if(typeof findKoSafe==='function') return findKoSafe(id) || null; }catch(e){}
+      try{ if(typeof findKoMatch==='function') return findKoMatch(id) || null; }catch(e){}
+    }
+    return null;
   }
-  function sameName(a,b){
+  function teamsOf(x){
+    return {
+      h:x && (x.h || x.homeTeam || x.home || x.homeName || x.homeTeamName || x.homeDisplayName),
+      a:x && (x.a || x.awayTeam || x.away || x.awayName || x.awayTeamName || x.awayDisplayName)
+    };
+  }
+  function sameTeam(a,b){
     if(placeholder(a)||placeholder(b)) return true;
     try{ if(typeof liveNameMatch==='function' && (liveNameMatch(a,b)||liveNameMatch(b,a))) return true; }catch(e){}
     const x=norm(a), y=norm(b);
-    if(!x||!y) return true;
-    return x===y;
+    return !x || !y || x===y;
   }
-  function resultTeams(r){
-    return {
-      h: r && (r.homeTeam || r.homeName || r.home_team || r.homeTeamName || r.homeDisplayName || r.home),
-      a: r && (r.awayTeam || r.awayName || r.away_team || r.awayTeamName || r.awayDisplayName || r.away)
-    };
+  function compatible(id,r){
+    if(!id || !r) return true;
+    const exp=expectedFor(id);
+    if(!exp) return true;
+    const rt=teamsOf(r), et=teamsOf(exp);
+    const providerHasTeams=!placeholder(rt.h)||!placeholder(rt.a);
+    if(!providerHasTeams) return true;
+    const expectedHasTeams=!placeholder(et.h)||!placeholder(et.a);
+    if(!expectedHasTeams) return true;
+    return sameTeam(rt.h,et.h) && sameTeam(rt.a,et.a);
   }
-  function teamsCompatible(id,r,x){
-    if(!r) return true;
-    x=x||expectedMatch(id);
-    if(!x) return true;
-    const rt=resultTeams(r), et=expectedTeams(x);
-    if((placeholder(rt.h)&&placeholder(rt.a)) || (placeholder(et.h)&&placeholder(et.a))) return true;
-    // Ha a provider explicit csapatneveket ad, mindkét oldalnak passzolnia kell.
-    const hasProviderTeams=!placeholder(rt.h)||!placeholder(rt.a);
-    if(!hasProviderTeams) return true;
-    return sameName(rt.h,et.h) && sameName(rt.a,et.a);
-  }
-  function rejectReason(id,r,x){
-    try{
-      const rt=resultTeams(r), et=expectedTeams(x||expectedMatch(id));
-      return 'live team mismatch '+id+': '+label(rt.h)+' - '+label(rt.a)+' != '+label(et.h)+' - '+label(et.a);
-    }catch(e){return 'live team mismatch '+id;}
-  }
-  function safeResult(id,r,x){
-    if(!r) return r;
-    if(teamsCompatible(id,r,x)) return r;
-    try{ console.warn('[WC26 v185]', rejectReason(id,r,x)); }catch(e){}
+  function keep(id,r){
+    if(compatible(id,r)) return r;
+    try{ console.warn('[WC26 v186] dropped wrong live payload for', id, teamsOf(r), 'expected', teamsOf(expectedFor(id))); }catch(e){}
     return null;
   }
-  function scrubCurrent(){
-    try{
-      Object.keys(LIVE_RESULTS||{}).forEach(function(id){
-        const x=expectedMatch(id), r=LIVE_RESULTS[id];
-        if(x && r && !teamsCompatible(id,r,x)) delete LIVE_RESULTS[id];
-      });
-    }catch(e){}
+  function scrubId(id){
+    try{ if(id && LIVE_RESULTS && LIVE_RESULTS[id] && !compatible(id,LIVE_RESULTS[id])) delete LIVE_RESULTS[id]; }catch(e){}
   }
 
-  try{ if(typeof buildKO==='function') buildKO(); }catch(e){}
-  scrubCurrent();
-
   try{
-    const prevNormalize=normalizeLiveResult;
-    normalizeLiveResult=function(id,d){
-      const r=prevNormalize.call(this,id,d);
-      return safeResult(id,r,expectedMatch(id));
-    };
+    const prevNormalizeV186 = typeof normalizeLiveResult==='function' ? normalizeLiveResult : null;
+    if(prevNormalizeV186){
+      normalizeLiveResult=function(id,d){
+        if(!keep(id,d)) return null;
+        const r=prevNormalizeV186.call(this,id,d);
+        return keep(id,r);
+      };
+    }
   }catch(e){}
 
   try{
-    const prevActual=actualFor;
-    actualFor=function(m){
-      const id=m && m.id;
-      const r=prevActual.call(this,m);
-      return safeResult(id,r,expectedMatch(id));
-    };
+    const prevMergeV186 = typeof mergeLiveResults==='function' ? mergeLiveResults : null;
+    if(prevMergeV186){
+      mergeLiveResults=function(next){
+        const filtered={};
+        try{
+          Object.entries(next||{}).forEach(function(pair){
+            const id=pair[0], raw=pair[1];
+            const ok=keep(id,raw);
+            if(ok) filtered[id]=ok;
+          });
+        }catch(e){}
+        return prevMergeV186.call(this,filtered);
+      };
+    }
   }catch(e){}
 
   try{
-    const prevMerge=mergeLiveResults;
-    mergeLiveResults=function(next){
-      const filtered={};
-      Object.entries(next||{}).forEach(function(pair){
-        const id=pair[0], raw=pair[1], x=expectedMatch(id);
-        if(!raw) return;
-        // raw team guard before normalize + normalized guard inside normalize.
-        if(x && !teamsCompatible(id,raw,x)){
-          try{ console.warn('[WC26 v185]', rejectReason(id,raw,x)); }catch(e){}
-          return;
-        }
-        filtered[id]=raw;
-      });
-      const ok=prevMerge.call(this,filtered);
-      scrubCurrent();
-      return ok;
-    };
+    const prevOpenKoTipV186 = typeof openKoTip==='function' ? openKoTip : null;
+    if(prevOpenKoTipV186){
+      openKoTip=function(id){
+        scrubId(id);
+        return prevOpenKoTipV186.apply(this,arguments);
+      };
+    }
   }catch(e){}
 
   try{
-    const prevPatch=patchLiveRows;
-    patchLiveRows=function(next){
-      scrubCurrent();
-      const filtered={};
-      Object.keys(next||{}).forEach(function(id){ if(LIVE_RESULTS && LIVE_RESULTS[id] && teamsCompatible(id,LIVE_RESULTS[id],expectedMatch(id))) filtered[id]=LIVE_RESULTS[id]; });
-      return prevPatch.call(this,filtered);
-    };
+    const prevProbV186 = typeof probCard==='function' ? probCard : null;
+    if(prevProbV186){
+      probCard=function(x,r){
+        const id=(x&&x.id)||'';
+        return prevProbV186.call(this,x,keep(id,r));
+      };
+    }
   }catch(e){}
 
-  try{
-    const prevProb=probCard;
-    probCard=function(x,r){
-      const id=(x&&x.id)||'';
-      const safe=safeResult(id,r,expectedMatch(id));
-      return prevProb.call(this,x,safe);
-    };
-  }catch(e){}
-
-  window.wc26LiveTeamsCompatible=function(id,r){return teamsCompatible(id,r,expectedMatch(id));};
+  try{ window.WC26_V186_STATUS={base:'V184',v185RolledBack:true,installedAt:new Date().toISOString()}; }catch(e){}
 })();
-/* ===== /WC26 v185 ===== */
+/* ===== /WC26 v186 ===== */
 
 </script></body></html>
