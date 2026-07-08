@@ -15502,10 +15502,28 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     }
     return null;
   }
+  function wc26LooksLikeTeamValueV189(v){
+    if(v==null) return false;
+    if(typeof v==='number') return false;
+    if(typeof v==='object') return true;
+    const s=String(v||'').trim();
+    if(!s) return false;
+    // h/a in live/result records are often numeric scores ("5", "1"), not team names.
+    if(/^\d+$/.test(s)) return false;
+    if(/^\d+\s*[-:]\s*\d+$/.test(s)) return false;
+    return true;
+  }
+  function wc26PickTeamValueV189(){
+    for(let i=0;i<arguments.length;i++){
+      const v=arguments[i];
+      if(wc26LooksLikeTeamValueV189(v)) return v;
+    }
+    return '';
+  }
   function teamsOf(x){
     return {
-      h:x && (x.h || x.homeTeam || x.home || x.homeName || x.homeTeamName || x.homeDisplayName),
-      a:x && (x.a || x.awayTeam || x.away || x.awayName || x.awayTeamName || x.awayDisplayName)
+      h: x && wc26PickTeamValueV189(x.homeTeam, x.home, x.homeName, x.homeTeamName, x.homeDisplayName, x.home_team, x.home_team_name, x.hTeam, x.teamH, x.h),
+      a: x && wc26PickTeamValueV189(x.awayTeam, x.away, x.awayName, x.awayTeamName, x.awayDisplayName, x.away_team, x.away_team_name, x.aTeam, x.teamA, x.a)
     };
   }
   function sameTeam(a,b){
@@ -15527,7 +15545,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
   function keep(id,r){
     if(compatible(id,r)) return r;
-    try{ console.warn('[WC26 v186] dropped wrong live payload for', id, teamsOf(r), 'expected', teamsOf(expectedFor(id))); }catch(e){}
+    try{ console.warn('[WC26 v189] dropped wrong live payload for', id, teamsOf(r), 'expected', teamsOf(expectedFor(id))); }catch(e){}
     return null;
   }
   function scrubId(id){
