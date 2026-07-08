@@ -1,4 +1,3 @@
-
 <!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><style>
 :root{
   --bg:#05090b;
@@ -9147,11 +9146,11 @@ function koPred(id){let p=KO_PRED[id];if(!p||!validScore(p.h)||!validScore(p.a))
 function koWinner(match){if(!match.h||!match.a)return null;let r=LIVE_RESULTS[match.id];if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pH>p.pA?match.h:match.a;return p.h>p.a?match.h:match.a;}
 function koLoser(match){if(!match.h||!match.a)return null;let r=LIVE_RESULTS[match.id];if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.a:match.h;return null;}return rh>ra?match.a:match.h;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pH>p.pA?match.a:match.h;return p.h>p.a?match.a:match.h;}
 
-function buildBronze(rounds){let sf=rounds?.[3]?.matches||[],ready=groupsComplete(),l1=koLoser(sf[0]),l2=koLoser(sf[1]),sch=KO_SCHEDULE['KO-BR-1']||{};return {id:'KO-BR-1',round:'BR',title:'Bronzmeccs',label:'Harmadik hely&eacute;rt',h:l1,a:l2,hs:l1?'Elődöntő vesztese 1':'Elődöntő vesztese 1',as:l2?'Elődöntő vesztese 2':'Elődöntő vesztese 2',index:1,date:sch.date,t:sch.t,locked:!ready||!(l1&&l2)}}
+function buildBronze(rounds){let sf=rounds?.[3]?.matches||[],ready=groupsComplete(),l1=koLoser(sf[0]),l2=koLoser(sf[1]),sch=KO_SCHEDULE['KO-BR-1']||{};return {id:'KO-BR-1',round:'BR',title:'Bronzmeccs',label:'Harmadik helyért',h:l1,a:l2,hs:l1?'Elődöntő vesztese 1':'Elődöntő vesztese 1',as:l2?'Elődöntő vesztese 2':'Elődöntő vesztese 2',index:1,date:sch.date,t:sch.t,locked:!ready||!(l1&&l2)}}
 function koTeamLine(team,seed,score,cls,pen,tip){if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';return '<div class="ko-team '+(cls||'')+'">'+crest(team,'22px')+'<span class="ko-name">'+esc(team)+'</span><span class="ko-score">'+(pen!=null?'<small class="ko-pen">('+pen+')</small>':'')+'<b class="'+(tip!=null?'has-tip':'')+'">'+(score==null?'-':score)+'</b>'+(tip!=null?'<span class="ko-tip-ind">'+tip+'</span>':'')+'</span></div>'}
 function koCard(m,row){var r=LIVE_RESULTS[m.id],hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),p=koPred(m.id);var dh=hasReal?+r.h:(p?p.h:null),da=hasReal?+r.a:(p?p.a:null);var dph=hasReal?(r.pH!=null?r.pH:null):(p&&p.pen?p.pH:null),dpa=hasReal?(r.pA!=null?r.pA:null):(p&&p.pen?p.pA:null);var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;if(dh!=null&&da!=null&&m.h&&m.a){if(dh!==da){w=dh>da?m.h:m.a;}else if(hasPen&&dph!==dpa){w=dph>dpa?m.h:m.a;}}var hw=w===m.h,aw=w===m.a;var rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';var sc=koTipScore(m),cls=[];if(hasReal)cls.push('live-result');else if(p){cls.push('predicted');}if(sc.cat==='exact')cls.push('result-exact');else if(sc.cat==='diff')cls.push('result-diff');else if(sc.cat==='outcome')cls.push('result-outcome');else if(sc.cat==='miss')cls.push('result-miss');if(m.locked)cls.push('locked');return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'+koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,(hasReal&&p)?p.h:null)+koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,(hasReal&&p)?p.a:null)+'</div>';}
 function koCol(title,matches,depth){let base=[1,2,4,8][depth]||1,step=Math.pow(2,depth+1);return '<div class="ko-col depth-'+(depth||0)+'"><h3>'+title+'</h3>'+matches.map((m,i)=>koCard(m,base+i*step)).join('')+'</div>'}
-function renderKO(){let m=document.getElementById('main'),rounds=buildKO(),bronze=buildBronze(rounds),r32=rounds[0].matches,r16=rounds[1].matches,qf=rounds[2].matches,sf=rounds[3].matches,fin=rounds[4].matches,ready=groupsComplete();m.className='main';let left=koCol('Legjobb 32',r32.slice(0,8),0)+koCol('Nyolcaddöntő',r16.slice(0,4),1)+koCol('Negyeddöntő',qf.slice(0,2),2)+koCol('Elődöntő',sf.slice(0,1),3),right=koCol('Elődöntő',sf.slice(1,2),3)+koCol('Negyeddöntő',qf.slice(2,4),2)+koCol('Nyolcaddöntő',r16.slice(4,8),1)+koCol('Legjobb 32',r32.slice(8,16),0),lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';m.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik hely&eacute;rt</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';activateCrests();let br=m.querySelector('.ko-bracket');if(br){br.scrollLeft=KO_SCROLL;requestAnimationFrame(()=>{br.scrollLeft=KO_SCROLL})}if(!FROZEN_MODE)m.querySelectorAll('[data-koid]').forEach(el=>el.onclick=e=>{e.stopPropagation();let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;openKoTip(el.dataset.koid)})}
+function renderKO(){let m=document.getElementById('main'),rounds=buildKO(),bronze=buildBronze(rounds),r32=rounds[0].matches,r16=rounds[1].matches,qf=rounds[2].matches,sf=rounds[3].matches,fin=rounds[4].matches,ready=groupsComplete();m.className='main';let left=koCol('Legjobb 32',r32.slice(0,8),0)+koCol('Nyolcaddöntő',r16.slice(0,4),1)+koCol('Negyeddöntő',qf.slice(0,2),2)+koCol('Elődöntő',sf.slice(0,1),3),right=koCol('Elődöntő',sf.slice(1,2),3)+koCol('Negyeddöntő',qf.slice(2,4),2)+koCol('Nyolcaddöntő',r16.slice(4,8),1)+koCol('Legjobb 32',r32.slice(8,16),0),lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';m.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik helyért</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';activateCrests();let br=m.querySelector('.ko-bracket');if(br){br.scrollLeft=KO_SCROLL;requestAnimationFrame(()=>{br.scrollLeft=KO_SCROLL})}if(!FROZEN_MODE)m.querySelectorAll('[data-koid]').forEach(el=>el.onclick=e=>{e.stopPropagation();let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;openKoTip(el.dataset.koid)})}
 function findKoMatch(id){let rounds=buildKO();return rounds.flatMap(r=>r.matches).concat([buildBronze(rounds)]).find(m=>m.id===id)}
 function openKoTip(id){if(FROZEN_MODE&&!READONLY_MODE)return;let x=findKoMatch(id);if(!x)return;document.querySelectorAll('.tip-overlay').forEach(el=>el.remove());let r=actualFor({id:x.id}),hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),locked=x.locked||matchLockState({id:x.id})!=='open',disTip=locked?' disabled':'',p=KO_PRED[id]||{},sc=koTipScore(x),sheetGrade=sc.cat?(' result-'+sc.cat):(r?.started?' live-locked':''),clock=liveClockLabel(r),isIntModal=r&&!r.finished&&String(r.status||'').toUpperCase().includes('INT'),clockPill=r?.finished?'<span class="tip-live-clock">FT</span>':((clock?'<span class="tip-live-clock">'+clock+'</span>':'')+(isIntModal?'<span class="tip-live-clock int-modal-badge">INT.</span>':'')),belowRow=hasReal?'<div class="tip-below-score">'+modalTimelineHtml(r,{h:x.h,a:x.a})+'</div>':'',scoreBox=hasReal?'<div class="tip-score tip-score-real"><div class="tip-real-cell tip-real-h">'+r.h+'</div><span class="tip-dash">-</span><div class="tip-real-cell tip-real-a">'+r.a+'</div><input id="tipH" type="hidden" value="'+(p.h??'')+'"><input id="tipA" type="hidden" value="'+(p.a??'')+'"></div>':'<div class="tip-score"><input id="tipH" type="number" min="0" max="99" inputmode="numeric" value="'+(p.h??'')+'" aria-label="Els&#337; csapat g&oacute;lja"'+disTip+'><span class="tip-dash">-</span><input id="tipA" type="number" min="0" max="99" inputmode="numeric" value="'+(p.a??'')+'" aria-label="M&aacute;sodik csapat g&oacute;lja"'+disTip+'></div>',yourTipHtml=(hasReal&&validScore(p.h)&&validScore(p.a))?'<div class="tip-your-tip-banner'+(sc.cat?' grade-'+sc.cat:'')+'"><span class="tip-your-tip-label">A te tipped</span><span class="tip-your-tip-score">'+p.h+' - '+p.a+'</span></div>':'',koR=r||LIVE_RESULTS[id]||null,penOpen=validScore(p.h)&&validScore(p.a)&&+p.h===+p.a,ov=document.createElement('div');ov.className='overlay tip-overlay';ov.dataset.tipId=id;ov.dataset.tipKind='ko';ov.innerHTML='<div class="sheet tip-sheet '+sheetGrade+'"><div class="sheet-top"><div class="sheet-pill"></div><button class="sheet-x" type="button" data-close-tip>&times;</button></div><div class="sheet-title">'+(locked?'M&eacute;rk&#337;z&eacute;s &aacute;llapota':'M&eacute;rk&#337;z&eacute;s tippel&eacute;se')+'</div><div class="tip-head"><span>'+(x.date&&x.t?localMatchDate(x)+' &middot; ':'')+x.title+' &middot; #'+x.index+'</span>'+(x.date&&x.t?'<span class="tip-time-pill">&#128337; '+localMatchTime(x)+'</span>':'')+'</div>'+yourTipHtml+'<div class="tip-match"><div class="tip-teams"><div class="tip-team">'+crest(x.h)+'<span>'+esc(x.h)+'</span><div class="tip-team-meta">'+modelMeta(x.h)+'</div></div>'+scoreBox+'<div class="tip-team">'+crest(x.a)+'<span>'+esc(x.a)+'</span><div class="tip-team-meta">'+modelMeta(x.a)+'</div></div></div>'+belowRow+'</div>'+probCard(x,koR)+'<div class="penalty-box '+(penOpen?'':'hidden')+'"><div class="penalty-title"><span>Tizenegyesek</span><span>csak d&ouml;ntetlenn&eacute;l</span></div><div class="penalty-grid"><div class="pen-team">'+esc(x.h)+'</div><div class="pen-inputs"><input id="penH" type="number" min="0" max="99" inputmode="numeric" value="'+(p.pH??'')+'" aria-label="Els&#337; csapat tizenegyesei"'+disTip+'><span class="tip-dash">-</span><input id="penA" type="number" min="0" max="99" inputmode="numeric" value="'+(p.pA??'')+'" aria-label="M&aacute;sodik csapat tizenegyesei"'+disTip+'></div><div class="pen-team">'+esc(x.a)+'</div></div><div class="pen-note">Ha a rendes j&aacute;t&eacute;kid&#337;/hosszabb&iacute;t&aacute;s ut&aacute;ni eredm&eacute;ny d&ouml;ntetlen, itt add meg a tizenegyesp&aacute;rbaj eredm&eacute;ny&eacute;t. A tov&aacute;bbjut&oacute;t ez d&ouml;nti el.</div></div><div class="tip-msg" id="tipMsg"></div>'+'<div class="tip-actions"><button class="tip-btn clear" type="button" data-clear-tip'+disTip+'>Tipp t&ouml;rl&eacute;se</button><button class="tip-btn save" type="button" data-save-tip'+disTip+'>'+(locked?'Z&aacute;rolva':'Ment&eacute;s')+'</button></div>'+(locked?'<div class="sheet-verdict"><b>Z&aacute;rolva</b> A m&eacute;rk&#337;z&eacute;s m&aacute;r elkezd&#337;d&ouml;tt vagy lez&aacute;rult, ez&eacute;rt a tipped nem m&oacute;dos&iacute;that&oacute;.</div></div>':'<div class="sheet-verdict"><b>Ment&eacute;s ut&aacute;n</b> a gy&#337;ztes tov&aacute;bbker&uuml;l a következ&#337; körbe, &eacute;s a statisztik&aacute;k is friss&uuml;lnek.</div></div>');document.body.appendChild(ov);syncModalOpenClass();activateCrests();let syncPen=()=>{let h=ov.querySelector('#tipH').value,a=ov.querySelector('#tipA').value,show=validScore(h)&&validScore(a)&&+h===+a,box=ov.querySelector('.penalty-box');box.classList.toggle('hidden',!show);if(!show){ov.querySelector('#penH').value='';ov.querySelector('#penA').value=''}};if(!locked){ov.querySelector('#tipH').addEventListener('input',syncPen);ov.querySelector('#tipA').addEventListener('input',syncPen)}ov.onclick=e=>{if(e.target===ov||e.target.closest('[data-close-tip]'))closeTip()};ov.querySelector('[data-save-tip]').onclick=()=>saveKoTip(id);ov.querySelector('[data-clear-tip]').onclick=async()=>{let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;await wc26DeleteKoTip(id);closeTip();render();refreshCommunityPreviews()};
 // V191: KO/modal self-reopen loop removed.
@@ -10274,7 +10273,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     const left=v115KoCol('Legjobb 32',r32.slice(0,8),0)+v115KoCol('Nyolcaddöntő',r16.slice(0,4),1)+v115KoCol('Negyeddöntő',qf.slice(0,2),2)+v115KoCol('Elődöntő',sf.slice(0,1),3);
     const right=v115KoCol('Elődöntő',sf.slice(1,2),3)+v115KoCol('Negyeddöntő',qf.slice(2,4),2)+v115KoCol('Nyolcaddöntő',r16.slice(4,8),1)+v115KoCol('Legjobb 32',r32.slice(8,16),0);
     const lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';
-    main.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik hely&eacute;rt</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';
+    main.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik helyért</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';
     activateCrests();
     const br=main.querySelector('.ko-bracket');
     if(br){
@@ -14250,4 +14249,204 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     };
   }
 })();
+
+
+/* ===== WC26 v193: KO penalty advancement + accent-safe labels ===== */
+(function(){
+  if(window.__WC26_V193_KO_PENALTY_ADVANCE_ACCENTS__) return;
+  window.__WC26_V193_KO_PENALTY_ADVANCE_ACCENTS__ = true;
+
+  function scoreNum(v){ return (typeof validScore === 'function' && validScore(v)) ? +v : null; }
+  function teamName(v){
+    if(v && typeof v === 'object') v = v.team || v.name || v.shortName || '';
+    return String(v == null ? '' : v).trim();
+  }
+  function koDeleteKey(){
+    try{ return 'wc26_ko_deleted_clean_' + ((typeof wc26User !== 'undefined' && wc26User && wc26User.uid) || 'anon'); }
+    catch(e){ return 'wc26_ko_deleted_clean_anon'; }
+  }
+  function readKoDeleted(){
+    try{ return JSON.parse(localStorage.getItem(koDeleteKey()) || '{}') || {}; }
+    catch(e){ return {}; }
+  }
+  function isKoDeleted(id){ return !!readKoDeleted()[id]; }
+  function clearKoDeleted(id){
+    try{
+      const d = readKoDeleted();
+      if(d[id]){ delete d[id]; localStorage.setItem(koDeleteKey(), JSON.stringify(d)); }
+    }catch(e){}
+  }
+  function rawKoPred(id){
+    if(isKoDeleted(id)) return null;
+    const direct = (typeof KO_PRED !== 'undefined' && KO_PRED) ? KO_PRED[id] : null;
+    if(direct) return direct;
+    const last = window.__WC26_LAST_GOOD_KO__ || null;
+    return last ? last[id] : null;
+  }
+  function cleanKoPred(p){
+    if(!p || typeof p !== 'object') return null;
+    const h = scoreNum(p.h), a = scoreNum(p.a);
+    if(h == null || a == null) return null;
+    if(h === a){
+      const pH = scoreNum(p.pH), pA = scoreNum(p.pA);
+      if(pH == null || pA == null || pH === pA) return null;
+      const side = pH > pA ? 'h' : 'a';
+      return Object.assign({}, p, { h, a, pH, pA, pen: side, penWinner: side, winner: side });
+    }
+    const side = h > a ? 'h' : 'a';
+    return Object.assign({}, p, { h, a, pH: null, pA: null, pen: false, penWinner: null, winner: side });
+  }
+
+  koPred = function(id){
+    const p = cleanKoPred(rawKoPred(id));
+    if(p && window.__WC26_LAST_GOOD_KO__) window.__WC26_LAST_GOOD_KO__[id] = p;
+    return p;
+  };
+
+  function koSideWinner(match){
+    if(!match || !teamName(match.h) || !teamName(match.a)) return null;
+    const r = (typeof actualFor === 'function' ? actualFor({id:match.id}) : (LIVE_RESULTS && LIVE_RESULTS[match.id])) || null;
+    if(r && r.finished && scoreNum(r.h) != null && scoreNum(r.a) != null){
+      const h = +r.h, a = +r.a;
+      if(h > a) return 'h';
+      if(a > h) return 'a';
+      const pH = scoreNum(r.pH), pA = scoreNum(r.pA);
+      if(pH != null && pA != null && pH !== pA) return pH > pA ? 'h' : 'a';
+      return null;
+    }
+    const p = koPred(match.id);
+    if(!p) return null;
+    if(p.winner === 'h' || p.winner === 'a') return p.winner;
+    if(p.pen === 'h' || p.pen === 'a') return p.pen;
+    if(+p.h > +p.a) return 'h';
+    if(+p.a > +p.h) return 'a';
+    const pH = scoreNum(p.pH), pA = scoreNum(p.pA);
+    if(pH != null && pA != null && pH !== pA) return pH > pA ? 'h' : 'a';
+    return null;
+  }
+
+  koWinner = function(match){
+    const side = koSideWinner(match);
+    return side === 'h' ? match.h : side === 'a' ? match.a : null;
+  };
+  koLoser = function(match){
+    const side = koSideWinner(match);
+    return side === 'h' ? match.a : side === 'a' ? match.h : null;
+  };
+
+  buildBronze = function(rounds){
+    const sf = (rounds && rounds[3] && rounds[3].matches) || [];
+    const ready = (typeof groupsComplete === 'function') ? groupsComplete() : false;
+    const l1 = koLoser(sf[0]), l2 = koLoser(sf[1]);
+    const sch = (typeof KO_SCHEDULE !== 'undefined' && KO_SCHEDULE['KO-BR-1']) || {};
+    return {
+      id:'KO-BR-1', round:'BR', title:'Bronzmeccs', label:'Harmadik helyért',
+      h:l1, a:l2,
+      hs:l1 ? 'Elődöntő vesztese 1' : 'Elődöntő vesztese 1',
+      as:l2 ? 'Elődöntő vesztese 2' : 'Elődöntő vesztese 2',
+      index:1, date:sch.date, t:sch.t,
+      locked:!ready || !(l1 && l2)
+    };
+  };
+
+  saveKoTip = function(id){
+    if(typeof READONLY_MODE !== 'undefined' && READONLY_MODE) return;
+    const x = (typeof findKoMatch === 'function') ? findKoMatch(id) : null;
+    if(!x || x.locked) return;
+    const br = document.querySelector('.ko-bracket');
+    if(br){ KO_SCROLL = br.scrollLeft; window.__WC26_KO_SCROLL = br.scrollLeft; }
+    const ov = document.querySelector('.tip-overlay');
+    if(!ov) return;
+    const hEl = ov.querySelector('#tipH'), aEl = ov.querySelector('#tipA'), pHEl = ov.querySelector('#penH'), pAEl = ov.querySelector('#penA'), msg = ov.querySelector('#tipMsg');
+    const h = hEl ? hEl.value : '', a = aEl ? aEl.value : '', pH = pHEl ? pHEl.value : '', pA = pAEl ? pAEl.value : '';
+    if(typeof groupsComplete === 'function' && !groupsComplete()){
+      if(msg) msg.textContent = 'Előbb tippeld ki mind a 72 csoportmeccset.';
+      return;
+    }
+    if(scoreNum(h) == null || scoreNum(a) == null){
+      if(msg) msg.textContent = 'Adj meg két 0 és 99 közötti egész számot.';
+      return;
+    }
+    const obj = {
+      h:+h, a:+a,
+      hTeam:teamName(x.h),
+      aTeam:teamName(x.a),
+      round:x.title
+    };
+    if(+h === +a){
+      if(scoreNum(pH) == null || scoreNum(pA) == null){
+        if(msg) msg.textContent = 'Döntetlennél a tizenegyeseket is meg kell adni.';
+        return;
+      }
+      if(+pH === +pA){
+        if(msg) msg.textContent = 'A tizenegyespárbaj nem lehet döntetlen.';
+        return;
+      }
+      obj.pH = +pH;
+      obj.pA = +pA;
+      obj.pen = +pH > +pA ? 'h' : 'a';
+      obj.penWinner = obj.pen;
+      obj.winner = obj.pen;
+    }else{
+      obj.pH = null;
+      obj.pA = null;
+      obj.pen = false;
+      obj.penWinner = null;
+      obj.winner = +h > +a ? 'h' : 'a';
+    }
+    clearKoDeleted(id);
+    KO_PRED[id] = obj;
+    if(window.__WC26_LAST_GOOD_KO__) window.__WC26_LAST_GOOD_KO__[id] = cleanKoPred(obj) || obj;
+    if(typeof savePred === 'function') savePred();
+    if(typeof closeTip === 'function') closeTip();
+    if(typeof render === 'function') render();
+    try{ if(typeof refreshCommunityPreviews === 'function') refreshCommunityPreviews(); }catch(e){}
+  };
+
+  const entityMap = {
+    '&aacute;':'á','&Aacute;':'Á','&eacute;':'é','&Eacute;':'É','&iacute;':'í','&Iacute;':'Í','&oacute;':'ó','&Oacute;':'Ó','&ouml;':'ö','&Ouml;':'Ö','&uacute;':'ú','&Uacute;':'Ú','&uuml;':'ü','&Uuml;':'Ü',
+    '&#337;':'ő','&#336;':'Ő','&otilde;':'ő','&Otilde;':'Ő','&#369;':'ű','&#368;':'Ű','&ucirc;':'ű','&Ucirc;':'Ű'
+  };
+  const entityRe = new RegExp(Object.keys(entityMap).join('|'), 'g');
+  function fixVisibleEntities(root){
+    root = root || document.getElementById('main') || document.body;
+    if(!root || !document.createTreeWalker) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node){ return node.nodeValue && node.nodeValue.indexOf('&') !== -1 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; }
+    });
+    const nodes = [];
+    while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(node=>{ node.nodeValue = node.nodeValue.replace(entityRe, m=>entityMap[m] || m); });
+  }
+
+  const prevRenderKO = (typeof renderKO === 'function') ? renderKO : null;
+  if(prevRenderKO){
+    renderKO = function(){
+      const ret = prevRenderKO.apply(this, arguments);
+      fixVisibleEntities(document.getElementById('main'));
+      return ret;
+    };
+  }
+  const prevRender = (typeof render === 'function') ? render : null;
+  if(prevRender){
+    render = function(){
+      const ret = prevRender.apply(this, arguments);
+      fixVisibleEntities(document.getElementById('main'));
+      return ret;
+    };
+  }
+  const prevOpenKoTip = (typeof openKoTip === 'function') ? openKoTip : null;
+  if(prevOpenKoTip){
+    openKoTip = function(){
+      const ret = prevOpenKoTip.apply(this, arguments);
+      fixVisibleEntities(document.querySelector('.tip-overlay'));
+      return ret;
+    };
+  }
+
+  try{ fixVisibleEntities(document.getElementById('main')); }catch(e){}
+  try{ if(typeof S !== 'undefined' && S.tab === 'knockout' && typeof renderKO === 'function') setTimeout(()=>renderKO(),0); }catch(e){}
+})();
+/* ===== /WC26 v193 ===== */
+
 </script></body></html>
