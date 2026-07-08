@@ -12312,7 +12312,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   const oldStartFallbackV139 = (typeof startWc26LiveWorkerFallback==='function') ? startWc26LiveWorkerFallback : null;
   function wc26StartWorkerLiveOnlyV139(){
     wc26StopAnyLiveDbListenerV139();
-    if(FROZEN_MODE||wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL)return false;
+    if(FROZEN_MODE||window.wc26LiveFallbackTimer||!WC26_RESULTS_READ_URL)return false;
     if(oldStartFallbackV139){
       oldStartFallbackV139();
       return true;
