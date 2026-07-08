@@ -1,3 +1,4 @@
+
 <!doctype html><html lang="hu"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>FIFA World Cup 2026</title><style>
 :root{
   --bg:#05090b;
@@ -8297,9 +8298,10 @@ const TOTS={
 };
 const STAR_LIST=[POTY,{short:'Lamine Yamal',club:'Spain',rating:8.24,img:'https://images.fotmob.com/image_resources/playerimages/1423182.png'},{short:'Vin&iacute;cius J&uacute;nior',club:'Brazil',rating:8.20,img:'https://images.fotmob.com/image_resources/playerimages/846033.png'},{short:'Mohamed Salah',club:'Egypt',rating:8.08,img:'https://images.fotmob.com/image_resources/playerimages/292462.png'},{short:'Cristiano Ronaldo',club:'Portugal',rating:8.04,img:'https://images.fotmob.com/image_resources/playerimages/30893.png'}];
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function ini(n){return n.split(/\s+/).map(w=>w[0]).join('').replace(/[^A-Z]/gi,'').slice(0,3).toUpperCase()}
-function logo(n){let id=TEAM_IDS[n];return id?['https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'.png','https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'_xsmall.png']:[]}
-function crest(n,s){let u=logo(n),st=s?' style="--cs:'+s+'"':'';return '<span class="crest" data-n="'+esc(n)+'" data-i="0" data-u="'+encodeURIComponent(JSON.stringify(u))+'"'+st+'><img alt="'+esc(n)+'" src="'+(u[0]||'')+'" loading="eager" decoding="async"><span class="svg-fb"></span><span class="ini-fb">'+ini(n)+'</span></span>'}
+function wc26TeamLabel(n){if(n&&typeof n==='object')n=n.team||n.name||n.shortName||'';return n==null?'':String(n).trim()}
+function ini(n){n=wc26TeamLabel(n);if(!n)return'TBD';let out=n.split(/\s+/).filter(Boolean).map(w=>w[0]||'').join('').replace(/[^A-Z]/gi,'').slice(0,3).toUpperCase();return out||'TBD'}
+function logo(n){n=wc26TeamLabel(n);if(!n)return[];let id=TEAM_IDS[n];return id?['https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'.png','https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'_xsmall.png']:[]}
+function crest(n,s){n=wc26TeamLabel(n);let u=logo(n),st=s?' style="--cs:'+s+'"':'',label=n||'TBD',emptyCls=n?'':' show-ini';return '<span class="crest'+emptyCls+'" data-n="'+esc(label)+'" data-i="0" data-u="'+encodeURIComponent(JSON.stringify(u))+'"'+st+'><img alt="'+esc(label)+'" src="'+(u[0]||'')+'" loading="eager" decoding="async"><span class="svg-fb"></span><span class="ini-fb">'+ini(n)+'</span></span>'}
 let cache={};try{cache=JSON.parse(sessionStorage.getItem('wc26_logos')||'{}')}catch(e){}function save(){try{sessionStorage.setItem('wc26_logos',JSON.stringify(cache))}catch(e){}}
 function activateCrests(){document.querySelectorAll('.crest').forEach(el=>{let n=el.dataset.n,img=el.querySelector('img');if(!img)return;if(cache[n])img.src=cache[n];img.onerror=()=>{let u=JSON.parse(decodeURIComponent(el.dataset.u||'%5B%5D')),i=(+el.dataset.i||0)+1;el.dataset.i=i;if(i<u.length)img.src=u[i];else el.classList.add('show-ini')};img.onload=()=>{el.classList.remove('show-ini');if(!cache[n]){cache[n]=img.src;save()}};if(img.complete&&img.naturalWidth>0)img.onload();else if(img.complete)img.onerror()})}
 function playerCard(p){return '<div class="ov-player"><div class="ov-player-wrap"><img class="ov-player-img" src="'+p.img+'" alt="'+esc(p.short)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" loading="lazy"><div class="ov-player-img no-img" style="display:none">&#128100;</div><div class="ov-crest-badge">'+crest(p.club)+'</div></div><div class="ov-rating-badge">'+p.rating.toFixed(2)+'</div><div class="ov-player-name">'+p.short+'</div></div>'}
@@ -14225,5 +14227,27 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   }
   if(oldOpenTip){ openTip = function(){ return guardedOpen.call(this, oldOpenTip, arguments); }; }
   if(oldOpenKoTip){ openKoTip = function(){ return guardedOpen.call(this, oldOpenKoTip, arguments); }; }
+})();
+
+
+/* ===== WC26 v192: KO null-team guard + split crash hardening ===== */
+(function(){
+  if(window.__WC26_V192_KO_NULL_TEAM_GUARD__) return;
+  window.__WC26_V192_KO_NULL_TEAM_GUARD__ = true;
+  const prevOpenKoTip = typeof openKoTip === 'function' ? openKoTip : null;
+  function hasKoTeam(v){
+    if(v && typeof v === 'object') v = v.team || v.name || v.shortName || '';
+    return v != null && String(v).trim() !== '' && String(v).trim().toLowerCase() !== 'null';
+  }
+  if(prevOpenKoTip){
+    openKoTip = function(id){
+      let m = null;
+      try{ if(typeof findKoMatch === 'function') m = findKoMatch(id); }catch(e){}
+      if(m && (!hasKoTeam(m.h) || !hasKoTeam(m.a))){
+        return false;
+      }
+      return prevOpenKoTip.apply(this, arguments);
+    };
+  }
 })();
 </script></body></html>
