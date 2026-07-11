@@ -8297,10 +8297,10 @@ const TOTS={
 };
 const STAR_LIST=[POTY,{short:'Lamine Yamal',club:'Spain',rating:8.24,img:'https://images.fotmob.com/image_resources/playerimages/1423182.png'},{short:'Vin&iacute;cius J&uacute;nior',club:'Brazil',rating:8.20,img:'https://images.fotmob.com/image_resources/playerimages/846033.png'},{short:'Mohamed Salah',club:'Egypt',rating:8.08,img:'https://images.fotmob.com/image_resources/playerimages/292462.png'},{short:'Cristiano Ronaldo',club:'Portugal',rating:8.04,img:'https://images.fotmob.com/image_resources/playerimages/30893.png'}];
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function wc26TeamLabel(n){if(n&&typeof n==='object')n=n.team||n.name||n.shortName||'';return n==null?'':String(n).trim()}
-function ini(n){n=wc26TeamLabel(n);if(!n)return'TBD';let out=n.split(/\s+/).filter(Boolean).map(w=>w[0]||'').join('').replace(/[^A-Z]/gi,'').slice(0,3).toUpperCase();return out||'TBD'}
-function logo(n){n=wc26TeamLabel(n);if(!n)return[];let id=TEAM_IDS[n];return id?['https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'.png','https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'_xsmall.png']:[]}
-function crest(n,s){n=wc26TeamLabel(n);let u=logo(n),st=s?' style="--cs:'+s+'"':'',label=n||'TBD',emptyCls=n?'':' show-ini';return '<span class="crest'+emptyCls+'" data-n="'+esc(label)+'" data-i="0" data-u="'+encodeURIComponent(JSON.stringify(u))+'"'+st+'><img alt="'+esc(label)+'" src="'+(u[0]||'')+'" loading="eager" decoding="async"><span class="svg-fb"></span><span class="ini-fb">'+ini(n)+'</span></span>'}
+function teamLabel(n){if(n&&typeof n==='object')n=n.team||n.name||n.short||n.seed||'';n=String(n??'').trim();return(n&&n!=='null'&&n!=='undefined')?n:'TBD'}
+function ini(n){n=teamLabel(n);let out=n.split(/\s+/).filter(Boolean).map(w=>w[0]||'').join('').replace(/[^A-Z]/gi,'').slice(0,3).toUpperCase();return out||'TBD'}
+function logo(n){n=teamLabel(n);let id=TEAM_IDS[n];return id?['https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'.png','https://images.fotmob.com/image_resources/logo/teamlogo/'+id+'_xsmall.png']:[]}
+function crest(n,s){n=teamLabel(n);let u=logo(n),st=s?' style="--cs:'+s+'"':'';return '<span class="crest" data-n="'+esc(n)+'" data-i="0" data-u="'+encodeURIComponent(JSON.stringify(u))+'"'+st+'><img alt="'+esc(n)+'" src="'+(u[0]||'')+'" loading="eager" decoding="async"><span class="svg-fb"></span><span class="ini-fb">'+ini(n)+'</span></span>'}
 let cache={};try{cache=JSON.parse(sessionStorage.getItem('wc26_logos')||'{}')}catch(e){}function save(){try{sessionStorage.setItem('wc26_logos',JSON.stringify(cache))}catch(e){}}
 function activateCrests(){document.querySelectorAll('.crest').forEach(el=>{let n=el.dataset.n,img=el.querySelector('img');if(!img)return;if(cache[n])img.src=cache[n];img.onerror=()=>{let u=JSON.parse(decodeURIComponent(el.dataset.u||'%5B%5D')),i=(+el.dataset.i||0)+1;el.dataset.i=i;if(i<u.length)img.src=u[i];else el.classList.add('show-ini')};img.onload=()=>{el.classList.remove('show-ini');if(!cache[n]){cache[n]=img.src;save()}};if(img.complete&&img.naturalWidth>0)img.onload();else if(img.complete)img.onerror()})}
 function playerCard(p){return '<div class="ov-player"><div class="ov-player-wrap"><img class="ov-player-img" src="'+p.img+'" alt="'+esc(p.short)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" loading="lazy"><div class="ov-player-img no-img" style="display:none">&#128100;</div><div class="ov-crest-badge">'+crest(p.club)+'</div></div><div class="ov-rating-badge">'+p.rating.toFixed(2)+'</div><div class="ov-player-name">'+p.short+'</div></div>'}
@@ -9146,11 +9146,11 @@ function koPred(id){let p=KO_PRED[id];if(!p||!validScore(p.h)||!validScore(p.a))
 function koWinner(match){if(!match.h||!match.a)return null;let r=LIVE_RESULTS[match.id];if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pH>p.pA?match.h:match.a;return p.h>p.a?match.h:match.a;}
 function koLoser(match){if(!match.h||!match.a)return null;let r=LIVE_RESULTS[match.id];if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.a:match.h;return null;}return rh>ra?match.a:match.h;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pH>p.pA?match.a:match.h;return p.h>p.a?match.a:match.h;}
 
-function buildBronze(rounds){let sf=rounds?.[3]?.matches||[],ready=groupsComplete(),l1=koLoser(sf[0]),l2=koLoser(sf[1]),sch=KO_SCHEDULE['KO-BR-1']||{};return {id:'KO-BR-1',round:'BR',title:'Bronzmeccs',label:'Harmadik helyért',h:l1,a:l2,hs:l1?'Elődöntő vesztese 1':'Elődöntő vesztese 1',as:l2?'Elődöntő vesztese 2':'Elődöntő vesztese 2',index:1,date:sch.date,t:sch.t,locked:!ready||!(l1&&l2)}}
+function buildBronze(rounds){let sf=rounds?.[3]?.matches||[],ready=groupsComplete(),l1=koLoser(sf[0]),l2=koLoser(sf[1]),sch=KO_SCHEDULE['KO-BR-1']||{};return {id:'KO-BR-1',round:'BR',title:'Bronzmeccs',label:'Harmadik hely&eacute;rt',h:l1,a:l2,hs:l1?'Elődöntő vesztese 1':'Elődöntő vesztese 1',as:l2?'Elődöntő vesztese 2':'Elődöntő vesztese 2',index:1,date:sch.date,t:sch.t,locked:!ready||!(l1&&l2)}}
 function koTeamLine(team,seed,score,cls,pen,tip){if(!team)return '<div class="ko-team ko-empty"><span class="ko-name ko-placeholder">'+seed+'</span></div>';return '<div class="ko-team '+(cls||'')+'">'+crest(team,'22px')+'<span class="ko-name">'+esc(team)+'</span><span class="ko-score">'+(pen!=null?'<small class="ko-pen">('+pen+')</small>':'')+'<b class="'+(tip!=null?'has-tip':'')+'">'+(score==null?'-':score)+'</b>'+(tip!=null?'<span class="ko-tip-ind">'+tip+'</span>':'')+'</span></div>'}
 function koCard(m,row){var r=LIVE_RESULTS[m.id],hasReal=r&&(r.started||r.finished)&&validScore(r.h)&&validScore(r.a),p=koPred(m.id);var dh=hasReal?+r.h:(p?p.h:null),da=hasReal?+r.a:(p?p.a:null);var dph=hasReal?(r.pH!=null?r.pH:null):(p&&p.pen?p.pH:null),dpa=hasReal?(r.pA!=null?r.pA:null):(p&&p.pen?p.pA:null);var hasPen=dph!=null&&dpa!=null&&dh===da,w=null;if(dh!=null&&da!=null&&m.h&&m.a){if(dh!==da){w=dh>da?m.h:m.a;}else if(hasPen&&dph!==dpa){w=dph>dpa?m.h:m.a;}}var hw=w===m.h,aw=w===m.a;var rowStyle=row?(' style="grid-row:'+row+' / span 2"'):'';var sc=koTipScore(m),cls=[];if(hasReal)cls.push('live-result');else if(p){cls.push('predicted');}if(sc.cat==='exact')cls.push('result-exact');else if(sc.cat==='diff')cls.push('result-diff');else if(sc.cat==='outcome')cls.push('result-outcome');else if(sc.cat==='miss')cls.push('result-miss');if(m.locked)cls.push('locked');return '<div class="ko-card '+cls.join(' ')+'" data-koid="'+m.id+'"'+rowStyle+'><div class="ko-watermark">'+m.label+'</div>'+koTeamLine(m.h,m.hs,dh!=null?dh:null,hw?'win':aw?'dim':'',hasPen?dph:null,(hasReal&&p)?p.h:null)+koTeamLine(m.a,m.as,da!=null?da:null,aw?'win':hw?'dim':'',hasPen?dpa:null,(hasReal&&p)?p.a:null)+'</div>';}
 function koCol(title,matches,depth){let base=[1,2,4,8][depth]||1,step=Math.pow(2,depth+1);return '<div class="ko-col depth-'+(depth||0)+'"><h3>'+title+'</h3>'+matches.map((m,i)=>koCard(m,base+i*step)).join('')+'</div>'}
-function renderKO(){let m=document.getElementById('main'),rounds=buildKO(),bronze=buildBronze(rounds),r32=rounds[0].matches,r16=rounds[1].matches,qf=rounds[2].matches,sf=rounds[3].matches,fin=rounds[4].matches,ready=groupsComplete();m.className='main';let left=koCol('Legjobb 32',r32.slice(0,8),0)+koCol('Nyolcaddöntő',r16.slice(0,4),1)+koCol('Negyeddöntő',qf.slice(0,2),2)+koCol('Elődöntő',sf.slice(0,1),3),right=koCol('Elődöntő',sf.slice(1,2),3)+koCol('Negyeddöntő',qf.slice(2,4),2)+koCol('Nyolcaddöntő',r16.slice(4,8),1)+koCol('Legjobb 32',r32.slice(8,16),0),lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';m.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik helyért</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';activateCrests();let br=m.querySelector('.ko-bracket');if(br){br.scrollLeft=KO_SCROLL;requestAnimationFrame(()=>{br.scrollLeft=KO_SCROLL})}if(!FROZEN_MODE)m.querySelectorAll('[data-koid]').forEach(el=>el.onclick=e=>{e.stopPropagation();let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;openKoTip(el.dataset.koid)})}
+function renderKO(){let m=document.getElementById('main'),rounds=buildKO(),bronze=buildBronze(rounds),r32=rounds[0].matches,r16=rounds[1].matches,qf=rounds[2].matches,sf=rounds[3].matches,fin=rounds[4].matches,ready=groupsComplete();m.className='main';let left=koCol('Legjobb 32',r32.slice(0,8),0)+koCol('Nyolcaddöntő',r16.slice(0,4),1)+koCol('Negyeddöntő',qf.slice(0,2),2)+koCol('Elődöntő',sf.slice(0,1),3),right=koCol('Elődöntő',sf.slice(1,2),3)+koCol('Negyeddöntő',qf.slice(2,4),2)+koCol('Nyolcaddöntő',r16.slice(4,8),1)+koCol('Legjobb 32',r32.slice(8,16),0),lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';m.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik hely&eacute;rt</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';activateCrests();let br=m.querySelector('.ko-bracket');if(br){br.scrollLeft=KO_SCROLL;requestAnimationFrame(()=>{br.scrollLeft=KO_SCROLL})}if(!FROZEN_MODE)m.querySelectorAll('[data-koid]').forEach(el=>el.onclick=e=>{e.stopPropagation();let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;openKoTip(el.dataset.koid)})}
 function findKoMatch(id){let rounds=buildKO();return rounds.flatMap(r=>r.matches).concat([buildBronze(rounds)]).find(m=>m.id===id)}
 function openKoTip(id){if(FROZEN_MODE&&!READONLY_MODE)return;let x=findKoMatch(id);if(!x)return;document.querySelectorAll('.tip-overlay').forEach(el=>el.remove());let r=actualFor({id:x.id}),hasReal=r&&(r.started||r.finished||matchLockState({id:x.id})!=="open")&&validScore(r.h)&&validScore(r.a),locked=x.locked||matchLockState({id:x.id})!=='open',disTip=locked?' disabled':'',p=KO_PRED[id]||{},sc=koTipScore(x),sheetGrade=sc.cat?(' result-'+sc.cat):(r?.started?' live-locked':''),clock=liveClockLabel(r),isIntModal=r&&!r.finished&&String(r.status||'').toUpperCase().includes('INT'),clockPill=r?.finished?'<span class="tip-live-clock">FT</span>':((clock?'<span class="tip-live-clock">'+clock+'</span>':'')+(isIntModal?'<span class="tip-live-clock int-modal-badge">INT.</span>':'')),belowRow=hasReal?'<div class="tip-below-score">'+modalTimelineHtml(r,{h:x.h,a:x.a})+'</div>':'',scoreBox=hasReal?'<div class="tip-score tip-score-real"><div class="tip-real-cell tip-real-h">'+r.h+'</div><span class="tip-dash">-</span><div class="tip-real-cell tip-real-a">'+r.a+'</div><input id="tipH" type="hidden" value="'+(p.h??'')+'"><input id="tipA" type="hidden" value="'+(p.a??'')+'"></div>':'<div class="tip-score"><input id="tipH" type="number" min="0" max="99" inputmode="numeric" value="'+(p.h??'')+'" aria-label="Els&#337; csapat g&oacute;lja"'+disTip+'><span class="tip-dash">-</span><input id="tipA" type="number" min="0" max="99" inputmode="numeric" value="'+(p.a??'')+'" aria-label="M&aacute;sodik csapat g&oacute;lja"'+disTip+'></div>',yourTipHtml=(hasReal&&validScore(p.h)&&validScore(p.a))?'<div class="tip-your-tip-banner'+(sc.cat?' grade-'+sc.cat:'')+'"><span class="tip-your-tip-label">A te tipped</span><span class="tip-your-tip-score">'+p.h+' - '+p.a+'</span></div>':'',koR=r||LIVE_RESULTS[id]||null,penOpen=validScore(p.h)&&validScore(p.a)&&+p.h===+p.a,ov=document.createElement('div');ov.className='overlay tip-overlay';ov.dataset.tipId=id;ov.dataset.tipKind='ko';ov.innerHTML='<div class="sheet tip-sheet '+sheetGrade+'"><div class="sheet-top"><div class="sheet-pill"></div><button class="sheet-x" type="button" data-close-tip>&times;</button></div><div class="sheet-title">'+(locked?'M&eacute;rk&#337;z&eacute;s &aacute;llapota':'M&eacute;rk&#337;z&eacute;s tippel&eacute;se')+'</div><div class="tip-head"><span>'+(x.date&&x.t?localMatchDate(x)+' &middot; ':'')+x.title+' &middot; #'+x.index+'</span>'+(x.date&&x.t?'<span class="tip-time-pill">&#128337; '+localMatchTime(x)+'</span>':'')+'</div>'+yourTipHtml+'<div class="tip-match"><div class="tip-teams"><div class="tip-team">'+crest(x.h)+'<span>'+esc(x.h)+'</span><div class="tip-team-meta">'+modelMeta(x.h)+'</div></div>'+scoreBox+'<div class="tip-team">'+crest(x.a)+'<span>'+esc(x.a)+'</span><div class="tip-team-meta">'+modelMeta(x.a)+'</div></div></div>'+belowRow+'</div>'+probCard(x,koR)+'<div class="penalty-box '+(penOpen?'':'hidden')+'"><div class="penalty-title"><span>Tizenegyesek</span><span>csak d&ouml;ntetlenn&eacute;l</span></div><div class="penalty-grid"><div class="pen-team">'+esc(x.h)+'</div><div class="pen-inputs"><input id="penH" type="number" min="0" max="99" inputmode="numeric" value="'+(p.pH??'')+'" aria-label="Els&#337; csapat tizenegyesei"'+disTip+'><span class="tip-dash">-</span><input id="penA" type="number" min="0" max="99" inputmode="numeric" value="'+(p.pA??'')+'" aria-label="M&aacute;sodik csapat tizenegyesei"'+disTip+'></div><div class="pen-team">'+esc(x.a)+'</div></div><div class="pen-note">Ha a rendes j&aacute;t&eacute;kid&#337;/hosszabb&iacute;t&aacute;s ut&aacute;ni eredm&eacute;ny d&ouml;ntetlen, itt add meg a tizenegyesp&aacute;rbaj eredm&eacute;ny&eacute;t. A tov&aacute;bbjut&oacute;t ez d&ouml;nti el.</div></div><div class="tip-msg" id="tipMsg"></div>'+'<div class="tip-actions"><button class="tip-btn clear" type="button" data-clear-tip'+disTip+'>Tipp t&ouml;rl&eacute;se</button><button class="tip-btn save" type="button" data-save-tip'+disTip+'>'+(locked?'Z&aacute;rolva':'Ment&eacute;s')+'</button></div>'+(locked?'<div class="sheet-verdict"><b>Z&aacute;rolva</b> A m&eacute;rk&#337;z&eacute;s m&aacute;r elkezd&#337;d&ouml;tt vagy lez&aacute;rult, ez&eacute;rt a tipped nem m&oacute;dos&iacute;that&oacute;.</div></div>':'<div class="sheet-verdict"><b>Ment&eacute;s ut&aacute;n</b> a gy&#337;ztes tov&aacute;bbker&uuml;l a következ&#337; körbe, &eacute;s a statisztik&aacute;k is friss&uuml;lnek.</div></div>');document.body.appendChild(ov);syncModalOpenClass();activateCrests();let syncPen=()=>{let h=ov.querySelector('#tipH').value,a=ov.querySelector('#tipA').value,show=validScore(h)&&validScore(a)&&+h===+a,box=ov.querySelector('.penalty-box');box.classList.toggle('hidden',!show);if(!show){ov.querySelector('#penH').value='';ov.querySelector('#penA').value=''}};if(!locked){ov.querySelector('#tipH').addEventListener('input',syncPen);ov.querySelector('#tipA').addEventListener('input',syncPen)}ov.onclick=e=>{if(e.target===ov||e.target.closest('[data-close-tip]'))closeTip()};ov.querySelector('[data-save-tip]').onclick=()=>saveKoTip(id);ov.querySelector('[data-clear-tip]').onclick=async()=>{let br=document.querySelector('.ko-bracket');if(br)KO_SCROLL=br.scrollLeft;await wc26DeleteKoTip(id);closeTip();render();refreshCommunityPreviews()};
 // V191: KO/modal self-reopen loop removed.
@@ -10273,7 +10273,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     const left=v115KoCol('Legjobb 32',r32.slice(0,8),0)+v115KoCol('Nyolcaddöntő',r16.slice(0,4),1)+v115KoCol('Negyeddöntő',qf.slice(0,2),2)+v115KoCol('Elődöntő',sf.slice(0,1),3);
     const right=v115KoCol('Elődöntő',sf.slice(1,2),3)+v115KoCol('Negyeddöntő',qf.slice(2,4),2)+v115KoCol('Nyolcaddöntő',r16.slice(4,8),1)+v115KoCol('Legjobb 32',r32.slice(8,16),0);
     const lock=ready?'':'<div class="ko-lock-note">Az &aacute;ll&aacute;s a jelenlegi csoporteredm&eacute;nyek alapj&aacute;n friss&uuml;l. A tippel&eacute;s a csoportkör v&eacute;g&eacute;n ny&iacute;lik meg.</div>';
-    main.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik helyért</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';
+    main.innerHTML='<section class="card"><h2 class="card-title">Egyenes kies&eacute;ses szakasz</h2>'+lock+'<div class="ko-bracket"><div class="ko-stage-wrap"><div class="ko-side ko-left">'+left+'</div><div class="ko-final-col"><div class="ko-cup">&#127942;</div><h3>Döntő</h3>'+fin.map(x=>koCard(x,8)).join('')+'<div class="ko-mid-title" style="grid-row:11">Harmadik hely&eacute;rt</div>'+koCard(bronze,12)+'</div><div class="ko-side ko-right">'+right+'</div></div></div></section>';
     activateCrests();
     const br=main.querySelector('.ko-bracket');
     if(br){
@@ -14229,21 +14229,26 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v192: KO null-team guard + split crash hardening ===== */
+/* ===== WC26 v192: KO null-team modal guard ===== */
 (function(){
   if(window.__WC26_V192_KO_NULL_TEAM_GUARD__) return;
   window.__WC26_V192_KO_NULL_TEAM_GUARD__ = true;
-  const prevOpenKoTip = typeof openKoTip === 'function' ? openKoTip : null;
-  function hasKoTeam(v){
-    if(v && typeof v === 'object') v = v.team || v.name || v.shortName || '';
-    return v != null && String(v).trim() !== '' && String(v).trim().toLowerCase() !== 'null';
+  function koTeamName(v){
+    if(v && typeof v === 'object') v = v.team || v.name || v.short || v.seed || '';
+    return String(v ?? '').trim();
   }
+  function koTeamReady(v){
+    const n = koTeamName(v);
+    return !!n && n !== '?' && n !== 'TBD' && n !== 'null' && n !== 'undefined' && ALL.includes(n);
+  }
+  const prevOpenKoTip = typeof openKoTip === 'function' ? openKoTip : null;
   if(prevOpenKoTip){
     openKoTip = function(id){
-      let m = null;
-      try{ if(typeof findKoMatch === 'function') m = findKoMatch(id); }catch(e){}
-      if(m && (!hasKoTeam(m.h) || !hasKoTeam(m.a))){
-        return false;
+      let x = null;
+      try { x = typeof findKoMatch === 'function' ? findKoMatch(id) : null; } catch(e) {}
+      if(x && (!koTeamReady(x.h) || !koTeamReady(x.a))){
+        console.warn('[WC26 v192] KO slot not ready, modal skipped:', id, x);
+        return;
       }
       return prevOpenKoTip.apply(this, arguments);
     };
@@ -14251,202 +14256,239 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 })();
 
 
-/* ===== WC26 v193: KO penalty advancement + accent-safe labels ===== */
+/* ===== WC26 v193: finished-state guard for stale/live-confused match cards ===== */
 (function(){
-  if(window.__WC26_V193_KO_PENALTY_ADVANCE_ACCENTS__) return;
-  window.__WC26_V193_KO_PENALTY_ADVANCE_ACCENTS__ = true;
+  if(window.__WC26_V193_FINISH_STATE_GUARD__) return;
+  window.__WC26_V193_FINISH_STATE_GUARD__ = true;
 
-  function scoreNum(v){ return (typeof validScore === 'function' && validScore(v)) ? +v : null; }
-  function teamName(v){
-    if(v && typeof v === 'object') v = v.team || v.name || v.shortName || '';
-    return String(v == null ? '' : v).trim();
+  const SOFT_FINISH_MS_GROUP = 125 * 60 * 1000;
+  const SOFT_FINISH_MS_KO    = 185 * 60 * 1000;
+  const HARD_FINISH_MS       = 240 * 60 * 1000;
+
+  const oldDisplayNormalize = typeof wc26NormalizeResultForDisplay === 'function'
+    ? wc26NormalizeResultForDisplay
+    : function(id,r){ return r || null; };
+
+  function _idOf(m){ return String((m && m.id) || ''); }
+  function _isKoId(id){ return String(id || '').startsWith('KO-'); }
+  function _num(v){ return (typeof validScore === 'function' && validScore(v)) ? +v : null; }
+  function _hasScore(r){ return !!r && _num(r.h) !== null && _num(r.a) !== null; }
+  function _hasPens(r){ return !!r && _num(r.pH) !== null && _num(r.pA) !== null; }
+  function _blob(r){
+    if(!r) return '';
+    return String([
+      r.status,r.minute,r.matchStatus,r.period,r.shortDetail,r.detail,r.displayClock,
+      r.statusText,r.statusType,r.state,r.clock,r.matchTime,r.elapsed,r.currentMinute,
+      r.liveMinute,r.statusMinute,r.description
+    ].filter(v => v !== null && v !== undefined).join(' ')).toUpperCase();
   }
-  function koDeleteKey(){
-    try{ return 'wc26_ko_deleted_clean_' + ((typeof wc26User !== 'undefined' && wc26User && wc26User.uid) || 'anon'); }
-    catch(e){ return 'wc26_ko_deleted_clean_anon'; }
+  function _statusFinished(r){
+    const s = _blob(r);
+    return /(^|\b)(FT|AET|FINAL|FINISHED|ENDED)(\b|$)/.test(s)
+      || s.includes('FULL TIME')
+      || s.includes('FULL-TIME')
+      || s.includes('AFTER EXTRA')
+      || s.includes('AFTER PEN')
+      || s.includes('VÉGE')
+      || s.includes('VEGE');
   }
-  function readKoDeleted(){
-    try{ return JSON.parse(localStorage.getItem(koDeleteKey()) || '{}') || {}; }
-    catch(e){ return {}; }
+  function _explicitLive(r){
+    const s = _blob(r);
+    if(!s) return false;
+    if(_statusFinished(r)) return false;
+    if(/(^|\b)(HT|LIVE|ET|PEN|INT)(\b|$)/.test(s)) return true;
+    if(s.includes('HALF TIME') || s.includes('HALFTIME') || s.includes('IN PLAY') || s.includes('IN_PLAY')) return true;
+    if(s.includes('EXTRA TIME') || s.includes('SHOOTOUT')) return true;
+    if(/(^|\D)([1-9][0-9]?|1[01][0-9]|12[0-9])\s*'?($|\D)/.test(s)) return true;
+    return false;
   }
-  function isKoDeleted(id){ return !!readKoDeleted()[id]; }
-  function clearKoDeleted(id){
-    try{
-      const d = readKoDeleted();
-      if(d[id]){ delete d[id]; localStorage.setItem(koDeleteKey(), JSON.stringify(d)); }
-    }catch(e){}
-  }
-  function rawKoPred(id){
-    if(isKoDeleted(id)) return null;
-    const direct = (typeof KO_PRED !== 'undefined' && KO_PRED) ? KO_PRED[id] : null;
-    if(direct) return direct;
-    const last = window.__WC26_LAST_GOOD_KO__ || null;
-    return last ? last[id] : null;
-  }
-  function cleanKoPred(p){
-    if(!p || typeof p !== 'object') return null;
-    const h = scoreNum(p.h), a = scoreNum(p.a);
-    if(h == null || a == null) return null;
-    if(h === a){
-      const pH = scoreNum(p.pH), pA = scoreNum(p.pA);
-      if(pH == null || pA == null || pH === pA) return null;
-      const side = pH > pA ? 'h' : 'a';
-      return Object.assign({}, p, { h, a, pH, pA, pen: side, penWinner: side, winner: side });
+
+  function _minuteNum(r){
+    if(!r) return null;
+    for(const v of [r.minute,r.matchMinute,r.elapsed,r.currentMinute,r.liveMinute,r.matchTime,r.statusMinute,r.displayClock,r.clock]){
+      if(v === null || v === undefined) continue;
+      const m = String(typeof v === 'object' ? (v.display || v.value || v.text || v.minute || '') : v).match(/(\d{1,3})/);
+      if(m){ const n = +m[1]; if(Number.isFinite(n)) return n; }
     }
-    const side = h > a ? 'h' : 'a';
-    return Object.assign({}, p, { h, a, pH: null, pA: null, pen: false, penWinner: null, winner: side });
-  }
-
-  koPred = function(id){
-    const p = cleanKoPred(rawKoPred(id));
-    if(p && window.__WC26_LAST_GOOD_KO__) window.__WC26_LAST_GOOD_KO__[id] = p;
-    return p;
-  };
-
-  function koSideWinner(match){
-    if(!match || !teamName(match.h) || !teamName(match.a)) return null;
-    const r = (typeof actualFor === 'function' ? actualFor({id:match.id}) : (LIVE_RESULTS && LIVE_RESULTS[match.id])) || null;
-    if(r && r.finished && scoreNum(r.h) != null && scoreNum(r.a) != null){
-      const h = +r.h, a = +r.a;
-      if(h > a) return 'h';
-      if(a > h) return 'a';
-      const pH = scoreNum(r.pH), pA = scoreNum(r.pA);
-      if(pH != null && pA != null && pH !== pA) return pH > pA ? 'h' : 'a';
-      return null;
-    }
-    const p = koPred(match.id);
-    if(!p) return null;
-    if(p.winner === 'h' || p.winner === 'a') return p.winner;
-    if(p.pen === 'h' || p.pen === 'a') return p.pen;
-    if(+p.h > +p.a) return 'h';
-    if(+p.a > +p.h) return 'a';
-    const pH = scoreNum(p.pH), pA = scoreNum(p.pA);
-    if(pH != null && pA != null && pH !== pA) return pH > pA ? 'h' : 'a';
     return null;
   }
-
-  koWinner = function(match){
-    const side = koSideWinner(match);
-    return side === 'h' ? match.h : side === 'a' ? match.a : null;
-  };
-  koLoser = function(match){
-    const side = koSideWinner(match);
-    return side === 'h' ? match.a : side === 'a' ? match.h : null;
-  };
-
-  buildBronze = function(rounds){
-    const sf = (rounds && rounds[3] && rounds[3].matches) || [];
-    const ready = (typeof groupsComplete === 'function') ? groupsComplete() : false;
-    const l1 = koLoser(sf[0]), l2 = koLoser(sf[1]);
-    const sch = (typeof KO_SCHEDULE !== 'undefined' && KO_SCHEDULE['KO-BR-1']) || {};
-    return {
-      id:'KO-BR-1', round:'BR', title:'Bronzmeccs', label:'Harmadik helyért',
-      h:l1, a:l2,
-      hs:l1 ? 'Elődöntő vesztese 1' : 'Elődöntő vesztese 1',
-      as:l2 ? 'Elődöntő vesztese 2' : 'Elődöntő vesztese 2',
-      index:1, date:sch.date, t:sch.t,
-      locked:!ready || !(l1 && l2)
-    };
-  };
-
-  saveKoTip = function(id){
-    if(typeof READONLY_MODE !== 'undefined' && READONLY_MODE) return;
-    const x = (typeof findKoMatch === 'function') ? findKoMatch(id) : null;
-    if(!x || x.locked) return;
-    const br = document.querySelector('.ko-bracket');
-    if(br){ KO_SCROLL = br.scrollLeft; window.__WC26_KO_SCROLL = br.scrollLeft; }
-    const ov = document.querySelector('.tip-overlay');
-    if(!ov) return;
-    const hEl = ov.querySelector('#tipH'), aEl = ov.querySelector('#tipA'), pHEl = ov.querySelector('#penH'), pAEl = ov.querySelector('#penA'), msg = ov.querySelector('#tipMsg');
-    const h = hEl ? hEl.value : '', a = aEl ? aEl.value : '', pH = pHEl ? pHEl.value : '', pA = pAEl ? pAEl.value : '';
-    if(typeof groupsComplete === 'function' && !groupsComplete()){
-      if(msg) msg.textContent = 'Előbb tippeld ki mind a 72 csoportmeccset.';
-      return;
+  function _livePhase(r){
+    const s = _blob(r);
+    return /(^|\b)(HT|ET|PEN|INT)(\b|$)/.test(s)
+      || s.includes('HALF TIME')
+      || s.includes('HALFTIME')
+      || s.includes('EXTRA TIME')
+      || s.includes('SHOOTOUT');
+  }
+  function _findKo(id){
+    try{ return (typeof findKoMatch === 'function' && findKoMatch(id)) || null; }catch(e){ return null; }
+  }
+  function _resolveMatch(m){
+    const id = _idOf(m);
+    if(!id) return m || null;
+    if(m && (m.h || m.a || m.date || m.t || m.g || m.r)) return m;
+    if(typeof FX_BY_ID !== 'undefined' && FX_BY_ID && FX_BY_ID[id]) return FX_BY_ID[id];
+    return _findKo(id) || m || {id};
+  }
+  function _kickoffMs(id,m,r){
+    id = String(id || _idOf(m) || '');
+    const x = _resolveMatch(m) || {id};
+    if(!_isKoId(id) && typeof fixtureKickoff === 'function'){
+      try{ const ms = fixtureKickoff(x); if(ms && Number.isFinite(ms)) return ms; }catch(e){}
     }
-    if(scoreNum(h) == null || scoreNum(a) == null){
-      if(msg) msg.textContent = 'Adj meg két 0 és 99 közötti egész számot.';
-      return;
+    const sch = (typeof KO_SCHEDULE !== 'undefined' && KO_SCHEDULE && KO_SCHEDULE[id]) ? KO_SCHEDULE[id] : {};
+    const date = (r && r.date) || x.date || sch.date || '';
+    const time = (r && (r.time || r.t)) || x.t || x.time || sch.t || sch.time || '';
+    if(!date || !time) return null;
+    try{
+      const iso = String(date) + 'T' + String(time).slice(0,5) + ':00+00:00';
+      const ms = new Date(iso).getTime();
+      return Number.isFinite(ms) ? ms : null;
+    }catch(e){ return null; }
+  }
+  function _shouldFinishByTime(id,r,m){
+    if(!_hasScore(r)) return false;
+    const ko = _isKoId(id);
+    const kick = _kickoffMs(id,m,r);
+    if(!kick) return false;
+    const age = Date.now() - kick;
+    if(age < 0) return false;
+    if(age >= HARD_FINISH_MS) return true;
+    const rh = _num(r.h), ra = _num(r.a), mn = _minuteNum(r);
+    if(ko && rh !== null && ra !== null && rh !== ra && age >= 115 * 60 * 1000 && (mn === null || mn >= 90)) return true;
+    if(!ko && age >= SOFT_FINISH_MS_GROUP && (mn === null || mn >= 90)) return true;
+    if(_livePhase(r) && age < HARD_FINISH_MS) return false;
+    return age >= (ko ? SOFT_FINISH_MS_KO : SOFT_FINISH_MS_GROUP);
+  }
+  function _shouldAutoFinish(id,r,m){
+    if(!r || r.finished) return false;
+    if(!_hasScore(r)) return false;
+    if(_hasPens(r)) return true;
+    if(_statusFinished(r)) return true;
+
+    // Score-only KO/group payloads are usually stored final scores. Without a minute/live phase,
+    // do not render them as “Élő” forever.
+    const explicitlyLive = _explicitLive(r);
+    if((r.started || r.locked) && !explicitlyLive) return true;
+
+    return _shouldFinishByTime(id,r,m);
+  }
+  function _finalStatus(r){
+    const s = _blob(r);
+    if(_hasPens(r) || s.includes('PEN') || s.includes('SHOOTOUT')) return 'PEN';
+    if(s.includes('AET') || s.includes('EXTRA')) return 'AET';
+    return 'FT';
+  }
+
+  wc26NormalizeResultForDisplay = function(id,r){
+    const out = oldDisplayNormalize(id,r);
+    if(!out) return out;
+    const x = _resolveMatch({id});
+    if(_shouldAutoFinish(String(id || ''), out, x)){
+      out.started = true;
+      out.finished = true;
+      out.status = _finalStatus(out);
+      out.minute = null;
+      out.__wc26DisplayAutoFinished = !_statusFinished(out);
     }
-    const obj = {
-      h:+h, a:+a,
-      hTeam:teamName(x.h),
-      aTeam:teamName(x.a),
-      round:x.title
-    };
-    if(+h === +a){
-      if(scoreNum(pH) == null || scoreNum(pA) == null){
-        if(msg) msg.textContent = 'Döntetlennél a tizenegyeseket is meg kell adni.';
-        return;
-      }
-      if(+pH === +pA){
-        if(msg) msg.textContent = 'A tizenegyespárbaj nem lehet döntetlen.';
-        return;
-      }
-      obj.pH = +pH;
-      obj.pA = +pA;
-      obj.pen = +pH > +pA ? 'h' : 'a';
-      obj.penWinner = obj.pen;
-      obj.winner = obj.pen;
-    }else{
-      obj.pH = null;
-      obj.pA = null;
-      obj.pen = false;
-      obj.penWinner = null;
-      obj.winner = +h > +a ? 'h' : 'a';
-    }
-    clearKoDeleted(id);
-    KO_PRED[id] = obj;
-    if(window.__WC26_LAST_GOOD_KO__) window.__WC26_LAST_GOOD_KO__[id] = cleanKoPred(obj) || obj;
-    if(typeof savePred === 'function') savePred();
-    if(typeof closeTip === 'function') closeTip();
-    if(typeof render === 'function') render();
-    try{ if(typeof refreshCommunityPreviews === 'function') refreshCommunityPreviews(); }catch(e){}
+    return out;
   };
 
-  const entityMap = {
-    '&aacute;':'á','&Aacute;':'Á','&eacute;':'é','&Eacute;':'É','&iacute;':'í','&Iacute;':'Í','&oacute;':'ó','&Oacute;':'Ó','&ouml;':'ö','&Ouml;':'Ö','&uacute;':'ú','&Uacute;':'Ú','&uuml;':'ü','&Uuml;':'Ü',
-    '&#337;':'ő','&#336;':'Ő','&otilde;':'ő','&Otilde;':'Ő','&#369;':'ű','&#368;':'Ű','&ucirc;':'ű','&Ucirc;':'Ű'
+  actualFor = function(m){
+    const id = _idOf(m);
+    return wc26NormalizeResultForDisplay(id, (typeof LIVE_RESULTS !== 'undefined' && LIVE_RESULTS) ? LIVE_RESULTS[id] : null);
   };
-  const entityRe = new RegExp(Object.keys(entityMap).join('|'), 'g');
-  function fixVisibleEntities(root){
-    root = root || document.getElementById('main') || document.body;
-    if(!root || !document.createTreeWalker) return;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node){ return node.nodeValue && node.nodeValue.indexOf('&') !== -1 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; }
-    });
-    const nodes = [];
-    while(walker.nextNode()) nodes.push(walker.currentNode);
-    nodes.forEach(node=>{ node.nodeValue = node.nodeValue.replace(entityRe, m=>entityMap[m] || m); });
+
+  matchLockState = function(m){
+    const id = _idOf(m);
+    const x = _resolveMatch(m) || {id};
+    const r = actualFor({id});
+    if(r && r.finished) return 'finished';
+    if(r && r.started) return 'live';
+    const kick = _kickoffMs(id,x,r);
+    if(!kick) return 'open';
+    const now = Date.now();
+    if(now < kick) return 'open';
+    if(now >= kick + HARD_FINISH_MS) return 'finished';
+    return 'live';
+  };
+
+  function _koMatchTime(m){
+    const id = _idOf(m);
+    const lr = (typeof LIVE_RESULTS !== 'undefined' && LIVE_RESULTS) ? LIVE_RESULTS[id] : null;
+    const sch = (typeof KO_SCHEDULE !== 'undefined' && KO_SCHEDULE && KO_SCHEDULE[id]) ? KO_SCHEDULE[id] : {};
+    const md = (lr && lr.date) || m.date || sch.date || '';
+    const mt = (lr && (lr.time || lr.t)) || m.t || m.time || sch.t || sch.time || '';
+    if(md && mt){
+      try{ return new Date(String(md) + 'T' + String(mt).slice(0,5) + ':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}); }
+      catch(e){ return String(mt).slice(0,5); }
+    }
+    return '--:--';
+  }
+  function _stateClass(cat){
+    const base = String(cat || '');
+    if(!base) return '';
+    if(base === 'exact') return ' result-exact';
+    if(base === 'diff') return ' result-diff';
+    if(base === 'outcome') return ' result-outcome';
+    if(base === 'miss') return ' result-miss';
+    return '';
+  }
+  koMatchRow = function(m){
+    const p = koPred(m.id), state = matchLockState(m), sc = koTipScore(m), locked = state !== 'open';
+    const edit = FROZEN_MODE || locked ? '' : '<div class="mr-bell">&#9998;</div>';
+    const rowCls = (p ? ' predicted' : '') + (locked ? ' locked' : '') + (state === 'live' ? ' live-locked' : '') + _stateClass(sc.base || sc.cat);
+    const r2 = actualFor({id:m.id}) || ((typeof LIVE_RESULTS !== 'undefined' && LIVE_RESULTS) ? LIVE_RESULTS[m.id] : null) || null;
+    const livePill = (r2 && r2.started && !r2.finished && liveClockLabel(r2))
+      ? '<em class="mr-live-state live wc26-ko-left-clock"><span></span>' + esc(liveClockLabel(r2)) + '</em>'
+      : '';
+    let badge = '';
+    if(sc && sc.cat){
+      const base = sc.base || sc.cat;
+      const klass = base === 'exact' ? 'ok' : base === 'diff' ? 'diff' : base === 'outcome' ? 'outcome' : base === 'miss' ? 'bad' : 'neutral';
+      badge = '<em class="mr-live-state ' + klass + '">' + esc(sc.label || 'Tippelve') + '</em>';
+    }else if(!livePill){
+      if(state === 'finished') badge = '';
+      else if(state === 'live') badge = '<em class="mr-live-state live"><span></span>' + (liveClockLabel(r2) || 'Élő') + '</em>';
+      else if(state === 'open') badge = '<em class="mr-live-state open">Tippelhető</em>';
+      else badge = '<em class="mr-live-state neutral">Zárolva</em>';
+    }
+    return '<div class="match-row' + rowCls + '" data-ko-mid="' + m.id + '">'
+      + '<div class="mr-date">' + _koMatchTime(m) + '<span>' + (KO_ROUND_SHORT[m.title] || m.title) + '</span>' + livePill + (p ? '<em class="mr-tip wc26-ko-core-tip">Tippelve</em>' : '') + badge + '</div>'
+      + '<div class="mr-sep"></div>'
+      + '<div class="mr-teams"><div class="mr-team ' + (p ? 'win' : '') + '">' + crest(m.h || '') + '<span class="mr-tname">' + esc(m.h || m.hs || '') + '</span></div><div class="mr-team ' + (p ? 'win' : '') + '">' + crest(m.a || '') + '<span class="mr-tname">' + esc(m.a || m.as || '') + '</span></div></div>'
+      + '<div class="mr-scores">' + scoreHtml(m) + '</div>' + edit + '</div>';
+  };
+
+  if(typeof patchLiveRows === 'function'){
+    patchLiveRows = function(next){
+      if(S.tab !== 'matches' && S.tab !== 'overview') return false;
+      let ok = true;
+      Object.keys(next || {}).forEach(id => {
+        const row = document.querySelector('[data-mid="' + id + '"],[data-ko-mid="' + id + '"]');
+        if(!row){ if(!document.querySelector('.tip-overlay')) ok = false; return; }
+        const m = (typeof FX_BY_ID !== 'undefined' && FX_BY_ID && FX_BY_ID[id]) || _findKo(id);
+        if(!m){ ok = false; return; }
+        const scWrap = row.querySelector('.mr-scores');
+        if(!scWrap){ ok = false; return; }
+        scWrap.innerHTML = scoreHtml(m);
+        const badge = row.querySelector('.mr-date .mr-live-state:not(.wc26-ko-left-clock)');
+        const newBadge = id.startsWith('KO-') ? wc26MatchStateBadgeAny(m) : matchStateBadge(m);
+        if(badge && newBadge !== badge.outerHTML){ const tmp = document.createElement('div'); tmp.innerHTML = newBadge; if(tmp.firstChild) badge.replaceWith(tmp.firstChild); else badge.remove(); }
+        else if(!badge && newBadge){ row.querySelector('.mr-date')?.insertAdjacentHTML('beforeend',newBadge); }
+        row.classList.remove('result-exact','result-diff','result-outcome','result-miss','live-locked','predicted','locked');
+        const score = id.startsWith('KO-') ? koTipScore(m) : tipScore(m);
+        const state = matchLockState(m);
+        if(score.cat) row.classList.add('result-' + (score.base || score.cat));
+        if(state !== 'open') row.classList.add('locked');
+        if(state === 'live') row.classList.add('live-locked');
+        if((id.startsWith('KO-') ? koPred(id) : getPred(id))) row.classList.add('predicted');
+      });
+      return ok;
+    };
   }
 
-  const prevRenderKO = (typeof renderKO === 'function') ? renderKO : null;
-  if(prevRenderKO){
-    renderKO = function(){
-      const ret = prevRenderKO.apply(this, arguments);
-      fixVisibleEntities(document.getElementById('main'));
-      return ret;
-    };
-  }
-  const prevRender = (typeof render === 'function') ? render : null;
-  if(prevRender){
-    render = function(){
-      const ret = prevRender.apply(this, arguments);
-      fixVisibleEntities(document.getElementById('main'));
-      return ret;
-    };
-  }
-  const prevOpenKoTip = (typeof openKoTip === 'function') ? openKoTip : null;
-  if(prevOpenKoTip){
-    openKoTip = function(){
-      const ret = prevOpenKoTip.apply(this, arguments);
-      fixVisibleEntities(document.querySelector('.tip-overlay'));
-      return ret;
-    };
-  }
-
-  try{ fixVisibleEntities(document.getElementById('main')); }catch(e){}
-  try{ if(typeof S !== 'undefined' && S.tab === 'knockout' && typeof renderKO === 'function') setTimeout(()=>renderKO(),0); }catch(e){}
+  try{ render(); }catch(e){}
 })();
-/* ===== /WC26 v193 ===== */
 
 </script></body></html>
