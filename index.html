@@ -12771,7 +12771,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 
 
-/* ===== WC26 v200: single final runtime controller, UI untouched =====
+/* ===== WC26 v203: single final runtime controller, fresh live + final DB sync =====
    V166 UI is preserved. This block replaces only runtime plumbing:
    - one Worker /results loader
    - one Worker /live-results loop
@@ -12784,10 +12784,11 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   if(window.__WC26_V167_RUNTIME_SURGERY__) return;
   window.__WC26_V167_RUNTIME_SURGERY__ = true;
 
-  const LIVE_GAP_MS = 5000;
-  const MATCH_TAB_GAP_MS = 8000;
+  const LIVE_GAP_MS = 3500;
+  const MATCH_TAB_GAP_MS = 6000;
   const IDLE_GAP_MS = 60000;
-  const RESULTS_GAP_MS = 90000;
+  const RESULTS_GAP_MS = 30000;
+  const FINAL_PULL_GAP_MS = 15000;
   const OWN_GAP_MS = 9000;
   const AUTOSAVE_MS = 900;
   let liveTimer = null;
@@ -12803,6 +12804,9 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   let renderQueued = false;
   let lastRenderAt = 0;
   let modalRefreshAt = 0;
+  let lastFastLiveAt = 0;
+  let lastFinalPullAt = 0;
+  let finalPullTimer = null;
 
   function now(){ return Date.now ? Date.now() : +new Date(); }
   function visible(){ return !document.hidden && document.visibilityState !== 'hidden'; }
@@ -12993,6 +12997,35 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     return true;
   };
 
+  function paintVisibleLiveCards(){
+    const t=currentTab();
+    if(t!=='matches' && t!=='overview') return false;
+    const batch={};
+    try{
+      document.querySelectorAll('[data-mid],[data-ko-mid]').forEach(row=>{
+        const id=row.getAttribute('data-mid')||row.getAttribute('data-ko-mid')||'';
+        const r=id && LIVE_RESULTS ? LIVE_RESULTS[id] : null;
+        if(r && (r.started || r.finished)) batch[id]=r;
+      });
+      if(!Object.keys(batch).length) return false;
+      return typeof patchLiveRows==='function' ? !!patchLiveRows(batch) : false;
+    }catch(e){ return false; }
+  }
+
+  function queueFinalResultsPull(results){
+    let hasFinal=false;
+    try{ hasFinal=Object.values(results||{}).some(r=>r && r.finished===true); }catch(e){}
+    if(!hasFinal || now()-lastFinalPullAt<FINAL_PULL_GAP_MS) return;
+    lastFinalPullAt=now();
+    try{ if(finalPullTimer) clearTimeout(finalPullTimer); }catch(e){}
+    finalPullTimer=setTimeout(()=>{
+      finalPullTimer=null;
+      loadMatchResultsFromBackendDb(true).then(()=>paintVisibleLiveCards()).catch(()=>{});
+    },650);
+    // A Worker final write + public-cache patch néha egy külön request végén ér célba.
+    setTimeout(()=>loadMatchResultsFromBackendDb(true).then(()=>paintVisibleLiveCards()).catch(()=>{}),4200);
+  }
+
   async function fetchJson(url, opts){ try{ const r=await fetch(url, opts || { cache:'no-store' }); return r.ok ? await r.json() : null; }catch(e){ return null; } }
 
   wc26LoadKoPairsFromWorker = async function(force){
@@ -13009,19 +13042,19 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     if(FROZEN_MODE || !url) return false;
     if(resultsInFlight) return resultsInFlight;
     if(!force && lastResultsAt && now()-lastResultsAt<RESULTS_GAP_MS) return true;
-    const run=(async()=>{
+    resultsInFlight=(async()=>{
       lastResultsAt=now();
       const sep=url.includes('?')?'&':'?';
-      const data=await fetchJson(url+sep+'rt=v200_'+Math.floor(now()/60000), { cache:'no-store' });
+      const data=await fetchJson(url+sep+'rt=v203_'+now(), { cache:'no-store', headers:{'Accept':'application/json'}, credentials:'omit' });
       if(data && data.results){
         applyAllKoFromResults(data.results);
         mergeLiveResults(data.results);
+        paintVisibleLiveCards();
         return true;
       }
       return false;
-    })();
-    if(!force) resultsInFlight=run.finally(()=>{ resultsInFlight=null; });
-    return force ? run : resultsInFlight;
+    })().finally(()=>{ resultsInFlight=null; });
+    return resultsInFlight;
   };
 
   async function liveTick(force){
@@ -13030,15 +13063,32 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     if(liveInFlight) return liveInFlight;
     const gap=activeLiveLocal()?LIVE_GAP_MS:(isMatchTab()?MATCH_TAB_GAP_MS:IDLE_GAP_MS);
     if(!force && lastLiveAt && now()-lastLiveAt<gap) return true;
-    const run=(async()=>{
+    liveInFlight=(async()=>{
       lastLiveAt=now();
       const sep=url.includes('?')?'&':'?';
-      const data=await fetchJson(url+sep+'t='+now()+'&src=v200', { cache:'no-store' });
-      if(data && data.results) return mergeLiveResults(data.results) !== false;
+
+      // Azonnali, memóriás első festés. Nem vár külső providerre.
+      if(force && now()-lastFastLiveAt>2500){
+        lastFastLiveAt=now();
+        const fast=await fetchJson(url+sep+'fast=1&t='+now()+'&src=v203-fast', { cache:'no-store', headers:{'Accept':'application/json'}, credentials:'omit' });
+        if(fast && fast.results){
+          mergeLiveResults(fast.results);
+          paintVisibleLiveCards();
+        }
+      }
+
+      // A fresh=1 a Worker provider-syncjét futtatja: ez írja ki FT/AET/PEN esetén
+      // a valós végeredményt Firestore-ba, és ebből frissül a kártya jobb oldali pirulája is.
+      const data=await fetchJson(url+sep+'fresh=1&t='+now()+'&src=v203-fresh', { cache:'no-store', headers:{'Accept':'application/json','Cache-Control':'no-cache'}, credentials:'omit' });
+      if(data && data.results){
+        mergeLiveResults(data.results);
+        paintVisibleLiveCards();
+        queueFinalResultsPull(data.results);
+        return true;
+      }
       return false;
-    })();
-    if(!force) liveInFlight=run.finally(()=>{ liveInFlight=null; });
-    return force ? run : liveInFlight;
+    })().finally(()=>{ liveInFlight=null; });
+    return liveInFlight;
   }
   function nextLiveDelay(){ return activeLiveLocal()?LIVE_GAP_MS:(isMatchTab()?MATCH_TAB_GAP_MS:IDLE_GAP_MS); }
   scheduleLiveSync = function(delay){
@@ -13062,12 +13112,12 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       return liveOk;
     }finally{ syncLiveResults._running=false; }
   };
-  listenWc26LiveMatches = function(){ scheduleLiveSync(800); return true; };
-  startWc26LiveWorkerFallback = function(){ scheduleLiveSync(800); return true; };
-  startLiveWorkerFallback = function(){ scheduleLiveSync(800); return true; };
-  ensureLivePaintLoop = function(){ scheduleLiveSync(800); return true; };
-  wc26EnsureLiveLeaderV134 = function(){ scheduleLiveSync(800); return true; };
-  wc26StartLiveFallbackV134 = function(){ scheduleLiveSync(800); return true; };
+  listenWc26LiveMatches = function(){ scheduleLiveSync(500); return true; };
+  startWc26LiveWorkerFallback = function(){ scheduleLiveSync(500); return true; };
+  startLiveWorkerFallback = function(){ scheduleLiveSync(500); return true; };
+  ensureLivePaintLoop = function(){ scheduleLiveSync(500); return true; };
+  wc26EnsureLiveLeaderV134 = function(){ scheduleLiveSync(500); return true; };
+  wc26StartLiveFallbackV134 = function(){ scheduleLiveSync(500); return true; };
   wc26ReleaseLeaderV134 = function(){ return true; };
 
   function ownItem(){
@@ -13281,19 +13331,19 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     };
   }catch(e){}
 
-  document.addEventListener('visibilitychange',()=>{ if(visible()){ lastLiveAt=0; syncLiveResults({forceLive:true,skipRetry:true}).catch(()=>{}); scheduleLiveSync(900); } },{passive:true});
-  document.addEventListener('click',e=>{ if(e.target && e.target.closest && e.target.closest('[data-mid],[data-ko-mid],[data-koid],.tab')) setTimeout(()=>syncLiveResults({forceLive:true,skipRetry:true}).catch(()=>{}),80); },true);
+  document.addEventListener('visibilitychange',()=>{ if(visible()){ lastLiveAt=0; syncLiveResults({forceLive:true,skipRetry:true,source:'v203'}).catch(()=>{}); scheduleLiveSync(500); } },{passive:true});
+  document.addEventListener('click',e=>{ if(e.target && e.target.closest && e.target.closest('[data-mid],[data-ko-mid],[data-koid],.tab')) setTimeout(()=>syncLiveResults({forceLive:true,skipRetry:true,source:'v203'}).catch(()=>{}),80); },true);
 
   try{ if(window.wc26LiveFallbackTimer){ clearInterval(window.wc26LiveFallbackTimer); window.wc26LiveFallbackTimer=null; } }catch(e){}
   try{ if(window.wc26LivePaintLoopTimer){ clearInterval(window.wc26LivePaintLoopTimer); window.wc26LivePaintLoopTimer=null; } }catch(e){}
   setTimeout(()=>{
     loadWc26Firebase().catch(()=>{});
-    syncLiveResults({forceLive:true,skipRetry:true}).catch(()=>{});
+    syncLiveResults({forceLive:true,skipRetry:true,source:'v203'}).catch(()=>{});
     loadMatchResultsFromBackendDb(true).catch(()=>{});
     scheduleLiveSync(5000);
   },0);
 })();
-/* ===== /WC26 v200 single final runtime controller ===== */
+/* ===== /WC26 v203 single final runtime controller ===== */
 
 /* ===== WC26 v164: live penalty-tip match-card right side breathing room =====
    Élő meccseknél, ahol a felhasználó tizenegyeseket is tippelt,
