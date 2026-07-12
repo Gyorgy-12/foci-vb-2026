@@ -9815,7 +9815,8 @@ function scoreHtml(x){
   return clockRow?'<div class="mr-score-wrap '+(p?'':'no-tip')+'">'+clockRow+'<div class="mr-score-lines">'+lines+'</div></div>':lines;
 }
 function koMatchRow(m){let p=koPred(m.id),cls=p?'win':'',state=matchLockState({id:m.id}),sc=koTipScore(m),locked=state!=='open',edit=FROZEN_MODE||locked?'':'<div class="mr-bell">&#9998;</div>',rowCls=(p?' predicted':'')+(locked?' locked':'')+(state==='live'?' live-locked':'')+(sc.cat==='exact'||sc.cat==='exact-pen-exact'?' result-exact':sc.cat==='diff'||sc.cat==='exact-pen-diff'||sc.cat==='draw-pen-diff'?' result-diff':sc.cat==='outcome'||sc.cat==='exact-pen-outcome'||sc.cat==='draw-pen-outcome'||sc.cat==='draw'?' result-outcome':sc.cat==='miss'?' result-miss':''),sch=KO_SCHEDULE[m.id]||{},md=sch.date||m.date||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].date)||'',mt=sch.t||m.t||(LIVE_RESULTS[m.id]&&LIVE_RESULTS[m.id].time)||'',timeStr=md&&mt?(()=>{try{return new Date(md+'T'+mt+':00+00:00').toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){return mt}})():'--:--';return '<div class="match-row'+rowCls+'" data-ko-mid="'+m.id+'"><div class="mr-date">'+timeStr+'<span>'+(KO_ROUND_SHORT[m.title]||m.title)+'</span>'+(p?'<em class="mr-tip">Tippelve</em>':'')+wc26MatchStateBadgeAny(m)+'</div><div class="mr-sep"></div><div class="mr-teams"><div class="mr-team '+cls+'">'+crest(m.h||'')+'<span class="mr-tname">'+esc(m.h||m.hs||'')+'</span></div><div class="mr-team '+cls+'">'+crest(m.a||'')+'<span class="mr-tname">'+esc(m.a||m.as||'')+'</span></div></div><div class="mr-scores">'+scoreHtml(m)+'</div>'+edit+'</div>'}
-function koWinner(match){if(!match.h||!match.a)return null;let r=actualFor({id:match.id});if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(p.pen)return p.pen==='h'?match.h:p.pen==='a'?match.a:null;if(validScore(p.h)&&validScore(p.a)){if(+p.h>+p.a)return match.h;if(+p.a>+p.h)return match.a;if(validScore(p.pH)&&validScore(p.pA)&&+p.pH!==+p.pA)return +p.pH>+p.pA?match.h:match.a;}return null}
+function koWinner(match){if(!match.h||!match.a)return null;let r=actualFor({id:match.id});if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.h:match.a;return null;}return rh>ra?match.h:match.a;}let p=koPred(match.id);if(!p)return null;if(validScore(p.h)&&validScore(p.a)){if(+p.h>+p.a)return match.h;if(+p.a>+p.h)return match.a;if(validScore(p.pH)&&validScore(p.pA)&&+p.pH!==+p.pA)return +p.pH>+p.pA?match.h:match.a;}return null}
+function koLoser(match){if(!match.h||!match.a)return null;let r=actualFor({id:match.id});if(r&&r.finished&&validScore(r.h)&&validScore(r.a)){let rh=+r.h,ra=+r.a;if(rh===ra){let ph=validScore(r.pH)?+r.pH:null,pa=validScore(r.pA)?+r.pA:null;if(ph!=null&&pa!=null&&ph!==pa)return ph>pa?match.a:match.h;return null;}return rh>ra?match.a:match.h;}let p=koPred(match.id);if(!p)return null;if(validScore(p.h)&&validScore(p.a)){if(+p.h>+p.a)return match.a;if(+p.a>+p.h)return match.h;if(validScore(p.pH)&&validScore(p.pA)&&+p.pH!==+p.pA)return +p.pH>+p.pA?match.a:match.h;}return null}
 tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.dataset.tab;if(S.tab==='matches'){matchAutoScrolledKey='';suppressShrinkUntil=Date.now()+700;topBar.classList.remove('shrunken');if(liveSyncInfo().active){syncLiveResults({skipRetry:true}).catch(()=>{})}}else window.scrollTo({top:0,behavior:'instant'});try{sessionStorage.setItem('wc26_active_tab',S.tab)}catch(err){}render();syncSoon()}};tblCtrl.onclick=e=>{let b=e.target.closest('[data-f]');if(b){S.filt=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('active',x===b));renderTables()}};tblRoundBtn.onclick=e=>{e.stopPropagation();tblRoundDrop.classList.toggle('open')};tblRoundDrop.onclick=e=>{let b=e.target.closest('[data-tr]');if(b){S.tblRound=+b.dataset.tr;tblRoundTxt.innerHTML=b.innerHTML;tblRoundDrop.querySelectorAll('[data-tr]').forEach(x=>x.classList.toggle('active',x===b));tblRoundDrop.classList.remove('open');renderTables()}};vBtn.onclick=e=>{e.stopPropagation();vDrop.classList.toggle('open')};vDrop.onclick=e=>{e.stopPropagation();let b=e.target.closest('[data-v]');if(b){S.view=b.dataset.v;vDrop.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('active',x===b));vDrop.classList.remove('open');renderTables()}};mCtrl.onclick=e=>{let b=e.target.closest('[data-mf]');if(b){MS.filt=b.dataset.mf;matchAutoScrolledKey='';document.querySelectorAll('[data-mf]').forEach(x=>x.classList.toggle('active',x===b));if(MS.filt!=='date')scrollTo({top:0,behavior:'auto'});render();syncSoon()}};roundSelDrop.innerHTML=[1,2,3].map(n=>'<button data-r="'+n+'">'+n+'. kör</button>').join('')+KO_ROUND_OPTIONS.map(o=>'<button data-r="'+o.key+'">'+o.label+'</button>').join('');roundSelBtn.onclick=e=>{e.stopPropagation();roundSelDrop.classList.toggle('open')};roundSelDrop.onclick=e=>{let b=e.target.closest('[data-r]');if(b){let v=b.dataset.r;MS.round=/^\d+$/.test(v)?+v:v;matchAutoScrolledKey='';roundSelTxt.innerHTML=b.innerHTML;roundSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};teamSelDrop.innerHTML=ALL.map(t=>'<button data-team="'+esc(t)+'">'+esc(t)+'</button>').join('');teamSelBtn.onclick=e=>{e.stopPropagation();teamSelDrop.classList.toggle('open')};teamSelDrop.onclick=e=>{let b=e.target.closest('[data-team]');if(b){MS.team=b.dataset.team;matchAutoScrolledKey='';teamSelTxt.textContent=MS.team;teamSelDrop.classList.remove('open');scrollTo({top:0,behavior:'auto'});renderMatches();syncSoon()}};document.onclick=()=>{vDrop.classList.remove('open');roundSelDrop.classList.remove('open');teamSelDrop.classList.remove('open');tblRoundDrop.classList.remove('open')};window.addEventListener('scroll',()=>{if(Date.now()<suppressShrinkUntil){if(pageYOffset<=12)topBar.classList.remove('shrunken');syncSoon();return}topBar.classList.toggle('shrunken',pageYOffset>12);syncSoon()},{passive:true});window.addEventListener('resize',()=>syncSoon(),{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!FROZEN_MODE){syncLiveResults().then(()=>scheduleLiveSync())}});if(window.ResizeObserver)new ResizeObserver(syncSpacer).observe(topBar);if(window.ResizeObserver){let cw=document.getElementById('ctrlWrap');if(cw)new ResizeObserver(syncSpacer).observe(cw)}topBar.addEventListener('transitionend',syncSpacer);setTimeout(()=>{try{applyFixtureOverrides()}catch(e){};try{applyTeamElo()}catch(e){}},2500);pruneStaleKoPred(false);render();setTimeout(()=>{loadWc26Firebase();loadMatchResultsFromBackendDb(false).finally(()=>{scheduleLiveSync();ensureLivePaintLoop();});},0);syncSoon();let __syncTicks=0,__syncTimer=setInterval(()=>{syncSpacer();__syncTicks++;if(__syncTicks>20)clearInterval(__syncTimer)},150);setInterval(syncSpacer,2000);(function(){let dragging=false,startX=0,startScroll=0,moved=false,el=null;document.addEventListener('mousedown',e=>{let br=e.target.closest('.ko-bracket');if(!br||e.target.closest('[data-koid]'))return;dragging=true;moved=false;el=br;startX=e.pageX;startScroll=br.scrollLeft;br.classList.add('ko-dragging')});document.addEventListener('mousemove',e=>{if(!dragging||!el)return;let dx=e.pageX-startX;if(Math.abs(dx)>4)moved=true;el.scrollLeft=startScroll-dx});document.addEventListener('mouseup',()=>{if(dragging&&el){dragging=false;el.classList.remove('ko-dragging');KO_SCROLL=el.scrollLeft;el=null}});document.addEventListener('click',e=>{if(moved&&e.target.closest('.ko-bracket')){e.preventDefault();e.stopPropagation();moved=false}},true)})();
 
 /* ===== WC26 v114 CLEAN REBASE: current-state audit pass ===== */
@@ -12771,7 +12772,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
 
 
-/* ===== WC26 v203: single final runtime controller, fresh live + final DB sync =====
+/* ===== WC26 v204: single final runtime controller, penalty advancement + fresh live/final DB sync =====
    V166 UI is preserved. This block replaces only runtime plumbing:
    - one Worker /results loader
    - one Worker /live-results loop
@@ -12908,16 +12909,17 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     if(!validScore(h)||!validScore(a)) return null;
     const pH=d.pH??d.penH??d.penaltyHome??d.pen_h??d.homePen??null;
     const pA=d.pA??d.penA??d.penaltyAway??d.pen_a??d.awayPen??null;
-    const finished=d.finished===true||/(^|)(ft|aet|final|finished|ended)(|$)/i.test(statusText)||/full[ -]?time/i.test(statusText);
+    const hasResolvedPens=validScore(pH)&&validScore(pA)&&+pH!==+pA;
+    const finished=d.finished===true||hasResolvedPens||/(^|\b)(ft|aet|final|finished|ended)(\b|$)/i.test(statusText)||/full[ -]?time/i.test(statusText);
     const minute=d.minute??d.matchMinute??d.elapsed??d.currentMinute??d.liveMinute??d.matchTime??d.statusMinute??null;
-    const explicitLive=d.started===true||/(^|)(live|ht|et|pen|int)(|$)/i.test(statusText)||/in[_ ]?play|half[ -]?time|extra[ -]?time|shootout/i.test(statusText)||(minute!==null&&minute!==undefined&&String(minute).trim()!=='');
+    const explicitLive=d.started===true||hasResolvedPens||/(^|\b)(live|ht|et|pen|int)(\b|$)/i.test(statusText)||/in[_ ]?play|half[ -]?time|extra[ -]?time|shootout/i.test(statusText)||(minute!==null&&minute!==undefined&&String(minute).trim()!=='');
     const started=finished||explicitLive;
     const scorers=parseRuntimeArray(d.scorers);
     const rawCards=[...parseRuntimeArray(d.redCards),...parseRuntimeArray(d.reds),...parseRuntimeArray(d.cards),...parseRuntimeArray(d.bookings),...parseRuntimeArray(d.events),...parseRuntimeArray(d.yellowCards)];
     const cards=rawCards.map(c=>({...c,team:(c.team==='a'||c.team==='away'||c.side==='away'||c.teamSide==='away')?'a':'h',player:c.player||c.playerName||c.name||c.person||''}));
     const redCards=cards.filter(c=>{const t=String(c.type||c.card||c.eventType||c.kind||c.name||'').toLowerCase();return c.red||c.yellowRed||c.isRed||c.redCard||t==='rc'||t.includes('red')||t.includes('second yellow')||t.includes('second_yellow');}).map(c=>{const t=String(c.type||c.card||c.eventType||'').toLowerCase();const yr=c.yellowRed||c.secondYellow||t.includes('second yellow')||t.includes('yellow-red')||t.includes('second_yellow');return yr?{...c,yellowRed:true,red:true}:{...c,red:true};});
     const yellowCards=cards.filter(c=>{const t=String(c.type||c.card||c.eventType||c.kind||'').toLowerCase();return c.yellow||t==='yc'||t==='yellow'||(t.includes('yellow')&&!t.includes('red')&&!t.includes('second'));});
-    return {started,finished,h:+h,a:+a,pH:validScore(pH)?+pH:null,pA:validScore(pA)?+pA:null,minute:finished?null:minute,status:finished?(status.includes('pen')?'PEN':status.includes('aet')||status.includes('extra')?'AET':'FT'):statusText,scorers,redCards,yellowCards,odds,oddsUpdatedAt:d.oddsUpdatedAt||null,homeTeam:d.homeTeam?normalizeTeamName(d.homeTeam):null,awayTeam:d.awayTeam?normalizeTeamName(d.awayTeam):null,date:d.date||null,time:d.time||d.t||null,source:d.source||'worker',updatedAt:d.updatedAt||d.updated||null};
+    return {started,finished,h:+h,a:+a,pH:validScore(pH)?+pH:null,pA:validScore(pA)?+pA:null,minute:finished?null:minute,status:finished?(hasResolvedPens||status.includes('pen')?'PEN':status.includes('aet')||status.includes('extra')?'AET':'FT'):statusText,scorers,redCards,yellowCards,odds,oddsUpdatedAt:d.oddsUpdatedAt||null,homeTeam:d.homeTeam?normalizeTeamName(d.homeTeam):null,awayTeam:d.awayTeam?normalizeTeamName(d.awayTeam):null,date:d.date||null,time:d.time||d.t||null,source:d.source||'worker',updatedAt:d.updatedAt||d.updated||null};
   }
   function normalizeIncoming(id,obj){
     try{
@@ -12963,7 +12965,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
   // Final, cheap live merge. UI renderers stay untouched; only merge/polling is centralized.
   mergeLiveResults = function(next){
     if(!next || typeof next !== 'object') return false;
-    let changed=false, prune=false, fixed={};
+    let changed=false, prune=false, koFlowChanged=false, fixed={};
     Object.entries(next).forEach(([id,obj])=>{
       const r=normalizeIncoming(id,obj);
       if(!r) return;
@@ -12975,6 +12977,11 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       fixed[id]=r;
       changed=true;
       applyKoFromResult(id,r);
+      const koResolved=String(id).startsWith('KO-')&&validScore(r.h)&&validScore(r.a)&&(
+        +r.h!==+r.a || (validScore(r.pH)&&validScore(r.pA)&&+r.pH!==+r.pA)
+      );
+      const koOutcomeChanged=koResolved&&(!old||old.h!==r.h||old.a!==r.a||old.pH!==r.pH||old.pA!==r.pA||!old.finished);
+      if(koOutcomeChanged) koFlowChanged=true;
       if(r.finished && (!old || !old.finished || old.h!==r.h || old.a!==r.a || old.pH!==r.pH || old.pA!==r.pA)) prune=true;
     });
     if(!changed) return false;
@@ -12982,14 +12989,18 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     try{ if(typeof applyKoScheduleHotfix==='function') applyKoScheduleHotfix(); }catch(e){}
 
     const t=currentTab();
-    if(modalOpen()) refreshModalCheap();
-    else if(t==='matches' || t==='overview'){
+    if(modalOpen()){
+      refreshModalCheap();
+      if(koFlowChanged) requestRender('ko-flow-modal');
+    }else if(t==='matches' || t==='overview'){
       let patched=false;
       try{ patched = typeof patchLiveRows==='function' ? !!patchLiveRows(fixed) : false; }catch(e){ patched=false; }
-      if(!patched || prune) requestRender('live-'+t);
+      // Egy lezárt KO-meccs nemcsak a saját kártyáját módosítja: a győztest
+      // és a vesztest be kell tölteni a következő kör / bronzmeccs kártyáiba is.
+      if(!patched || prune || koFlowChanged) requestRender('live-'+t);
     }else if(t==='knockout'){
       try{ if(typeof patchKoCards==='function') patchKoCards(); }catch(e){}
-      if(prune) requestRender('ko-prune');
+      if(prune || koFlowChanged) requestRender('ko-flow');
     }else if(t==='table' || t==='stats') requestRender('stats-table');
     else if(t==='community'){
       try{ if(typeof refreshCommunityPreviews==='function') refreshCommunityPreviews(); }catch(e){}
@@ -13014,7 +13025,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
   function queueFinalResultsPull(results){
     let hasFinal=false;
-    try{ hasFinal=Object.values(results||{}).some(r=>r && r.finished===true); }catch(e){}
+    try{ hasFinal=Object.values(results||{}).some(r=>r && (r.finished===true || (validScore(r.pH)&&validScore(r.pA)&&+r.pH!==+r.pA))); }catch(e){}
     if(!hasFinal || now()-lastFinalPullAt<FINAL_PULL_GAP_MS) return;
     lastFinalPullAt=now();
     try{ if(finalPullTimer) clearTimeout(finalPullTimer); }catch(e){}
@@ -13045,7 +13056,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
     resultsInFlight=(async()=>{
       lastResultsAt=now();
       const sep=url.includes('?')?'&':'?';
-      const data=await fetchJson(url+sep+'rt=v203_'+now(), { cache:'no-store', headers:{'Accept':'application/json'}, credentials:'omit' });
+      const data=await fetchJson(url+sep+'rt=v204_'+now(), { cache:'no-store', headers:{'Accept':'application/json'}, credentials:'omit' });
       if(data && data.results){
         applyAllKoFromResults(data.results);
         mergeLiveResults(data.results);
@@ -13070,7 +13081,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
       // Azonnali, memóriás első festés. Nem vár külső providerre.
       if(force && now()-lastFastLiveAt>2500){
         lastFastLiveAt=now();
-        const fast=await fetchJson(url+sep+'fast=1&t='+now()+'&src=v203-fast', { cache:'no-store', headers:{'Accept':'application/json'}, credentials:'omit' });
+        const fast=await fetchJson(url+sep+'fast=1&t='+now()+'&src=v204-fast', { cache:'no-store', headers:{'Accept':'application/json'}, credentials:'omit' });
         if(fast && fast.results){
           mergeLiveResults(fast.results);
           paintVisibleLiveCards();
@@ -13079,7 +13090,7 @@ tabs.onclick=e=>{let b=e.target.closest('.tab');if(b){closeAllModals();S.tab=b.d
 
       // A fresh=1 a Worker provider-syncjét futtatja: ez írja ki FT/AET/PEN esetén
       // a valós végeredményt Firestore-ba, és ebből frissül a kártya jobb oldali pirulája is.
-      const data=await fetchJson(url+sep+'fresh=1&t='+now()+'&src=v203-fresh', { cache:'no-store', headers:{'Accept':'application/json','Cache-Control':'no-cache'}, credentials:'omit' });
+      const data=await fetchJson(url+sep+'fresh=1&t='+now()+'&src=v204-fresh', { cache:'no-store', headers:{'Accept':'application/json','Cache-Control':'no-cache'}, credentials:'omit' });
       if(data && data.results){
         mergeLiveResults(data.results);
         paintVisibleLiveCards();
